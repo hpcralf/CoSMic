@@ -332,7 +332,6 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
 #' more than one value and once across the parameter set of the first directv
 #' parameter.
 #'
-#' @import grids
 #' @import gridExtra
 #' @import pracma
 #' @import RColorBrewer

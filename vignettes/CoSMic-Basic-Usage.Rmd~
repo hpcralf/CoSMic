@@ -1,0 +1,679 @@
+################################################################################
+################################################################################
+##      ___      __         _      
+##     / __\___ / _\  /\/\ (_) ___ 
+##    / /  / _ \\ \  /    \| |/ __|
+##   / /__| (_) |\ \/ /\/\ \ | (__ 
+##   \____/\___/\__/\/    \/_|\___|
+##
+##  COVID-19 Spatial Microsimulation  ---  For Germany  ########################
+################################################################################
+##
+## Authors:      Christian Dudel
+##               Matthias Rosenbaum-Feldbruegge
+##               Sebastian Kluesener
+##               Ralf Schneider
+##
+## Contact:      dudel@demogr.mpg.de
+##               sebastian.kluesener@bib.bund.de
+##
+################################################################################
+################################################################################
+
+## Better safe than sorry ------------------------------------------------------
+rm(list=ls())
+
+### Libraries ##################################################################
+library(dplyr)
+## Switch off dplyr grouping message ----------------------
+## See https://dplyr.tidyverse.org/reference/summarise.html
+options(dplyr.summarise.inform=FALSE) # 
+
+library(rlist)
+library(data.table)
+setDTthreads(threads=1)
+
+library(ggplot2)    # Plotting                 ---
+library(lhs)        # Latin Hypercube Sampling ---
+library(GA)         # Genetic Algorithms       ---
+library(doRNG)      # Parallel random seed     ---
+library(grid)       # Gridplots                ---
+library(gridExtra)
+library(pracma)
+library(RColorBrewer)
+
+library(tictoc)
+
+### Import functions ###########################################################
+src.dir <- "CoSMic/R"
+for ( i in dir(src.dir,pattern="*.R$") ) { source(paste(src.dir,i,sep="/")) }
+
+################################################################################
+### Execution Control Panel                                                    #
+################################################################################
+
+### E1. Execution procedure ----------------------------------------------------
+##  Valid values : "Basic-Param" or "Optimization"
+exec.procedure <- "Basic-Param"
+
+### E2. Parallel Execution Method ----------------------------------------------
+##  Valid values : "OMP", "MPI" or "PSOCK"
+parallel.method <- "OMP"
+
+### E3. Maximum number of cores to use on a single node ------------------------
+max.cores <- 64
+
+### E4. Whether std.out from workers should be captured to a file cl.out -------
+omp.cluster.dbg <- TRUE
+
+### E5. Path to data directory -------------------------------------------------
+data.dir <- "Data"
+
+### E6. Path to data directory -------------------------------------------------
+output.dir <- NULL
+
+## E7. Export suffix for output files to distinguish different model -----------
+##     executions.
+## Valid values : Any String valid in names on the used file system
+##                NULL - Defaults to:
+##                       v<model_version>-<country>-<exec_date_and_time>
+export_name <- NULL
+
+### E8. Write checkpoint -------------------------------------------------------
+cp.write <- FALSE
+
+### E9. If cp.write at which timestep ? ----------------------------------------
+cp.time <- 0
+
+### E10. Read checkpoint -------------------------------------------------------
+cp.reload <- FALSE
+
+### E11. Directory from which to load checkpoint data --------------------------
+### (storage is performed to output.dir).
+cp.dir <- NULL
+
+################################################################################
+## Model Control Panel                                                         #
+################################################################################
+
+### 1. Seeding #################################################################
+
+### Seed Base ------------------------------------------------------------------
+## Valid values : NULL for no seeding
+##                42 for seeding. Let us make Doug proud of us!
+seed.base <- NULL
+
+### Should seed be used in model loop ? ----------------------------------------
+## Valid values : TRUE or FALSE
+##                If TRUE seed.base will also be used in a call to set.seed 
+##                within the model loop. This will make all iterations of the 
+##                model parameters equal.
+seed.in.inner.loop = FALSE
+
+### 2. Derive initial population ###############################################
+
+## Choose country --------------------------------------------------------------
+## Valid values: "Germany"
+country <- c("Germany")
+
+## Choose sample size ----------------------------------------------------------
+## Valid values: Any integer (10% of German population: 8301921)
+set.pspace(param  = "sam_size",
+           values = 83019)
+
+## Should spacial structure be restricted to a subset ? ------------------------
+## Valid values: TRUE or FALSE
+restrict <- TRUE
+
+## Which spatial structure to simulate -----------------------------------------
+## Valid values: In case restrict <- TRUE
+##               "NONE" to use no regional structure. This is not meaningfull 
+##                      with exec.procedure <- "Optimization"
+##               A character vector with state names. E.g.:
+##                      counties <- c("Schleswig-Holstein","Hamburg","Bremen")
+##               An integer vector with district ids. E.g.:
+##                      counties <- c(1001,1002,1003,2000,3101,3102,3103,3151)
+##               --------------------------
+## Valid values: In case restrict <- FALSE
+##               Any values
+##               -------------------------
+## In effect :   In case restrict <- TRUE
+sim.regions <- c("Schleswig-Holstein","Hamburg","Niedersachsen","Bremen")#,
+#                 "Nordrhein-Westfalen","Hessen","Rheinland-Pfalz",
+#                 "Baden-Württemberg","Bayern","Saarland","Berlin",
+#                 "Brandenburg","Mecklenburg-Vorpommern","Sachsen",
+#                 "Sachsen-Anhalt","Thüringen")
+
+## Sample proportion per state for initialisation of ---------------------------
+## -- infected, not contagious
+## -- infected, contagious
+## -- ill
+## -- dead cases
+## Valid values: A vector of real numbers > 0.0
+sam_prop.ps <- c(1.00 ,    # Schleswig-Holstein      
+                 1.00 ,    # Hamburg                 
+                 1.00 ,    # Niedersachsen           
+                 1.00 ,    # Bremen                  
+                 1.00 ,    # Nordrhein-Westfalen     
+                 1.00 ,    # Hessen                  
+                 1.00 ,    # Rheinland-Pfalz         
+                 1.00 ,    # Baden-Württemberg       
+                 1.00 ,    # Bayern                  
+                 1.00 ,    # Saarland                
+                 1.00 ,    # Berlin                  
+                 1.00 ,    # Brandenburg             
+                 1.00 ,    # Mecklenburg-Vorpommern  
+                 1.00 ,    # Sachsen                 
+                 1.00 ,    # Sachsen-Anhalt          
+                 1.00  )   # Thüringen               
+
+## How to derive simulation population from dataset? ---------------------------
+## Valid values: "random"        => Random sample from population
+##                "proportional" => Roughly scales population in selected 
+##                                  counties to sam_size 
+sim_pop <- "proportional"
+
+### 3. How to seed infections in population ####################################
+    
+## Number of initially infected people -----------------------------------------
+## Valid values: Any integer >= 0
+ini_infected <- 10
+
+## Where and how to seed -------------------------------------------------------
+## Valid values: "random" => Random assignment using ini_infected
+##               "county" => Chooses one random county and infects ini_infected there
+##               "data"   => Uses empirical counts of infections in counties
+##                           This ignores 'ini_infected'!
+seed_infections <- "data" 
+
+## Set seed date of infections in population -----------------------------------
+## Valid values : Any date string of format yyyy-mm-dd
+## Required     : If seed_infections <- "data"
+seed_date <- "2020-03-09"
+
+## How many days to seed before seed date --------------------------------------
+## Valid values: Any integer >= 0
+seed_before <- 7
+
+## 4. How long to simulate #####################################################
+
+## Set number of days to simulate ----------------------------------------------
+## Valid values : Any integer smaller or equal than the last day in R0change + 1
+##                NULL - Atomatically set from R0change
+time_n <- NULL
+
+### 5. Define disease characteristics ##########################################
+    
+## R0 (basic reproduction number) ----------------------------------------------
+## Valid values: Any floating point value > 0 
+set.pspace(param  = "R0",
+           values = 3.5)
+
+## Duration from infection to being contagious ---------------------------------
+## Valid values: Any integer value > 0 
+inf_dur <- 3
+
+## Duration from being contagious to being ill ---------------------------------
+## Valid values: Any integer value > 0 
+cont_dur <- 2
+
+## Duration from illness to healthy, immune ------------------------------------
+## Valid values: Any integer value > 0 
+ill_dur <- 8
+    
+## ICU risk per day ------------------------------------------------------------
+## Valid values: An integer vactor of length ill_dur whose values are >= 0
+##               and mean(icu_per_day) = 1.
+icu_per_day <- c(0,0,0,0,0,0,0,8)
+## icu_per_day <- c(0,0,0,1,1.2,1.4,1.6,1.6,1.6,1.4,1.2,1)
+
+## Duration in ICU -------------------------------------------------------------
+## Valid values: Any integer value > 0 
+set.pspace(param  = "icu_dur",
+           values = 14)
+
+## To what extent are sick people less contagious ------------------------------
+## Valid values: Any floating pointvalue with 0 < less_contagious <= 1.0
+##               1.0 = reference level
+less_contagious <- 0.7
+
+## Does R0 react to reduction of infections of ill/contagious? -----------------
+## Valid values: Any floating pointvalue with 0 < less_contagious <= 1.0
+##               If set to 1, R0 will be forced to value specified above. In
+##               this case the value of 'less_contagious' spreads the
+##               infections during the sickness, but does not reduce them.
+##               If set to 0, less_contagious reduces infections and thus R0
+R0_force <- 0
+
+## Do immune individuals "block" infections? -----------------------------------
+## Valid values: TRUE or FALSE
+immune_stop <- TRUE
+    
+## 6. Define reductions in social contacts #####################################
+##    (policy effects and behavioural change) ##################################
+
+##    Should R0 be loaded as matrix? -------------------------------------------
+##    If true, R0change, R0effect, and R0county
+##    do not have to be specified, but will be taken from the matrix.
+##    Can also be a matrix; if matrix, then
+##    Rows = counties, columns = simulation steps (time_n-1)
+import_R0_matrix <- FALSE
+
+
+## Relative effect of change in R0 (numeric) -----------------------------------
+## Base Data for weeks   11    12    12    13     14     15     16  ( In 2020 )
+##                     c(1.8 ,0.65, 0.65, 0.501, 0.545, 0.567, 0.556)
+## Caution week 12 is treated twice !
+##
+## R0effect is set to the parameter space by calling
+## set.pspace(param, values, s.dev)
+## Valid values: param  : "R0effect"
+##               values : Floating point values > 0.0 passed in as
+##                        1.) A numeric vector with n elements
+##                        2.) A data.frame with m variants per element so
+##                            having dim(m,n)
+##                        3.) A list of filenames. From these files a list of
+##                            data.frames is generated with each list element
+##                            having dim(no. of states in sim.regions, n)
+##               s.dev  : A numeric vector of floating point values >= 0.0
+##                        of same length as values.
+##                        It is only taken into account if a numeric vector
+##                        is passed in as values. 
+##                        If it is not given all elements are set to 0 by
+##                        default.
+##
+## Example for constant R0effect over time for all states ------------
+## set.pspace(param = "R0effect", values=1.0)
+##
+## Example for numeric vector with explicit s.dev --------------------
+## set.pspace(param  = "R0effect",
+##           values = c(0.65, 0.501, 0.545, 0.567, 0.556, 0.556,
+##                      0.4 , 0.4  , 0.4  , 0.4  , 0.4  , 0.4  ),
+##           s.dev  = c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)      )
+##
+## Example for a data.frame ------------------------------------------
+## set.pspace(param  = "R0effect",
+##            values = data.frame( R0effect1 = c( 0.85 , 0.85 , 0.85 ),
+##                                 R0effect2 = c( 0.501, 0.601, 0.701),
+##                                 R0effect3 = c( 0.545, 0.545, 0.545),
+##                                 R0effect4 = c( 0.567, 0.567, 0.567),
+##                                 R0effect5 = c( 0.556, 0.556, 0.556),
+##                                 R0effect6 = c( 0.556, 0.556, 0.556),
+##                                 R0effect7 = c( 0.4  , 0.4  , 0.4  ),
+##                                 R0effect8 = c( 0.4  , 0.4  , 0.4  ) ))
+##
+## Example for a list of filenames -----------------------------------
+set.pspace(param  = "R0effect",
+           values = list(R0effect.ps1 = read.table(
+                             file=paste(
+                                 "Data",country,
+                                 "R0effect_R3.5-Opt-35-4.3.2.csv",sep="/"))
+                         ))
+    
+## Changes of R0 ---------------------------------------------------------------
+## Valid values : list of as much integer tupels as elements in R0effect's
+##                numeric vector or R0effect's data.frame's second dimension
+##                with the first element of the tupel the start and second
+##                element the end of change.
+##                "NONE" if no change should happen
+R0change <- list(c(  1,  7),
+                 c(  8, 13),
+                 c( 14, 19),
+                 c( 20, 25), #04
+                 c( 26, 32), #05
+                 c( 33, 39), #06
+                 c( 40, 46), #07
+                 c( 47, 53), #08
+                 c( 54, 60), #09
+                 c( 61, 67), #10
+                 c( 68, 74), #11
+                 c( 75, 81), #12
+                 c( 82, 88), #13
+                 c( 89, 95), #14
+                 c( 96,102), #15
+                 c(103,109), #16
+                 c(110,116), #17
+                 c(117,123), #18 
+                 c(124,130), #19
+                 c(131,137)) #20
+
+## Affected countiues ----------------------------------------------------------
+## Valid values : list with tupels of district ids of counties affected by each 
+##                R0_change. The elements in list can be c("ALL") if all 
+##                counties are affected
+R0county <-  as.list(rep("ALL",20))
+    
+## E.g.: Germany with special treatment of Heinsberg (dist_id = 5370) ----------
+## R0county <- list(c("ALL"),
+##                  c("5370"),
+##                  c("ALL"),
+##                  c("ALL"),
+##                  c("ALL"),
+##                  c("ALL"),
+##                  c("ALL"),
+##                  c("ALL")) 
+    
+## Delay and smooth effect of change -------------------------------------------
+## Valid values: TRUE or FALSE
+R0delay <- TRUE
+    
+## If effects of change are delayed and smoothed, how many days?
+## Valid values: Any integer > 0
+R0delay_days <- 5
+    
+## If effects of change are delayed, what type of transition?
+## Valid options: "logistic" or "linear"
+R0delay_type <- "linear"
+
+### 7. Options for implementing an endogenous lockdown #########################
+    
+## Use endogenous lockdown ? ---------------------------------------------------
+endogenous_lockdown <- FALSE
+    
+## How much does lockdown reduce R0? (relative; 1=no change) -------------------
+lockdown_effect <- 0.39
+
+## Effect of lockdown on connectivity? (relative; 1=no change) -----------------
+lockdown_connect <- 0.5
+
+## Threshold for starting lockdown: Number of new cases ------------------------
+lockdown_threshold <- 100
+
+## Period which is checked for lockdown: x days before current day -------------
+lockdown_days <- 10
+
+### 8. Define weights of commuter matrix and redistribution of #################
+###    observed infections                                     #################
+
+## Weight of disease spreding within region vs. disease spreading to other -----
+## regions (connectivity between regions obtained from commuter flow data) -----
+## Valid values: Any real number > 0 and < 1.
+##               1.0 : Only within matters 
+##               0.0 : Only connectivity matrix matters
+set.pspace(param = "w_int", values = 0.9)
+
+## Weight of relocation of infections to other counties according to -----------
+## observerd cases
+## Valid values: Any real number > 0 and < 1.
+##               1.0 : Only observed infections matter
+##               0.0 : Only modelled infections matter
+set.pspace(param = "w.obs", values = 0.0)
+
+## How to redistribute observed infections -------------------------------------
+## Valid values: 0 = across the complete country 
+##               1 = distribute only wihin the states
+set.pspace(param = "w.obs.by.state", values = 0)
+
+### 9. Define whether transition probabilities should differ by age and sex ####
+## Valid values: "NONE", "age", "age_sex
+control_age_sex <- "age" 
+
+## 10. Define number of model executions per parameter set #####################
+## Valid values : Any integer > 0
+##                NULL - Defaults to 10
+iter <- 4
+
+## How many samples in the latin hyper cube ------------------------------------
+## Valid values : Any integer > 0
+##                NULL or 1 - hyper Cube Sampling deactivated
+lhc.samples <- 1
+
+## Reload lhc from file ? ------------------------------------------------------
+## Valid values : TRUE, FALSE
+lhc.reload  <- FALSE
+
+### 11. Which results to write and what to plot directly #######################
+
+## Result to write out ---------------------------------------------------------
+## Valid values : "ALL" or any other
+results         <- "ALL"
+
+## Global result plots across country ------------------------------------------
+## Valid values : TRUE, FALSE
+gplots          <- TRUE
+
+## Grouped result plots across country -----------------------------------------
+## Valid values : TRUE, FALSE
+cplots          <- TRUE
+
+## Grouped result plots by state -----------------------------------------------
+## Valid values : TRUE, FALSE
+cplots.states   <- TRUE
+
+## Result plots by county ------------------------------------------------------
+## Valid values : TRUE, FALSE
+cplots.nuts2    <- TRUE
+
+################################################################################
+## Input Data Contorl Panel                                                    #
+################################################################################
+
+## ID01. Transition Probabilities ----------------------------------------------
+trans.pr  <- "trans_probs_1.6death_3.0_icu.csv"
+    
+## ID02. Population Structure --------------------------------------------------
+pop.data  <- "181231_pop_age_sex_distr_ger.csv"
+
+## ID03. Infected cases per county per date ------------------------------------
+inf.cases  <-  "cases.csv"
+
+## ID04. Dead cases per county per date ----------------------------------------
+dead.cases <-  "deaths.csv"
+
+## ID05. Connectivity matrix: Total population ---------------------------------
+connect.total <- "2019_comm_mat_tot_pop.csv"
+
+## ID06. Connectivity matrix: Working population -------------------------------
+connect.work <- "2019_comm_mat_work_pop.csv"
+
+## ID07. State Structure -------------------------------------------------------
+states.structure <- "states.csv"
+    
+## ID08. County structure ------------------------------------------------------
+counties.structure  <- "counties_nuts2.csv"
+
+## ID09. Social reduction effect as matrix -------------------------------------
+R0.matrix.inp <- NULL
+
+## ID10. Dead cases by state ---------------------------------------------------
+dead.cases.by.state <- "Todesfaelle_Bundesland_23_07.csv"
+
+## ID11. Dead cases by country -------------------------------------------------
+dead.cases.by.country <- "Todesfaelle_Deutschland_28_05.csv"
+
+## ID12. ICU cases by county ---------------------------------------------------
+icu.cases.by.county <- "ICU_cases_Germany_Kreis.csv"
+
+## ID13. ICU cases by state ----------------------------------------------------
+icu.cases.by.state <- "ICU_cases_Germany_bundesland.csv"
+
+## ID14. ICU cases by country --------------------------------------------------
+icu.cases.by.country <- "ICU_cases_Germany.csv"
+
+## ID15. Latin hypercube data --------------------------------------------------
+lhc.data <- NULL
+
+################################################################################
+## Optimization Control Panel                                                  #
+################################################################################
+ 
+## Optimization Targets --------------------------------------------------------
+opt.target.icu     <- TRUE
+opt.target.deaths  <- FALSE
+
+## To which region optimization is applied -------------------------------------
+## Valid values : "country", "state" or "nuts2"
+opt.target.region  <- "state"
+
+## Names of parameters to optimize ---------------------------------------------
+opt.names  <- paste0(rep(c("SH", "HH", "NI", "HB",
+                           "NW", "HE", "RP", "BW",
+                           "BY", "SL", "BE", "BB",
+                           "MV", "SN", "ST", "TH"),each=4),c(5:8))
+
+## Lower bounds of optimization parameters -------------------------------------
+##          ## 1      2     3      4      5      6      7     8     9    10
+opt.lb <- rep(0.2,64)
+
+## Upper bounds of optimization parameters -------------------------------------
+##          ## 1      2      3      4      5      6   
+opt.ub <- rep(0.4,64)
+ 
+## Population size pro generation ----------------------------------------------
+opt.pop.size <- 128
+
+## Maximum iterations in optimization ------------------------------------------
+opt.max.iter <- 100
+
+## Suggested individuals in first population -----------------------------------
+## Valid values : NULL for no suggestions
+##                rbind( c( <no of params to opt.> ) ,
+##                       c( <no of params to opt.> ) , ... )
+use.sug.sol <- NULL
+
+### <<< DEBUG >>> ###
+single.parameters <- ls()
+### <<< DEBUG >>> ###
+
+################################################################################
+## Set parameter lists for COVID19_Spatial_Microsimulation #####################
+################################################################################
+
+## Set execution parameter lists -----------------------------------------------
+exec.params <- set.exec.params(exec.procedure  = exec.procedure,
+                               parallel.method = parallel.method,
+                               max.cores       = max.cores,
+                               omp.cluster.dbg = omp.cluster.dbg,
+                               data.dir        = data.dir,
+                               output.dir      = output.dir,
+                               export_name     = export_name,
+                               cp.write        = cp.write,
+                               cp.time         = cp.time,
+                               cp.reload       = cp.reload,
+                               cp.dir          = cp.dir)
+
+## Set static parameter list ---------------------------------------------------
+static.params <- set.static.params(pspace,
+                                   seed.in.inner.loop,
+                                   seed.base,          
+                                   country,             restrict,
+                                   sim.regions,         sam_prop.ps,
+                                   sim_pop,             ini_infected,
+                                   seed_infections,
+                                   seed_date,           seed_before,
+                                   time_n,
+                                   inf_dur,             cont_dur,
+                                   ill_dur,             icu_per_day,
+                                   less_contagious,     R0_force,
+                                   immune_stop,
+                                   import_R0_matrix,
+                                   R0change,            R0county,
+                                   R0delay,             R0delay_days,
+                                   R0delay_type,
+                                   endogenous_lockdown, lockdown_effect,
+                                   lockdown_connect,    lockdown_threshold,
+                                   lockdown_days,       control_age_sex,                            
+                                   iter,                lhc.samples,
+                                   lhc.reload,          gplots,
+                                   cplots,              cplots.states,
+                                   cplots.nuts2,        results)
+
+## Set list with input data ----------------------------------------------------
+iol <- load.input(exec.params$data.dir,
+                  static.params$country,
+                  trans.pr, pop.data, inf.cases, dead.cases,
+                  connect.total, connect.work,
+                  states.structure, counties.structure, R0.matrix.inp,
+                  dead.cases.by.state, dead.cases.by.country,
+                  icu.cases.by.county,
+                  icu.cases.by.state,  icu.cases.by.country,
+                  lhc.data)
+
+## Set optimization parameter list ---------------------------------------------
+opt.params <- set.optimization.params(opt.target.icu    ,  
+                                      opt.target.deaths ,   
+                                      opt.target.region ,  
+                                      opt.names         ,  
+                                      opt.lb            ,  
+                                      opt.ub            ,
+                                      opt.pop.size      ,
+                                      opt.max.iter      ,  
+                                      use.sug.sol       ,
+                                      exec.params       ,
+                                      static.params,
+                                      pspace)
+
+################################################################################
+## Model Execution #############################################################
+################################################################################
+
+## Generate spatial structure and its population -------------------------------
+sim.struc <- init.spatial.population( iol , static.params )
+
+## Initialize connectivity matrix ----------------------------------------------
+iol <- init.connectivity( iol , static.params , sim.struc)
+
+## Initialize reference data ---------------------------------------------------
+opt.params <- init.reference.data(iol , opt.params, static.params, sim.struc)
+
+## Save prepared input data ----------------------------------------------------
+save.exec.params(exec.params)
+save.static.params(exec.params, static.params)
+save.pspace(exec.params, pspace)
+save.optimization.params(exec.params, opt.params)
+
+save.input(exec.params, iol)
+save.spatial.population(exec.params, sim.struc)
+
+## Compare checkpoint parameters -----------------------------------------------
+if (exec.params$cp.reload) {
+    checkpoint.check.reload(exec.params,static.params)   
+}
+
+
+## Init parallel execution -----------------------------------------------------
+cl <- init.parallel.execution(exec.params, static.params, opt.params)
+
+################################################################################
+## Call Model Function                                                         #
+################################################################################
+
+################################################################################
+### Parameter Study ------------------------------------------------------------
+if (exec.params$exec.procedure == "Basic-Param") {
+
+    ## Record COVID-19 spatial microsimulation for Germany timing --------------
+    tic("COVID-19 spatial microsimulation for Germany")
+
+    fer <- CoSMic (ep = exec.params,
+                   sp = static.params,
+                   iol = iol,
+                   pspace=pspace,
+                   sim.struc = sim.struc,
+                   op = opt.params, opt=NULL)
+
+    ## Record COVID-19 spatial microsimulation for Germany timing --------------
+    toc()
+    
+################################################################################
+### Parameter Optimization -----------------------------------------------------
+} else if (exec.params$exec.procedure == "Optimization") {
+
+    ## Record COVID-19 spatial microsimulation for Germany timing --------------
+    tic("COVID-19 spatial microsimulation for Germany")
+
+    CoSMic.Opt(ep = exec.params,
+               sp = static.params,
+               iol = iol,
+               pspace=pspace,
+               sim.struc = sim.struc,
+               op=opt.params,
+               cl=cl)
+    
+    ## Record COVID-19 spatial microsimulation for Germany timing --------------
+    toc()
+    
+}
+
+# Finalize parallel execution --------------------------------------------------
+finalize.parallel.execution(exec.params,cl)
