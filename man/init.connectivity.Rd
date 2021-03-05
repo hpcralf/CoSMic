@@ -18,7 +18,7 @@ order to create a valid layout.}
 }
 \value{
 An input data list with modified \code{connect_work} and
-\code[connect_total} components. See \code{\link[=load.input]{load.input()}} about details on
+\code{connect_total} components. See \code{\link[=load.input]{load.input()}} about details on
 how the input data list has to be strucutred in order to be
 correctly modified by this function.
 }
