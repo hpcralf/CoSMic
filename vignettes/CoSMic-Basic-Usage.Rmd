@@ -41,7 +41,10 @@
 ---
 title: "CoSMic - Basic usage"
 author: "Ralf Schneider <schneider@hlrs.de>"
-output: rmarkdown::html_vignette
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
 vignette: >
   %\VignetteIndexEntry{CoSMic - Basic usage}
   %\VignetteEngine{knitr::rmarkdown}
@@ -49,26 +52,54 @@ vignette: >
 ---
 
 # Introduction
-In this vignette we demonstrate the basic usage of CoSMic function stack to execute **CO**VID-19 **S**patial **Mic**rosimulations to predict coverage of intensive care units.
+In this vignette we demonstrate the usage of the CoSMic function stack to execute
+**CO**VID-19 **S**patial **Mic**rosimulations to predict coverage of intensive care units and
+provide extensive description of the model's parameters. As an example we predict ICU-cases
+during the first wave of the COVID-19 pandemic in the four federal German states "Schleswig-Hollstein",
+"Hamburg", "Niedersachsen" and "Bremen".
 
-First things first. Since we want to be better save than sorry we clean the environment.
-```{r eval=FALSE}
+### Remark
+Even though this vignette demonstrates the usage of CoSMic on the example of four federal German states,
+it is not meant to produce quantitative correct results since it uses only an 0.1% sample of the German
+population. It was  found during CoSMic's development that correct prediction of ICU capacitiy coverage
+during the first and second wave of the  COVID-19 pandemic for a country like Germany with ~83 million
+inhabitants at least requires a 20% population sample. Smaler samples were found  to run out
+of healthy individuals in the middle of the second wave. Due to the rather large number of individuals to
+be required an the non deterministic character of the model from which the need for ensemble excutions
+result, the model has to be executed on parallel computing cluster ressources in order to return results
+within reasonable timeframes.
+
+First things first. Since we want to be better save than sorry, first of all  we clean the environment
+and then load CoSMic. For CoSMic installation instructions please see https://github.com/hpcralf/CoSMic.
+```{r}
 rm(list=ls())
-```
-Since CoSMic is currently not developed up to the state of a proper R-package we install it manually from source by means of the devtools and roxygen2 packages.
-```{r eval=FALSE}
-library(devtools)
-library(roxygen2)
-devtools::load_all()
-devtools::install()
-```
-
-After installation we load the package.
-```{r eval=FALSE}
 library(CoSMic)
 ```
 
 # Parameter Setup
+In this section you'll find explanation of the CoSMic input parameters whihc we seperate into
+
+* **Execution parameters**
+  This section covers all parameters related to the model's execution process like file system paths,
+  setup of the checkpoint restart procedure, selection of parallelization method etc.
+* **Model parameters**
+  This section covers all parameters related to the model's setup which in turn is seperated into
+  the following subsections.
+  * Random Number Generation
+  * Model Population
+  * Seeding
+  * Disease Characteristice
+  * Infection Dynamic
+  * Endogenous lockdowns
+  * Commuting paterns
+  * Weighting factors of model effects
+  * Ensemble & Parameter Variations
+* **Output options**
+* **Input data**
+* **Optimization setup**
+  This section covers all parameters related to the control of the paramter optimization
+  procedure implemented in CoSMic by means of the
+  [GA package](https://cran.r-project.org/web/packages/GA/index.html "GA @ https://cran.r-project.org")
 
 ## Setup of the Execution Control Parameters
 

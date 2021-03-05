@@ -13,6 +13,7 @@ Based on these estimates the model can provide national and sub-national
 forecasts for trends in the number of ICU patients and other indicators
 under different scenarios regarding NPIs.
 
+## Installation
 Since CoSMic is currently not developed up to the state of a proper R-package please install
 it using
 ```{r}
@@ -35,3 +36,9 @@ and execute
 library(devtools)
 devtools::install()
 ```
+
+## Usage
+Please see
+
+* https://github.com/hpcralf/CoSMic/blob/main/aux/CoSMic_0.11.1.0000.pdf
+* https://github.com/hpcralf/CoSMic/blob/main/aux/CoSMic-Basic-Usage.html

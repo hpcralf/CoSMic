@@ -2164,9 +2164,9 @@ CoSMic.Opt <- function(ep, sp, iol, pspace, sim.struc, op, cl) {
 #' @param A list with static model parameters as described in [set.static.params()].
 #'
 #' @return A data.frame with dimension
-#'         [<# different evaluations> x <potentially_variable_model_params>]
+#'         \[<# different evaluations> x <potentially_variable_model_params>\]
 #'         If all model parameters in pspace are fixed, i.e. not variable
-#'         dim(lhc) will be [sp$iter x <potentially_variable_model_params>]
+#'         dim(lhc) will be \[sp$iter x <potentially_variable_model_params>\]
 #' 
 #' @export
 init.lhc <-  function(pspace,sp) {

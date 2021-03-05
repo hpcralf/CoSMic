@@ -13,9 +13,9 @@ init.lhc(pspace, sp)
 }
 \value{
 A data.frame with dimension
-\link{<# different evaluations> x <potentially_variable_model_params>}
+[<# different evaluations> x <potentially_variable_model_params>]
 If all model parameters in pspace are fixed, i.e. not variable
-dim(lhc) will be \link{sp$iter x <potentially_variable_model_params>}
+dim(lhc) will be [sp$iter x <potentially_variable_model_params>]
 }
 \description{
 The function initializes the data.frame carrying the different sets of model
