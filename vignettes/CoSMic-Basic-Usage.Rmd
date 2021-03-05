@@ -53,230 +53,32 @@ vignette: >
 
 # Introduction
 In this vignette we demonstrate the usage of the CoSMic function stack to execute
-**CO**VID-19 **S**patial **Mic**rosimulations to predict coverage of intensive care units and
-provide extensive description of the model's parameters. As an example we predict ICU-cases
-during the first wave of the COVID-19 pandemic in the four federal German states "Schleswig-Hollstein",
-"Hamburg", "Niedersachsen" and "Bremen".
+**CO**VID-19 **S**patial **Mic**rosimulations to predict coverage of intensive care units.
+
+At this place we demonstrate the execution of CoSMic with minimal paramter setup efforts
+so keeping basically all default parameters.
+
+In this default setup CoSMic predicts ICU-cases during the first wave of the COVID-19 pandemic
+in the four federal German states "Schleswig-Hollstein", "Hamburg", "Niedersachsen" and "Bremen"
+as a kind of regression check.
+
+For an extensive documentation of the model's available parameters please see
+https://github.com/hpcralf/CoSMic/blob/main/aux/CoSMic-Parameter-Setup_and_Usage.html
 
 ### Remark
-Even though this vignette demonstrates the usage of CoSMic on the example of four federal German states,
-it is not meant to produce quantitative correct results since it uses only an 0.1% sample of the German
-population. It was  found during CoSMic's development that correct prediction of ICU capacitiy coverage
-during the first and second wave of the  COVID-19 pandemic for a country like Germany with ~83 million
-inhabitants at least requires a 20% population sample. Smaler samples were found  to run out
-of healthy individuals in the middle of the second wave. Due to the rather large number of individuals to
-be required an the non deterministic character of the model from which the need for ensemble excutions
-result, the model has to be executed on parallel computing cluster ressources in order to return results
-within reasonable timeframes.
+As already mentioned above, this demonstration executes CoSMic with default parameters so it is **not
+meant to produce quantitatively correct results**. This is due to the default population size of 0.1%
+of the German population. It was  found during CoSMic's development that correct prediction of ICU
+capacitiy coverage during the first and second wave of the  COVID-19 pandemic for a country like
+Germany with ~83 million inhabitants at least requires a 20% population sample. Smaler samples were
+found  to run out of healthy individuals in the middle of the second wave. 
 
-First things first. Since we want to be better save than sorry, first of all  we clean the environment
-and then load CoSMic. For CoSMic installation instructions please see https://github.com/hpcralf/CoSMic.
+First things first. Since we want to be better save than sorry, first of all  we clean the environment.
 ```{r}
 rm(list=ls())
+```
+
+Then we load CoSMic. For CoSMic installation instructions please see https://github.com/hpcralf/CoSMic.
+```{r}
 library(CoSMic)
 ```
-
-# Parameter Setup
-In this section you'll find explanation of the CoSMic input parameters whihc we seperate into
-
-* **Execution parameters**
-  This section covers all parameters related to the model's execution process like file system paths,
-  setup of the checkpoint restart procedure, selection of parallelization method etc.
-* **Model parameters**
-  This section covers all parameters related to the model's setup which in turn is seperated into
-  the following subsections.
-  * Random Number Generation
-  * Model Population
-  * Seeding
-  * Disease Characteristice
-  * Infection Dynamic
-  * Endogenous lockdowns
-  * Commuting paterns
-  * Weighting factors of model effects
-  * Ensemble & Parameter Variations
-* **Output options**
-* **Input data**
-* **Optimization setup**
-  This section covers all parameters related to the control of the paramter optimization
-  procedure implemented in CoSMic by means of the
-  [GA package](https://cran.r-project.org/web/packages/GA/index.html "GA @ https://cran.r-project.org")
-
-## Setup of the Execution Control Parameters
-
-### Execution Procedure
-First we set the execution procedure.
-
-Valid Values are:
-
-* `Basic-Param` - Multiple model execution and parameter variations.
-* `Optimization` - Model parameter optimization by means of the GA package.
-
-```{r}
-exec.procedure <- "Basic-Param"
-```
-
-### Parallel Execution Method
-Valid values :
-
-* `OMP` - Should be used for desktop PCs and shared memory compute nodes.
-* `MPI` - Should be used with `Basic-Param` execution procedure on distributed memory architectures.
-* `PSOCK` - Should be used with `Optimization` execution procedure on distributed memory architectures to exploit a hirarchical paralleization strategy.
-
-```{r}
-parallel.method <- "OMP"
-```
-
-### Maximum number of cores
-Specify the maximum number of cores to be used on a single node to not run out of memory.
-
-Valid value:
-
-* Any integer
-```{r}
-max.cores <- 64
-```
-
-## Parallel worker debug output
-Specify whether std.out from workers should be captured to a file named `cl.out`.
-
-Valid values :
-
-* `TRUE` or `FALSE`
-
-```{r}
-omp.cluster.dbg <- TRUE
-```
-
-### Path to data directory
-Specify the file system path to the directory where the CoSMic input files reside. Which files are essential to provide under wich circumstances will be explained later on.
-
-Valid values:
-
-* Any String valid as a path-name on the used file system
- 
-```{r}
-data.dir <- "Data"
-```
-
-### Path to output directory
-Specify the file system path to the directory to which the CoSMic result files will be written.
-
-Valid values:
-
-* Any String valid as a path-name on the used file system
-
-```{r}
-output.dir <- NULL
-```
-
-### Export suffix
-To to distinguish different model executions an output suffix can be set.
-
-Valid values are:
-
-* Any String valid to be used in filenames on the used file system.
-* `NULL` - Defaults to `v<model_version>-<country>-<exec_date_and_time>`.
-
-```{r}
-export_name <- NULL
-```
-
-### Write Checkpoint
-Specify whether checkpoint data should be written to `output.dir`.
-
-Valid values :
-
-* `TRUE` or `FALSE`
-
-```{r}
-cp.write <- FALSE
-```
-
-### Timestep of Checkpoint
-If `cp.write <- TRUE` at which timestep the checkpoint data should be writtten?
-
-Valid values :
-
-* Any integer smaller than the maximum simulation timestep.
-
-```{r}
-cp.time <- 0
-```
-
-### Reload checkpoint
-Specify whether checkpoint data should be reloaded.
-
-Valid values :
-
-* `TRUE` or `FALSE`
-```{r}
-cp.reload <- FALSE
-```
-
-### Checkpoint Directroy
-Specify the path from which checkpoint data should be reloaded in case `cp.reload <- TRUE`
-
-Valid values:
-
-* Any String valid as a path-name on the used file system
-
-```{r}
-cp.dir <- NULL
-```
--------------------------------------------------
-
-## Setup of the Model Control Parameters
-
-### Seeding 
-First we have to specify if and if yes where to seed.
-
-#### Seed Base
-Valid values:
-
-* `NULL` for no seeding
-* `42  ` for seeding so that Doug will be proud of us!
-```{r}
-seed.base <- NULL
-```
-
-#### Seed within model loop
-Specify whether seeding should happen within the model loop. In case of `MPI` or `PSOCK`
-used as parallel method this enables deterministic model execution over multiple executions.
-
-Valid values:
-
-* `TRUE` or `FALSE`
-
-If set to `TRUE`,  `seed.base` will also be used in a call to `set.seed` within
-the model loop. This will make all iterations of the model parameters equal.
-```{r}
-seed.in.inner.loop = FALSE
-```
-
-### Derivation of initial population
-
-#### Country to simulate
-
-Valid values:
-
-* `"Germany"`
-
-```{r}
-country <- c("Germany")
-```
-
-#### Population Sample Size
-Choose sample size.
-
-Valid values:
-
-* Any integer. E.g.: 8301921 represent a 10% sample of the German population.
-
-In this demonstration we use a rather small sample to keep the required computing
-resources within reasonable limits.
-```{r warning=FALSE}
-CoSMic::set.pspace(param  = "sam_size", values = 83019)
-```
-As you might have noticed, we use the `set.pspace` function to set this parameter since it
-potentially can take part of a parameter space exploration.
-
