@@ -161,7 +161,7 @@ save.spatial.population <- function(ep, sim.struc) {
 #'           order to create a valid layout.
 #'
 #' @return An input data list with modified \code{connect_work} and
-#'         \code[connect_total} components. See [load.input()] about details on
+#'         \code{connect_total} components. See [load.input()] about details on
 #'         how the input data list has to be strucutred in order to be
 #'         correctly modified by this function.
 #'
