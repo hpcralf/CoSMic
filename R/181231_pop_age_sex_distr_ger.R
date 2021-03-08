@@ -19,8 +19,8 @@
 #'
 #' @references Federal Statistical Office of Germany. Kreisfreie Städte und
 #' Landkreise nach Fläche, Bevölkerung und Bevölkerungsdichte, (2018),
-#' \href{https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales}
-#' {https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales}.
+#' \href{https://www.destatis.de/DE/Themen/Laender-Regionen/
+#' Regionales}{https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales}.
 #'
 #' @source \href{https://www.destatis.de/DE/Themen/Laender-Regionen/
 #' Regionales/Gemeindeverzeichnis/Administrativ/Archiv/Standardtabellen/

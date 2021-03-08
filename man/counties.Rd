@@ -28,7 +28,7 @@ that the spatial simulation structure in the CoSMic default setup.
 \references{
 Federal Statistical Office of Germany. Kreisfreie Städte und
 Landkreise nach Fläche, Bevölkerung und Bevölkerungsdichte, (2018),
-\href{https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales}
-{https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales}.
+\href{https://www.destatis.de/DE/Themen/Laender-Regionen/
+Regionales}{https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales}.
 }
 \keyword{datasets}

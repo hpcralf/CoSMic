@@ -14,7 +14,9 @@ An object of class \code{"data.frame"} with  402 columns.
 }
 }
 \source{
-...
+\href{https://statistik.arbeitsagentur.de/SiteGlobals/Forms/Suche/
+Einzelheftsuche_Formular.html;jsessionid=98E7BF6228AC1E77E530233B76A8A14F?
+nn=20934&topic_f=beschaeftigung-sozbe-krpend}{Direct link}
 }
 \usage{
 data(connect_work)
@@ -23,6 +25,10 @@ data(connect_work)
 ....
 }
 \references{
-...
+German Federal Employment Agency, Pendlerverflechtungen der
+sozialversicherungspflichtig Beschäftigten nach Ländern - Deutschland
+(Jahreszahlen), (2019), \href{https://statistik.arbeitsagentur.de/DE/
+Navigation/Statistiken/Themen-im-Fokus/Regionale-Mobilitaet/
+Regionale-Mobilitaet-Nav.html}{https://statistik.arbeitsagentur.de}.
 }
 \keyword{datasets}
