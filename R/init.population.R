@@ -257,7 +257,7 @@ init.connectivity  <- function (iol, sp, ss) {
 #'         function.
 #'
 #' @section ToDo:
-#' Implement ot[[dea.nuts2]]
+#' Implement ot\[\[dea.nuts2\]\]
 #'
 #' @export
 init.reference.data  <- function (iol, op, sp, sim.struc) {
