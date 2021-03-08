@@ -374,6 +374,7 @@ init.reference.data  <- function (iol, op, sp, sim.struc) {
         ot$icu.nuts2 <- merge(iol$counties[,c("dist_id","Nuts2")],ot$icu.nuts2,
                               by="dist_id")
 
+        ## Trim whitespaces in NUTS-2 names ------------------------------------
         ot$icu.nuts2$Nuts2 <- trimws(ot$icu.nuts2$Nuts2,which="both")
         ## Group first by NUTS2 regions and then by date and sum up ------------
         ot$icu.nuts2 <- ot$icu.nuts2 %>% group_by(Nuts2,date) %>% summarize(cases=sum(cases))

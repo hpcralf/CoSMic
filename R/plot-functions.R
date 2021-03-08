@@ -54,14 +54,6 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
                              x.min=NULL,x.max=NULL, relative=FALSE,
                              silent=FALSE) {
 
-    ## outfile         <- "Rplots.Test.pdf" 
-    ## seed_icu        <-opt.target$icu     
-    ## seed_dea        <-opt.target$dea     
-    ## iol             <-iol                           
-    ## pspace          <-pspace             
-    ## rr              <-rr                            
-    ## global.plot     <-TRUE          
-
     if (is.null(x.max) & is.null(sp$time_n)) {
         warning(paste("is.null(x.max) & is.null(sp$time_n) holds TRUE.",
                       "Both will be reset to max. value in R0change + 1"))
@@ -343,17 +335,6 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                            sec.text = FALSE,
                            ind.states=NULL, silent=FALSE, relative=FALSE) {
 
-    ## outfile      <- outfile
-    ## seed_icu     <- op$opt.target$icu.bs
-    ## seed_icu     <- op$opt.target$icu.nuts2
-    ## seed_dea     <- op$opt.target$dea.bs
-    ## seed_dea     <- NULL
-    ## iol          <- iol
-    ## pspace       <- pspace
-    ## rr           <- rr
-    ## region       <- "nuts2"
-    ## fix.lim      <- FALSE
-     
     ## -------------------------------------------------------------------------
     ## Select parpameters from pspace to group by
 
@@ -738,10 +719,11 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                             theme(legend.title = element_blank())
                         
                         ## Standard colours are hard to differentiate ------------------
-                        ##plt[[ii]] <- plt[[ii]] + scale_color_manual(values = c("Observed"  = 'black',
-                        ##                                                       "mu"        = 'deepskyblue',
-                        ##                                                       "mu log."   = 'yellowgreen',
-                        ##                                                       "Scaled weekly Grad."  = 'darkorchid1'))
+                        ## plt[[ii]] <- plt[[ii]] + scale_color_manual(
+                        ##                              values = c("Observed"  = 'black',
+                        ##                                         "mu"        = 'deepskyblue',
+                        ##                                         "mu log."   = 'yellowgreen',
+                        ##                                         "Scaled weekly Grad."  = 'darkorchid1'))
                     }
                     
                     ## ---------------------------------------------------------
@@ -959,23 +941,7 @@ plot.R0effect <- function(R0effect,sp,outfile=NULL,silent=FALSE) {
 
 plot.states.combined <- function(outfile, sp, seed_icu, seed_dea, iol,
                                  pspace, rr, region, ind.states) {
-
-    ## r.dir <- dir()[6]
-    ## sp <- readRDS(paste(r.dir,dir(r.dir,pattern="static"),sep="/"))
-    ## op <- readRDS(paste(r.dir,dir(r.dir,pattern="opt"),sep="/"))
-    ## ep <- readRDS(paste(r.dir,dir(r.dir,pattern="exec"),sep="/"))
-    ## pspace <- readRDS(paste(r.dir,dir(r.dir,pattern="pspace"),sep="/"))
-    ## iol <- readRDS(paste(r.dir,dir(r.dir,pattern="input"),sep="/"))
-    ## sim.struc <- readRDS(paste(r.dir,dir(r.dir,pattern="spatial"),sep="/"))
-    ## load(paste(r.dir,dir(r.dir,pattern="Aggregated"),sep="/"))
-    
-    ## outfile      <- outfile
-    ## seed_icu     <- op$opt.target$icu.bs
-    ## seed_dea     <- op$opt.target$dea.bs
-    ## seed_icu     <- op$opt.target$icu.nuts2
-    ## seed_dea     <- NULL
-    ## region       <- "nuts2"
-        
+       
     plt <- list()
 
     ## ---------------------------------------------------------------------

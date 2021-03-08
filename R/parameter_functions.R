@@ -919,8 +919,8 @@ load.input <- function(data.dir              = "./",
                        dead.cases            = NULL,
                        connect.total         = NULL,
                        connect.work          = NULL,
-                       states                = NULL,
-                       counties              = NULL,
+                       sts                   = NULL,
+                       cnts                  = NULL,
                        R0.matrix.inp         = NULL,
                        dead.cases.by.state   = NULL,
                        dead.cases.by.country = NULL,
@@ -942,7 +942,7 @@ load.input <- function(data.dir              = "./",
     ## Population structure ----------------------------------------------------
     if (is.null(pop.data)) {
         data("181231_pop_age_sex_distr_ger")
-        iol[["pop"]]  <- pop.data
+        iol[["pop"]]  <- pop
     } else {
         pop  <- read.csv(paste(data.dir,pop.data,sep="/"))
     }
@@ -978,9 +978,9 @@ load.input <- function(data.dir              = "./",
     } else {
         connect_work = read.csv(paste(data.dir,connect.work,sep="/"))
     }
-    
+
     ## State information -------------------------------------------------------
-    if (is.null(states)) {
+    if (is.null(sts)) {
         data(states)
         iol[["states"]]  <- states
     } else {
@@ -989,7 +989,7 @@ load.input <- function(data.dir              = "./",
     }
     
     ## County information ------------------------------------------------------
-    if (is.null(counties)) {
+    if (is.null(cnts)) {
         data(counties)
         iol[["counties"]]  <- counties
     } else {

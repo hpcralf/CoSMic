@@ -101,18 +101,16 @@ set.pspace(param  = "sam_size", values = 83019)
 set.pspace(param  = "R0", values = 3.5)
 ```
 
-## Duration in ICU -------------------------------------------------------------
+## Duration in ICU
 ```{r}
 set.pspace(param  = "icu_dur", values = 14)
 ```
 
-## R0 reduction factor ---------------------------------------------------------
+## R0 reduction factor
 ```{r}
+data(R0effect)
 set.pspace(param  = "R0effect",
-           values = read.table(file=paste(
-				  "/home/hpcralf/hlrs/BIB/cosmic/Data/Germany",
-                                   "R0effect_R3.5-Opt-35-4.3.2.csv",sep="/"))
-                         )
+           values =  list(R0effect.ps1=R0effect))
 ```
 
 ## Weight of infection dynamic
@@ -147,4 +145,30 @@ static.params <- set.static.params(pspace)
 ## Set input data
 ```{r}
 iol <- load.input()
+```
+
+## Generate spatial structure and its population
+```{r}
+sim.struc <- init.spatial.population( iol , static.params )
+```
+
+## Initialize connectivity matrix
+```{r}
+iol <- init.connectivity( iol , static.params , sim.struc )
+```
+
+## Call CoSMic
+
+### Init parallel execution
+```{r eval=FALSE}
+init.parallel.execution(exec.params, static.params, NULL)
+```
+
+```{r eval=FALSE}
+CoSMic (ep        = exec.params,
+        sp        = static.params,
+        iol       = iol,
+	pspace    = pspace,
+	sim.struc = sim.struc,
+	op = NULL, opt=NULL)
 ```
