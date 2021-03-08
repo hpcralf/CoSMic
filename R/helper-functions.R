@@ -117,7 +117,7 @@ attenuate <- function(x,steps=5,type="logistic") {
 #'               to the next \code{length} weeks.
 #'               *Defaults to:* \code{"constant-weekly"}.
 #' @param base The week based on which to extrapolate. If not given the last
-#'             week i.e. dim(R0effect)[1] is used.
+#'             week i.e. dim(R0effect)\[1\] is used.
 #'             *Defaults to:* \code{NULL}.
 #' @param length Number of week to extrapolate after base.
 #'               *Defaults to:* \code{8}.
