@@ -16,7 +16,7 @@ under different scenarios regarding NPIs.
 ## Installation
 Since CoSMic is currently not developed up to the state of a proper R-package please install
 it using
-```{r}
+```R
 library(devtools)
 devtools::install_github("hpcralf/CoSMic",build_manual=TRUE,build_vignettes=TRUE)
 ```
