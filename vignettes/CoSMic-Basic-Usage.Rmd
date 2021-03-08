@@ -138,9 +138,20 @@ set.pspace(param = "w.obs.by.state", values = 0)
 ```
 
 ## Setup of Static Model Parameters
+
+With \code{set.static.params} we initialize a default parameter list but switch on
+all plotting along with full result output.
 ```{r}
-static.params <- set.static.params(pspace)
+static.params <- set.static.params(
+	      pspace=pspace,
+	      gplots              = TRUE,
+              cplots              = TRUE,
+              cplots.states       = TRUE,
+              cplots.nuts2        = TRUE,
+              results             = "ALL")
 ```
+
+static.params$results<-"ALL"
 
 ## Set input data
 ```{r}
@@ -157,6 +168,15 @@ sim.struc <- init.spatial.population( iol , static.params )
 iol <- init.connectivity( iol , static.params , sim.struc )
 ```
 
+## Save parameter files
+```{r eval=FALSE}
+save.exec.params(exec.params)
+save.static.params(exec.params, static.params)
+save.pspace(exec.params, pspace)
+save.input(exec.params, iol)
+save.spatial.population(exec.params, sim.struc)
+```
+
 ## Call CoSMic
 
 ### Init parallel execution
@@ -171,4 +191,9 @@ CoSMic (ep        = exec.params,
 	pspace    = pspace,
 	sim.struc = sim.struc,
 	op = NULL, opt=NULL)
+```
+
+## Finalize parallel execution
+```{r eval=FALSE}
+finalize.parallel.execution(exec.params,cl)
 ```

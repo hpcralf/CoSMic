@@ -1682,7 +1682,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
             
             plots.by.state(outfile      = outfile,
                            sp           = sp,
-                           seed_icu     = op$opt.target$icu.bs,
+                           seed_icu     = iol$icu.bs,
                            seed_dea     = op$opt.target$dea.bs,
                            iol          = iol,
                            pspace       = pspace,
@@ -1711,7 +1711,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                            rr           = rr,
                            region       = "state",
                            fix.lim      = TRUE,
-                           ind.states   = sp$sp.states)
+                           ind.states   = c(1,2,3,4,5,6,7))
         }
         
         ## #####################################################################
@@ -1735,7 +1735,8 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                            pspace       = pspace,
                            rr           = rr,
                            region       = "nuts2",
-                           fix.lim      = FALSE)
+                           fix.lim      = FALSE,
+                           ind.states   = c(1,2,3,4,5,6,7))
 
             ## Global fixed scale accross all diagramms -----------------
             outfile <- paste0(ep$output.dir,
@@ -1751,7 +1752,8 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                            pspace       = pspace,
                            rr           = rr,
                            region       = "nuts2",
-                           fix.lim      = TRUE)
+                           fix.lim      = TRUE,
+                           ind.states   = c(1,2,3,4,5,6,7))
         }
                 
 ################################################################################

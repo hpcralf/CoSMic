@@ -47,6 +47,8 @@
 #'
 #' @import pracma
 #' @import RColorBrewer
+#' @import ggplot2
+#' 
 #' @export
 plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
                              iol, pspace,
@@ -324,9 +326,12 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
 #' more than one value and once across the parameter set of the first directv
 #' parameter.
 #'
+#' @import grid
 #' @import gridExtra
 #' @import pracma
 #' @import RColorBrewer
+#' @import ggplot2
+#' 
 #' @export
 plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                            pspace, rr, region, fix.lim,
@@ -418,6 +423,8 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
      
     if (is.null(ind.states)) {
         ind.states.to.plot <- names(rr)
+        sp.states.map <- ind.states.to.plot
+        names(sp.states.map) <- ind.states.to.plot
     } else {
 
         if ( class(ind.states) == "character" ) {
@@ -441,7 +448,8 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
 
     if (relative & ("ill_ICU" %in% ind.states.to.plot)) {
         sp.states.map["ill_ICU"] <- paste(sp.states.map["ill_ICU"],"[%]")
-    }
+    } 
+    
 
     ## Warnig if incompatible elements on secondary y-axis ---
     if ( ("RMS" %in% Sec.Axis) &
