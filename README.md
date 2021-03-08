@@ -18,7 +18,7 @@ Since CoSMic is currently not developed up to the state of a proper R-package pl
 it using
 ```{r}
 library(devtools)
-devtools::install_github("hpcralf/CoSMic")
+devtools::install_github("hpcralf/CoSMic",build_manual=TRUE,build_vignettes=TRUE)
 ```
 
 Alternatively you can check out the code with
@@ -28,13 +28,13 @@ git clone https://github.com/hpcralf/CoSMic.git
 ```
 or download the source code zip-file from https://github.com/hpcralf/CoSMic/archive/main.zip.
 
-Once having checked out the code or extracted the source-package change to the code directory
-(CoSMic in case of git-chekcout or CoSMic-main case of zip-file download), start a R session
+Once having checked out the code or extracted the source-package, change to the code directory
+(CoSMic in case of git-chekcout or CoSMic-main in case of zip-file download), start a R session
 and execute
 
 ```R
 library(devtools)
-devtools::install()
+devtools::install(build_manual=TRUE,build_vignettes=TRUE)
 ```
 
 ## Usage

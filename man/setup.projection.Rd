@@ -27,7 +27,7 @@ to the next \code{length} weeks.
 \emph{Defaults to:} \code{"constant-weekly"}.}
 
 \item{base}{The week based on which to extrapolate. If not given the last
-week i.e. dim(R0effect)\link{1} is used.
+week i.e. dim(R0effect)[1] is used.
 \emph{Defaults to:} \code{NULL}.}
 
 \item{length}{Number of week to extrapolate after base.

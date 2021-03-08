@@ -5,22 +5,21 @@
 \title{Loading input data}
 \usage{
 load.input(
-  data.dir,
-  country,
-  trans.pr,
-  pop.data,
-  inf.cases,
-  dead.cases,
-  connect.total,
-  connect.work,
-  states,
-  counties,
+  data.dir = "./",
+  trans.pr = NULL,
+  pop.data = NULL,
+  inf.cases = NULL,
+  dead.cases = NULL,
+  connect.total = NULL,
+  connect.work = NULL,
+  states = NULL,
+  counties = NULL,
   R0.matrix.inp = NULL,
-  dead.cases.by.state,
-  dead.cases.by.country,
-  icu.cases.by.county,
-  icu.cases.by.state,
-  icu.cases.by.country,
+  dead.cases.by.state = NULL,
+  dead.cases.by.country = NULL,
+  icu.cases.by.county = NULL,
+  icu.cases.by.state = NULL,
+  icu.cases.by.country = NULL,
   lhc.data = NULL
 )
 }

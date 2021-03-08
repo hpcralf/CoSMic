@@ -73,6 +73,7 @@ capacitiy coverage during the first and second wave of the  COVID-19 pandemic fo
 Germany with ~83 million inhabitants at least requires a 20% population sample. Smaler samples were
 found  to run out of healthy individuals in the middle of the second wave. 
 
+# Initialization
 First things first. Since we want to be better save than sorry, first of all  we clean the environment.
 ```{r}
 rm(list=ls())
@@ -81,4 +82,69 @@ rm(list=ls())
 Then we load CoSMic. For CoSMic installation instructions please see https://github.com/hpcralf/CoSMic.
 ```{r}
 library(CoSMic)
+```
+
+## Setup of Execution Parameters
+
+
+```{r warning=FALSE}
+exec.params <- set.exec.params()
+```
+
+## Choose sample size
+```{r}
+set.pspace(param  = "sam_size", values = 83019)
+```
+
+## R0 (basic reproduction number)
+```{r}
+set.pspace(param  = "R0", values = 3.5)
+```
+
+## Duration in ICU -------------------------------------------------------------
+```{r}
+set.pspace(param  = "icu_dur", values = 14)
+```
+
+## R0 reduction factor ---------------------------------------------------------
+```{r}
+set.pspace(param  = "R0effect",
+           values = read.table(file=paste(
+				  "/home/hpcralf/hlrs/BIB/cosmic/Data/Germany",
+                                   "R0effect_R3.5-Opt-35-4.3.2.csv",sep="/"))
+                         )
+```
+
+## Weight of infection dynamic
+With the following factor the spread of the disease within aregion vs. the
+spread to other regions resulting from the connectivity between regions
+obtained from commuter flow data is controlled. With setting it to 0.9
+90% of internal spreading and 10% of spread to connected regions is selected.
+```{r}
+set.pspace(param = "w_int", values = 0.9)
+```
+
+## Weight of infected cases relocation
+With this parameter the relocation of infected cases to othher counties
+according to the observerd cases is controlled. With setting it to 0.0
+relocation is turned off.
+```{r}
+set.pspace(param = "w.obs", values = 0.0)
+```
+
+## Redistribution method
+Either redistribution accross the whole country (0) or only within the
+states (1) can be selected.
+```{r}
+set.pspace(param = "w.obs.by.state", values = 0)
+```
+
+## Setup of Static Model Parameters
+```{r}
+static.params <- set.static.params(pspace)
+```
+
+## Set input data
+```{r}
+iol <- load.input()
 ```

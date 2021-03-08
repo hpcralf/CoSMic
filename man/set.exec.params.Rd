@@ -9,7 +9,7 @@ set.exec.params(
   parallel.method = "OMP",
   max.cores = 4,
   omp.cluster.dbg = FALSE,
-  data.dir = "Data",
+  data.dir = "data",
   output.dir = NULL,
   model.version = "12.0",
   export_name = NULL,
@@ -37,7 +37,7 @@ a file called cl.out.\cr
 \emph{Defaults to:} \code{FALSE}}
 
 \item{data.dir}{Path to the directory from which input files are read.\cr
-\emph{Defaults to:} \code{"Data"}}
+\emph{Defaults to:} \code{"data"}}
 
 \item{model.version}{The model version string.\cr
 \emph{Currently defaults to:} \code{12.0}}

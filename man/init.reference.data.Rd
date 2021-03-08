@@ -36,6 +36,6 @@ targets and the provided data.
 }
 \section{ToDo}{
 
-Implement ot[\link{dea.nuts2}]
+Implement ot[[dea.nuts2]]
 }
 

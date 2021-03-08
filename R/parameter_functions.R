@@ -51,7 +51,7 @@
 #'                        a file called cl.out.\cr
 #'                        *Defaults to:* \code{FALSE}
 #' @param data.dir Path to the directory from which input files are read.\cr
-#'                 *Defaults to:* \code{"Data"}
+#'                 *Defaults to:* \code{"data"}
 #' @param model.version The model version string.\cr
 #'                      *Currently defaults to:* \code{12.0}
 #' @param export_name File name addition for output files.\cr
@@ -81,7 +81,7 @@ set.exec.params <- function(exec.procedure  = "Basic-Param",
                             parallel.method = "OMP",
                             max.cores       = 4,
                             omp.cluster.dbg = FALSE,
-                            data.dir        = "Data",
+                            data.dir        = "data",
                             output.dir      = NULL,
                             model.version   = "12.0",
                             export_name     = NULL,
@@ -137,7 +137,7 @@ set.exec.params <- function(exec.procedure  = "Basic-Param",
 
     ## Data directory ------------------------------------------------
     if ( !dir.exists(data.dir) ) {
-        stop(paste("Data dir",data.dir,"does not exist!"))
+        warning(paste("Data dir",data.dir,"does not exist!"))
     }
     ep <- list.append(ep,
                       data.dir=data.dir)
@@ -497,30 +497,47 @@ save.pspace <- function(ep, pspace) {
 #'
 #' @export
 set.static.params <- function(pspace,
-                              seed.in.inner.loop,
-                              seed.base,             
-                              country,               restrict,
-                              sim.regions,           sam_prop.ps,
-                              sim_pop,               ini_infected,
-                              seed_infections,
-                              seed_date,             seed_before,
-                              time_n=NULL,
-                              inf_dur,               cont_dur,
-                              ill_dur,               icu_per_day,
-                              less_contagious,       R0_force,
-                              immune_stop,
-                              import_R0_matrix=FALSE,
-                              R0change,              R0county,
-                              R0delay,               R0delay_days,
-                              R0delay_type,
-                              endogenous_lockdown,   lockdown_effect,
-                              lockdown_connect,      lockdown_threshold,
-                              lockdown_days,         control_age_sex,
-                              iter=NULL,             lhc.samples=NULL,
-                              lhc.reload=FALSE,      gplots=FALSE,
-                              cplots=FALSE,          cplots.states=FALSE,
-                              cplots.nuts2=FALSE,
-                              results="Reduced",     sp.states=NULL) {
+                              seed.in.inner.loop  = FALSE,
+                              seed.base           = NULL,             
+                              country             = "Germany",
+                              restrict            = TRUE,
+                              sim.regions         = c("Schleswig-Holstein","Hamburg","Niedersachsen","Bremen"),
+                              sam_prop.ps         = c(1.0,1.0,1.0,1.0),
+                              sim_pop             = "proportional",
+                              ini_infected        = 10,
+                              seed_infections     = "data",
+                              seed_date           = "2020-03-09",
+                              seed_before         = 7,
+                              time_n              = NULL,
+                              inf_dur             = 3,
+                              cont_dur            = 2,
+                              ill_dur             = 8,
+                              icu_per_day         = c(0,0,0,0,0,0,0,8),
+                              less_contagious     = 0.7,
+                              R0_force            = 0,
+                              immune_stop         = TRUE,
+                              import_R0_matrix    = FALSE,
+                              R0change            = lapply(seq(1,by=7,length.out=20),
+                                                           function(x){c(x,x+6)}),
+                              R0county            =  as.list(rep("ALL",20)),
+                              R0delay             = TRUE,
+                              R0delay_days        = 5,
+                              R0delay_type        = "linear",
+                              endogenous_lockdown = FALSE,
+                              lockdown_effect     = 0.39,
+                              lockdown_connect    = 0.5,
+                              lockdown_threshold  = 100,
+                              lockdown_days       = 10,
+                              control_age_sex     = "age",
+                              iter                = 4,
+                              lhc.samples         = NULL,
+                              lhc.reload          = FALSE,
+                              gplots              = FALSE,
+                              cplots              = FALSE,
+                              cplots.states       = FALSE,
+                              cplots.nuts2        = FALSE,
+                              results             = "Reduced",
+                              sp.states           = NULL) {
     
     sp <- list()
 
@@ -674,7 +691,7 @@ set.static.params <- function(pspace,
                       import_R0_matrix=import_R0_matrix)
 
     ## Treat R0change ------------------------------------------------
-    ## If R0_effect is already in pspace check agains its length
+    ## If R0_effect is already in pspace check again its length
     if ( "R0_effect" %in% names(pspace) ) {
         if ( class( pspace[["R0_effect"]]$param ) == "numeric" ) {
 
@@ -852,9 +869,9 @@ set.static.params <- function(pspace,
     }
 
     ## Treat speaking names of health states -----------------------------------
-    if (is.null(sp.states) | (length(sp.states) != 7)) {
+    if (is.null(sp.states) | (length(sp.states) == 7)) {
 
-        if (length(sp.states) != 7) {
+        if ((length(sp.states) != 7) & (!is.null(sp.states))) {
             warning("The CoSMic SIER model operates with 7 health conditions.",
                     "Please provide as many speaking condition names")
         }
@@ -895,67 +912,114 @@ save.static.params <- function(ep, sp) {
 #'  Loading input data
 #'
 #' @export
-load.input <- function(data.dir, country,
-                       trans.pr, pop.data, inf.cases, dead.cases,
-                       connect.total, connect.work, states, counties,
-                       R0.matrix.inp=NULL,
-                       dead.cases.by.state, dead.cases.by.country,
-                       icu.cases.by.county,
-                       icu.cases.by.state,  icu.cases.by.country,
-                       lhc.data=NULL) {
+load.input <- function(data.dir              = "./",
+                       trans.pr              = NULL,
+                       pop.data              = NULL,
+                       inf.cases             = NULL,
+                       dead.cases            = NULL,
+                       connect.total         = NULL,
+                       connect.work          = NULL,
+                       states                = NULL,
+                       counties              = NULL,
+                       R0.matrix.inp         = NULL,
+                       dead.cases.by.state   = NULL,
+                       dead.cases.by.country = NULL,
+                       icu.cases.by.county   = NULL,
+                       icu.cases.by.state    = NULL,
+                       icu.cases.by.country  = NULL,
+                       lhc.data              = NULL) {
     
-    iol <- list(
-        
-        ## Load dataset with transition probabilities --------------------------
-        trans_pr = read.csv(paste(data.dir,country,trans.pr,sep="/")),
+    iol <- list()
+
+    ## Transition probabilities ------------------------------------------------
+    if (is.null(trans.pr)) {
+        data(trans_pr)
+        iol[["trans_pr"]]  <- trans_pr
+    } else {
+        trans_pr <- read.csv(paste(data.dir,trans.pr,sep="/"))
+    }
     
-        ## Load dataset with population structure ------------------------------
-        pop = read.csv(paste(data.dir,country,pop.data,sep="/")),
-
-        ## Load infected case data ---------------------------------------------
-        seed = read.csv(paste(data.dir,country,inf.cases,sep="/")),
-
-        ## Load death data -----------------------------------------------------
-        seed_dea = read.csv(paste(data.dir,country,dead.cases,sep="/")),
-
-        ## Load datasets with connectivity matrix: Total population ------------
-        connect_total = read.csv(paste(data.dir,country,connect.total,sep="/")),
-
-        ## Load datasets with connectivity matrix: Working population ----------
-        connect_work = read.csv(paste(data.dir,country,connect.work,sep="/")),
-        
-        ## Load translation between State code, shortcut Name ------------------
-        states = read.csv(paste(data.dir,country,states,sep="/"),
-                          stringsAsFactor=FALSE),
+    ## Population structure ----------------------------------------------------
+    if (is.null(pop.data)) {
+        data("181231_pop_age_sex_distr_ger")
+        iol[["pop"]]  <- pop.data
+    } else {
+        pop  <- read.csv(paste(data.dir,pop.data,sep="/"))
+    }
     
-        ## Load translation between State code, shortcut Name ------------------
-        counties = read.csv(paste(data.dir,country,counties,sep="/"),
-                            stringsAsFactor=FALSE)
-        )
+    ## Seed data for infection seeding during model startup --------------------
+    if (is.null(inf.cases)) {
+        data(infections)
+        iol[["seed"]]  <- seed
+    } else {
+        seed <- read.csv(paste(data.dir,inf.cases,sep="/"))
+        }
 
+    ## Seed data for seedinf of dead cases during model startup ----------------
+    if (is.null(dead.cases)) {
+        data(dead_cases)
+        iol[["seed_dea"]]  <- seed_dea
+    } else {
+        seed_dea <- read.csv(paste(data.dir,dead.cases,sep="/"))
+    }
+    
+    ## Connectivity matrix: Total population -----------------------------------
+    if (is.null(connect.total)) {
+        data(connect_total)
+        iol[["connect_total"]]  <- connect_total
+    } else {
+        connect_total = read.csv(paste(data.dir,connect.total,sep="/"))
+    }
+    
+    ## Connectivity matrix: Working population ---------------------------------
+    if (is.null(connect.work)) {
+        data(connect_work)
+        iol[["connect_work"]]  <- connect_work
+    } else {
+        connect_work = read.csv(paste(data.dir,connect.work,sep="/"))
+    }
+    
+    ## State information -------------------------------------------------------
+    if (is.null(states)) {
+        data(states)
+        iol[["states"]]  <- states
+    } else {
+        states <- read.csv(paste(data.dir,states,sep="/"),
+                           stringsAsFactor=FALSE)
+    }
+    
+    ## County information ------------------------------------------------------
+    if (is.null(counties)) {
+        data(counties)
+        iol[["counties"]]  <- counties
+    } else {
+        counties <- read.csv(paste(data.dir,counties,sep="/"),
+                             stringsAsFactor=FALSE)
+    }
+
+    ## Change class of date column of seed to class Date -----------------------
     if ( ! "date" %in% names(iol$seed) ) {
         stop(paste("Colname \"date\" is missing in file \n",
                    inf.cases))
     }
-    
     iol$seed$date <- as.Date(iol$seed$date)
 
-    ## Load R0 data  -----------------------------------------------------------
+    ## Load R0 data as matrix  -----------------------------------------------------------
     if ( !is.null(R0.matrix.inp) ) {
         iol <- list.append(iol,
-                           R0_raw = read.csv(paste(data.dir,country,
+                           R0_raw = read.csv(paste(data.dir,
                                                    R0.matrix.inp, sep=""))
                            )
     }
 
     ## Load reference data for dead cases for the complete country -------------
     if ( ! is.null( dead.cases.by.country ) ) {
-
+        
         iol <- list.append(
             iol, dead.cases.by.country =
-                     read.csv(file = paste(data.dir,country,
+                     read.csv(file = paste(data.dir,
                                            dead.cases.by.country,sep="/")))
-
+        
         ## Check whether the relevant columns exist ----------------------------
         if ( ! all(c("date","cases") %in% names(iol$dead.cases.by.country) ) ) {
             stop("Please check the structure of the file given by dead.cases.by.country \n ",
@@ -963,7 +1027,7 @@ load.input <- function(data.dir, country,
                  paste(names(iol$dead.cases.by.country),collapse=","),"\n ",
                  "But we need 'date' and 'cases'.")
         }
-
+        
         iol$dead.cases.by.country$date <- as.Date(iol$dead.cases.by.country$date)
         
     } else {
@@ -972,12 +1036,12 @@ load.input <- function(data.dir, country,
     
     ## Load reference data for dead cases by state -----------------------------
     if ( ! is.null( dead.cases.by.state ) ) {
-
+        
         iol <- list.append(
             iol, dead.cases.by.state =
-                     read.csv(file = paste(data.dir,country,
+                     read.csv(file = paste(data.dir,
                                            dead.cases.by.state,sep="/")))
-
+        
         ## Check whether the relevant columns exist ----------------------------
         if ( ! all(c("date","SummeTodesfaelle","Bundesland") %in% names(iol$dead.cases.by.state) ) ) {
             stop("Please check the structure of the file given by dead.cases.by.state \n ",
@@ -985,24 +1049,24 @@ load.input <- function(data.dir, country,
                  paste(names(iol$dead.cases.by.state),collapse=","),"\n ",
                  "But we need 'date','SummeTodesfaelle', 'Bundesland' .")
         }
-
+        
         iol$dead.cases.by.state$date <- as.Date(iol$dead.cases.by.state$date)
         ## Rename Columns to English names -------------------------------------
         names(iol$dead.cases.by.state)[
             which(names(iol$dead.cases.by.state)=="SummeTodesfaelle")] <- "deaths"
         names(iol$dead.cases.by.state)[
             which(names(iol$dead.cases.by.state)=="Bundesland")] <- "state"
-
+        
     } else {
         iol <- list.append(iol, dead.cases.by.state = NULL)
     }
-
+    
     ## Load reference data for ICU cases for the complete country --------------
     if ( ! is.null( icu.cases.by.country ) ) {
 
         iol <- list.append(
             iol, icu.cases.by.country =
-                     read.csv(file = paste(data.dir,country,
+                     read.csv(file = paste(data.dir,
                                            icu.cases.by.country,sep="/")))
 
         ## Check whether the relevant columns exist ----------------------------
@@ -1024,7 +1088,7 @@ load.input <- function(data.dir, country,
 
         iol <- list.append(
             iol, icu.cases.by.state =
-                     read.csv(file = paste(data.dir,country,
+                     read.csv(file = paste(data.dir,
                                            icu.cases.by.state,sep="/")))
 
         ## Check whether the relevant columns exist ----------------------------
@@ -1046,7 +1110,7 @@ load.input <- function(data.dir, country,
 
         iol <- list.append(
             iol, icu.cases.by.county =
-                     read.csv(file = paste(data.dir,country,
+                     read.csv(file = paste(data.dir,
                                            icu.cases.by.county,sep="/")))
 
         ## Check whether the relevant columns exist ----------------------------
@@ -1068,13 +1132,12 @@ load.input <- function(data.dir, country,
     ## Load prepared latin hypercube data --------------------------------------
     if ( ! is.null( lhc.data ) ) {
         iol <- list.append(
-            iol, lhc.data = read.table(file = paste(data.dir,country,
+            iol, lhc.data = read.table(file = paste(data.dir,
                                                     lhc.data,sep="/")))
     } else {
         iol <- list.append(iol, lhc.data = NULL)
     }
     
-        
     return(iol)
 }
 

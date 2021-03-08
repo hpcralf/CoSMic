@@ -39,14 +39,14 @@
 %%==============================================================================
 -->
 ---
-title: "CoSMic - Basic usage"
+title: "CoSMic - Parameter Setup and Usage"
 author: "Ralf Schneider <schneider@hlrs.de>"
 output:
   html_document:
     toc: true
     toc_depth: 2
 vignette: >
-  %\VignetteIndexEntry{CoSMic - Basic usage}
+  %\VignetteIndexEntry{CoSMic - Parameter Setup and Usage}
   %\VignetteEngine{knitr::rmarkdown}
   \usepackage[utf8]{inputenc}
 ---
