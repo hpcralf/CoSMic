@@ -927,7 +927,7 @@ load.input <- function(data.dir              = "./",
                        icu.cases.by.county   = NULL,
                        icu.cases.by.state    = NULL,
                        icu.cases.by.country  = NULL,
-                       lhc.data              = NULL) {
+                       lhc.data              = NULL	) {
     
     iol <- list()
 
@@ -936,7 +936,7 @@ load.input <- function(data.dir              = "./",
         data(trans_pr)
         iol[["trans_pr"]]  <- trans_pr
     } else {
-        trans_pr <- read.csv(paste(data.dir,trans.pr,sep="/"))
+        iol[["trans_pr"]] <- read.csv(paste(data.dir,trans.pr,sep="/"))
     }
     
     ## Population structure ----------------------------------------------------
@@ -944,7 +944,7 @@ load.input <- function(data.dir              = "./",
         data("181231_pop_age_sex_distr_ger")
         iol[["pop"]]  <- pop
     } else {
-        pop  <- read.csv(paste(data.dir,pop.data,sep="/"))
+        iol[["pop"]]  <- read.csv(paste(data.dir,pop.data,sep="/"))
     }
     
     ## Seed data for infection seeding during model startup --------------------
@@ -952,7 +952,7 @@ load.input <- function(data.dir              = "./",
         data(infections)
         iol[["seed"]]  <- seed
     } else {
-        seed <- read.csv(paste(data.dir,inf.cases,sep="/"))
+        iol[["seed"]] <- read.csv(paste(data.dir,inf.cases,sep="/"))
         }
 
     ## Seed data for seedinf of dead cases during model startup ----------------
@@ -960,7 +960,7 @@ load.input <- function(data.dir              = "./",
         data(dead_cases)
         iol[["seed_dea"]]  <- seed_dea
     } else {
-        seed_dea <- read.csv(paste(data.dir,dead.cases,sep="/"))
+        iol[["seed_dea"]] <- read.csv(paste(data.dir,dead.cases,sep="/"))
     }
     
     ## Connectivity matrix: Total population -----------------------------------
@@ -968,7 +968,7 @@ load.input <- function(data.dir              = "./",
         data(connect_total)
         iol[["connect_total"]]  <- connect_total
     } else {
-        connect_total = read.csv(paste(data.dir,connect.total,sep="/"))
+        iol[["connect_total"]] = read.csv(paste(data.dir,connect.total,sep="/"))
     }
     
     ## Connectivity matrix: Working population ---------------------------------
@@ -976,7 +976,7 @@ load.input <- function(data.dir              = "./",
         data(connect_work)
         iol[["connect_work"]]  <- connect_work
     } else {
-        connect_work = read.csv(paste(data.dir,connect.work,sep="/"))
+        iol[["connect_work"]] = read.csv(paste(data.dir,connect.work,sep="/"))
     }
 
     ## State information -------------------------------------------------------
@@ -984,7 +984,7 @@ load.input <- function(data.dir              = "./",
         data(states)
         iol[["states"]]  <- states
     } else {
-        states <- read.csv(paste(data.dir,states,sep="/"),
+        iol[["states"]] <- read.csv(paste(data.dir,sts,sep="/"),
                            stringsAsFactor=FALSE)
     }
     
@@ -993,12 +993,12 @@ load.input <- function(data.dir              = "./",
         data(counties)
         iol[["counties"]]  <- counties
     } else {
-        counties <- read.csv(paste(data.dir,counties,sep="/"),
+        iol[["counties"]] <- read.csv(paste(data.dir,cnts,sep="/"),
                              stringsAsFactor=FALSE)
     }
 
     ## Change class of date column of seed to class Date -----------------------
-    if ( ! "date" %in% names(iol$seed) ) {
+    if ( ! ("date" %in% names(iol$seed)) ) {
         stop(paste("Colname \"date\" is missing in file \n",
                    inf.cases))
     }
