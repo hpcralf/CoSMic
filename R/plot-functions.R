@@ -627,13 +627,27 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
 
                         for ( pg in seq(length(state.list)) ) {
 
-                            gg.R0e <- data.frame(date = sp$seed_date +
-                                                     unlist(lapply(sp$R0change,
-                                                                   function(x){as.integer(x[1]+(x[2]-x[1])/2)})),
-                                                 R0e = as.numeric(
-                                                     state.list[[pg]][1,paste0(iol$states[st,"Shortcut"],
-                                                     (1:length(sp$R0change)))]),
-                                                 name= paste0("R0effect pg-",pg))
+                            if ( region == "state" ) {
+                                gg.R0e <- data.frame(date = sp$seed_date +
+                                                         unlist(lapply(sp$R0change,
+                                                                       function(x){
+                                                                           as.integer(x[1]+(x[2]-x[1])/2)})),
+                                                     R0e = as.numeric(
+                                                         state.list[[pg]][1,paste0(iol$states[st,"Shortcut"],
+                                                         (1:length(sp$R0change)))]),
+                                                     name= paste0("R0effect pg-",pg))
+                            }
+                            if ( region == "nuts2" ) {
+                                gg.R0e <- data.frame(date = sp$seed_date +
+                                                         unlist(lapply(sp$R0change,
+                                                                       function(x){
+                                                                           as.integer(x[1]+(x[2]-x[1])/2)})),
+                                                     R0e = as.numeric(
+                                                         state.list[[pg]][1,paste0(st,
+                                                         (1:length(sp$R0change)))]),
+                                                     name= paste0("R0effect pg-",pg))
+                            }
+                            
                             
                             ## Add line for R0effect on secondary y-axis -------
                             plt[[ii]] <- plt[[ii]] +
@@ -647,7 +661,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
 
                     ## ---------------------------------------------------------
                     ## Plot R0effect as used by model on daily basis -----------
-                    if ( "R0effect.daily" %in% Sec.Axis) {
+                    if ( ("R0effect.daily" %in% Sec.Axis) & ( region == "state" ) ) {
 
                         for ( pg in seq(length(state.list)) ) {
                             ## Spread Weekly R0effect to get daily data ------------
@@ -669,6 +683,11 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                         }
                         
                     }
+                    if ( ("R0effect.daily" %in% Sec.Axis) & ( region == "nuts2" ) ) {
+
+                        warning("R0effect.daily for nuts2 nit yet implemented")
+                       
+                    }                    
 
                     ## ---------------------------------------------------------
                     ## Plot first derivative of observed data ------------------

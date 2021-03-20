@@ -1720,11 +1720,11 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
         ## with more than one value and once across the parameter set of the
         ## directv parameter for R0effect.
         if (sp$cplots.nuts2) {
-            
+
             ## Every diagram its own scale ------------------------------
             outfile <- paste0(ep$output.dir,
                               "Rplots-ByNUTS2-iter=",sp$iter,"-sam_size=",
-                              pspace[["sam_size"]]$param[1],"-",
+                              pspace[["sam_size"]]$param[1],"-RMS-",
                               ep$export_name,".pdf",sep="")
             
             plots.by.state(outfile      = outfile,
@@ -1736,13 +1736,35 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                            rr           = rr,
                            region       = "nuts2",
                            fix.lim      = FALSE,
+                           filtered = FALSE,
+                           Sec.Axis=c("RMS"),
+                           silent=FALSE,
+                           ind.states   = c(1,2,3,4,5,6,7))
+            
+            ## Every diagram its own scale ------------------------------
+            outfile <- paste0(ep$output.dir,
+                              "Rplots-ByNUTS2-iter=",sp$iter,"-sam_size=",
+                              pspace[["sam_size"]]$param[1],"-R0effect-",
+                              ep$export_name,".pdf",sep="")
+            
+            plots.by.state(outfile      = outfile,
+                           sp           = sp,
+                           seed_icu     = op$opt.target$icu.nuts2,
+                           seed_dea     = NULL,
+                           iol          = iol,
+                           pspace       = pspace,
+                           rr           = rr,
+                           region       = "nuts2",
+                           fix.lim      = FALSE,
+                           filtered = FALSE,
+                           Sec.Axis=c("R0effect"),
                            ind.states   = c(1,2,3,4,5,6,7))
 
             ## Global fixed scale accross all diagramms -----------------
             outfile <- paste0(ep$output.dir,
                               "Rplots-ByNUTS2-iter=",sp$iter,"-sam_size=",
-                              pspace[["sam_size"]]$param[1],"-",
-                              ep$export_name,"-fixed-scale",".pdf",sep="")
+                              pspace[["sam_size"]]$param[1],"-fixed-scale-",
+                              ep$export_name,".pdf",sep="")
             
             plots.by.state(outfile      = outfile,
                            sp           = sp,
