@@ -54,7 +54,7 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
                              iol, pspace,
                              rr,  ind.states=NULL, global.plot,
                              x.min=NULL,x.max=NULL, relative=FALSE,
-                             silent=FALSE) {
+                             silent=FALSE, split = NULL) {
 
     if (is.null(x.max) & is.null(sp$time_n)) {
         warning(paste("is.null(x.max) & is.null(sp$time_n) holds TRUE.",
@@ -68,6 +68,7 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
     if (class(x.min) != "Date") x.min <- sp$seed_date + x.min
     if (class(x.max) != "Date") x.max <- sp$seed_date + x.max
        
+    if (is.null(split) ) {
     ## --------------------------------------------------------------------------
     ## Select parameters from pspace to group by
     ## Extract parameter types from paramter list ---------------------
@@ -142,6 +143,9 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
     
     split.by <- gcols
     print(paste("Split by:",gcols))
+    } else {
+        split.by <- split
+    }
     
     ## x-Axis ---------------------------------------------------
     time <- seq(from=sp$seed_date,to=sp$seed_date+sp$time_n-1,by="days")
@@ -338,83 +342,88 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                            filtered = FALSE, fk.cases=rep(1/7, 7),
                            Sec.Axis = "RMS", fk.sec=rep(1/15, 15),
                            sec.text = FALSE,
-                           ind.states=NULL, silent=FALSE, relative=FALSE) {
+                           ind.states=NULL, silent=FALSE, relative=FALSE,
+                           split = NULL) {
 
-    ## -------------------------------------------------------------------------
-    ## Select parpameters from pspace to group by
-
-    ## Extract parameter types from paramter list ---------------------
-    pspace.types <- lapply(pspace,function(x){x$type})
-    
-    # Extract parameters of type dist --------------------------------
-    pspace.params <- lapply(pspace[which(pspace.types %in% c("dist","distv"))],
-                            function(x){x$param})
-    ## Extract standard deviations of type dist from pspace -----------
-    pspace.sd <- lapply(pspace[which(pspace.types %in% c("dist","distv"))],
-                        function(x){x$sd})
-    
-    ## Number of elements to vary in parameters of type dist ----------
-    n.dist    <-  sum(unlist(pspace.sd)>0)
-
-    ## 1.) The first of dist with sd > 1. Since all dist are sampled by LHS
-    ##     there is no need to group by the other ones.
-    if ( n.dist > 0 ) {
-        gcols <- names(unlist(pspace.params[[1]])[which(unlist(pspace.sd) >0)])[1]
+        ## -------------------------------------------------------------------------
+        ## Select parpameters from pspace to group by
+        
+    if ( is.null(split) ) {
+        ## Extract parameter types from paramter list ---------------------
+        pspace.types <- lapply(pspace,function(x){x$type})
+        
+        ## Extract parameters of type dist --------------------------------
+        pspace.params <- lapply(pspace[which(pspace.types %in% c("dist","distv"))],
+                                function(x){x$param})
+        ## Extract standard deviations of type dist from pspace -----------
+        pspace.sd <- lapply(pspace[which(pspace.types %in% c("dist","distv"))],
+                            function(x){x$sd})
+        
+        ## Number of elements to vary in parameters of type dist ----------
+        n.dist    <-  sum(unlist(pspace.sd)>0)
+        
+        ## 1.) The first of dist with sd > 1. Since all dist are sampled by LHS
+        ##     there is no need to group by the other ones.
+        if ( n.dist > 0 ) {
+            gcols <- names(unlist(pspace.params[[1]])[which(unlist(pspace.sd) >0)])[1]
+        } else {
+            gcols <- NULL
+        }
+        
+        ## 2.) All direct with length(param) > 1
+        direct.cols <- which(unlist(lapply(
+            pspace[which(pspace.types=="direct")],function(x){length(x$param)})) > 1)
+        if ( length( direct.cols ) > 0 ) {
+            if (length(gcols) == 0) {
+                gcols <- names(direct.cols)
+            } else {
+                gcols <- c(gcols,names(direct.cols))
+            }
+        }
+        
+        ## 3.) All directv with not constant param
+        if (length(pspace[which(pspace.types=="directv")]) == 1) {
+            
+            var.lens<-unlist(lapply(lapply(
+                pspace[[which(pspace.types=="directv")]]$param,unique),length))
+            
+            if  (length(gcols) == 0) {
+                gcols <- names(which(var.lens==max(var.lens))[1])
+            } else {
+                gcols <- c(gcols,
+                           names(which(var.lens==max(var.lens))[1]))
+            }
+            
+        } else if (length(pspace[which(pspace.types=="directv")]) > 1) {
+            print("Aggregated plotting by parameter is only supported for one directv parameter")
+            print("Skipping directv plots Sorry")
+        }
+        
+        ## 4.) All directl with not constant param
+        if (length(pspace[which(pspace.types=="directl")]) == 1) {
+            
+            lhc.dat <- do.call(rbind,lapply(pspace[[which(pspace.types=="directl")]]$param,unlist))
+            
+            var.lens<-unlist(lapply(apply(lhc.dat,2,unique),length))
+            
+            if  (length(gcols) == 0) {
+                gcols <- colnames(lhc.dat)[which(var.lens==max(var.lens))[1]]
+            } else {
+                gcols <- c(gcols,
+                           colnames(lhc.dat)[which(var.lens==max(var.lens))[1]])
+            }
+            
+        } else if (length(pspace[which(pspace.types=="directl")]) > 1) {
+            print("Aggregated plotting by parameter is only supported for one directl parameter")
+            print("Skipping directl plots Sorry")
+        }
+        
+        split.by <- gcols
+        print(gcols)
     } else {
-        gcols <- NULL
+        split.by <- split
     }
     
-    ## 2.) All direct with length(param) > 1
-    direct.cols <- which(unlist(lapply(
-        pspace[which(pspace.types=="direct")],function(x){length(x$param)})) > 1)
-    if ( length( direct.cols ) > 0 ) {
-        if (length(gcols) == 0) {
-            gcols <- names(direct.cols)
-        } else {
-            gcols <- c(gcols,names(direct.cols))
-        }
-    }
-    
-    ## 3.) All directv with not constant param
-    if (length(pspace[which(pspace.types=="directv")]) == 1) {
-        
-        var.lens<-unlist(lapply(lapply(
-            pspace[[which(pspace.types=="directv")]]$param,unique),length))
-        
-        if  (length(gcols) == 0) {
-            gcols <- names(which(var.lens==max(var.lens))[1])
-        } else {
-            gcols <- c(gcols,
-                       names(which(var.lens==max(var.lens))[1]))
-        }
-        
-    } else if (length(pspace[which(pspace.types=="directv")]) > 1) {
-        print("Aggregated plotting by parameter is only supported for one directv parameter")
-        print("Skipping directv plots Sorry")
-    }
-    
-    ## 4.) All directl with not constant param
-    if (length(pspace[which(pspace.types=="directl")]) == 1) {
-        
-        lhc.dat <- do.call(rbind,lapply(pspace[[which(pspace.types=="directl")]]$param,unlist))
-        
-        var.lens<-unlist(lapply(apply(lhc.dat,2,unique),length))
-        
-        if  (length(gcols) == 0) {
-            gcols <- colnames(lhc.dat)[which(var.lens==max(var.lens))[1]]
-        } else {
-            gcols <- c(gcols,
-                       colnames(lhc.dat)[which(var.lens==max(var.lens))[1]])
-        }
-        
-    } else if (length(pspace[which(pspace.types=="directl")]) > 1) {
-        print("Aggregated plotting by parameter is only supported for one directl parameter")
-        print("Skipping directl plots Sorry")
-    }
-    
-    split.by <- gcols
-    print(gcols)
-       
     ## x-Axis ---------------------------------------------------
     time <- seq(from=as.Date(sp$seed_date),to=as.Date(sp$seed_date)+sp$time_n-1,by="days")
 
@@ -685,7 +694,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                     }
                     if ( ("R0effect.daily" %in% Sec.Axis) & ( region == "nuts2" ) ) {
 
-                        warning("R0effect.daily for nuts2 nit yet implemented")
+                        warning("R0effect.daily for nuts2 not yet implemented")
                        
                     }                    
 
