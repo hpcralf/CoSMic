@@ -286,7 +286,7 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
             
             plt[[ii]] <- plt[[ii]] +
                 geom_line(data=observed,
-                          aes(x=date,y=cases,color="Observed"),size=1) +
+                          aes(x=date,y=cases,color="Observed")) +
                 scale_color_manual(values = c('Observed' = 'black')) +
                 theme(legend.title = element_blank())
         }
