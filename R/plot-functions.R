@@ -225,9 +225,9 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
             state.max  <- apply(as.data.frame(state.max) ,1,max)
 
             if (relative & (ii == "ill_ICU")) {
-                state.min  <- state.min  / sum(iol$icu.cap$cap30april) *100
-                state.mean <- state.mean / sum(iol$icu.cap$cap30april) *100
-                state.max  <- state.max  / sum(iol$icu.cap$cap30april) *100
+                state.min  <- state.min  / sum(iol$icu.cap$sum) *100
+                state.mean <- state.mean / sum(iol$icu.cap$sum) *100
+                state.max  <- state.max  / sum(iol$icu.cap$sum) *100
             }
             
             fill.dt <- paste(round(unique(state.list[[1]][1,split.by]),3),collapse=" - ")
@@ -249,9 +249,9 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
                 fill.dt <- paste(round(unique(state.list[[pg]][1,split.by]),3),collapse=" - ")
 
                 if (relative & (ii == "ill_ICU")) {
-                    state.min[[pg]]  <- state.min[[pg]]  / sum(iol$icu.cap$cap30april) *100
-                    state.mean[[pg]] <- state.mean[[pg]] / sum(iol$icu.cap$cap30april) *100
-                    state.max[[pg]]  <- state.max[[pg]]  / sum(iol$icu.cap$cap30april) *100
+                    state.min[[pg]]  <- state.min[[pg]]  / sum(iol$icu.cap$sum) *100
+                    state.mean[[pg]] <- state.mean[[pg]] / sum(iol$icu.cap$sum) *100
+                    state.max[[pg]]  <- state.max[[pg]]  / sum(iol$icu.cap$sum) *100
                 }
                 
                 df.gg <- data.frame(time=time,
@@ -279,7 +279,7 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
 
             if (relative) {
                 observed <- seed_icu
-                observed$cases <- observed$cases / sum(iol$icu.cap$cap30april) *100
+                observed$cases <- observed$cases / sum(iol$icu.cap$sum) *100
             } else {
                 observed <- seed_icu
             }
@@ -544,9 +544,9 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
             for ( pg in seq(length(state.list)) ) {
 
                 if (relative & (jj == "ill_ICU")) {
-                    state.min[[pg]]  <- state.min[[pg]]  / iol$icu.cap$cap30april[st] *100
-                    state.mean[[pg]] <- state.mean[[pg]] / iol$icu.cap$cap30april[st] *100
-                    state.max[[pg]]  <- state.max[[pg]]  / iol$icu.cap$cap30april[st] *100
+                    state.min[[pg]]  <- state.min[[pg]]  / iol$icu.cap$sum[st] *100
+                    state.mean[[pg]] <- state.mean[[pg]] / iol$icu.cap$sum[st] *100
+                    state.max[[pg]]  <- state.max[[pg]]  / iol$icu.cap$sum[st] *100
                 }
                 
                 fill.dt <- paste(round(unique(state.list[[pg]][1,split.by]),3),collapse=" - ")
@@ -618,7 +618,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                 }
 
                 if (relative) {
-                    ref.data$cases <- ref.data$cases / iol$icu.cap$cap30april[st] *100
+                    ref.data$cases <- ref.data$cases / iol$icu.cap$sum[st] *100
                 }
                                 
                 ## Add line for observed data-----------------------------------                
