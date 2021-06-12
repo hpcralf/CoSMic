@@ -47,6 +47,13 @@ attenuate <- function(x,steps=5,type="logistic") {
     ## Find changes in x -----------------------------------------
     changex <- which(diff(x)!=0)
     nchange <- length(changex)
+
+    avg.cl <- round(mean(changex[2:nchange]-changex[1:(nchange-1)]))
+    
+    if ((changex[nchange]+avg.cl) <= length(x)) {
+        nchange <- nchange + 1
+        changex[nchange] <- changex[nchange-1] + avg.cl
+    }        
     
     ## Apply logistic ------------------------------------------------------
     if(type=="logistic" & nchange>0) {

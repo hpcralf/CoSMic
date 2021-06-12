@@ -54,7 +54,7 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
                              iol, pspace,
                              rr,  ind.states=NULL, global.plot,
                              x.min=NULL,x.max=NULL, relative=FALSE,
-                             silent=FALSE, split = NULL) {
+                             silent=FALSE, split.in = NULL, y.max=NULL) {
 
     if (is.null(x.max) & is.null(sp$time_n)) {
         warning(paste("is.null(x.max) & is.null(sp$time_n) holds TRUE.",
@@ -68,7 +68,7 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
     if (class(x.min) != "Date") x.min <- sp$seed_date + x.min
     if (class(x.max) != "Date") x.max <- sp$seed_date + x.max
        
-    if (is.null(split) ) {
+    if (is.null(split.in) ) {
     ## --------------------------------------------------------------------------
     ## Select parameters from pspace to group by
     ## Extract parameter types from paramter list ---------------------
@@ -141,10 +141,10 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
         print("Skipping directl plots Sorry")
     }
     
-    split.by <- gcols
-    print(paste("Split by:",gcols))
+        split.by <- gcols
+        print(paste("Split by:",gcols))
     } else {
-        split.by <- split
+        split.by <- split.in
     }
     
     ## x-Axis ---------------------------------------------------
@@ -194,8 +194,8 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
         }
 
         if (relative & (ii == "ill_ICU")) {
-            main.title <- paste(sp$country,paste0(sp.states.map[ii]," [%]"),sep=" - ")
-            y.title <- paste(sp.states.map[ii],"[%]")
+            main.title <- paste(sp$country,paste0(ii," [%]"),sep=" - ")
+            y.title <- paste(ii,"[%]")
         } else {
             main.title <- paste(sp$country,sp.states.map[ii],sep=" - ")        
             y.title <- paste(sp.states.map[ii])
@@ -306,6 +306,11 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
         }
 
         plt[[ii]] <- plt[[ii]] + xlim(x.min,x.max)
+
+        if ( ! is.null(y.max) ) {
+            plt[[ii]] <- plt[[ii]] + ylim(0,y.max)
+        }
+        
     }
 
     if ( ! silent ) {
@@ -343,12 +348,12 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                            Sec.Axis = "RMS", fk.sec=rep(1/15, 15),
                            sec.text = FALSE,
                            ind.states=NULL, silent=FALSE, relative=FALSE,
-                           split = NULL) {
+                           split.in = NULL, y.max=NULL) {
 
         ## -------------------------------------------------------------------------
         ## Select parpameters from pspace to group by
         
-    if ( is.null(split) ) {
+    if ( is.null(split.in) ) {
         ## Extract parameter types from paramter list ---------------------
         pspace.types <- lapply(pspace,function(x){x$type})
         
@@ -421,7 +426,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
         split.by <- gcols
         print(gcols)
     } else {
-        split.by <- split
+        split.by <- split.in
     }
     
     ## x-Axis ---------------------------------------------------
@@ -456,7 +461,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
     }
 
     if (relative & ("ill_ICU" %in% ind.states.to.plot)) {
-        sp.states.map["ill_ICU"] <- paste(sp.states.map["ill_ICU"],"[%]")
+        sp.states.map["ill_ICU"] <- paste("ill_ICU","[%]")
     } 
     
 
@@ -540,13 +545,21 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
             
             state.max  <- lapply(state.sum,function(x){
                 apply(x[,paste0("X",1:sp$time_n)],2,max)})
+
+            if (region =="state") {
+                cap <- iol$icu.cap$sum[st] / 100
+            } else if (region =="nuts2") {
+                cap <- iol$icu.cap.nuts2$sum[iol$icu.cap.nuts2$nuts2==st] / 100
+            } else {
+                warning(paste("Region type",region,"is not supported"))
+            }
             
             for ( pg in seq(length(state.list)) ) {
 
                 if (relative & (jj == "ill_ICU")) {
-                    state.min[[pg]]  <- state.min[[pg]]  / iol$icu.cap$sum[st] *100
-                    state.mean[[pg]] <- state.mean[[pg]] / iol$icu.cap$sum[st] *100
-                    state.max[[pg]]  <- state.max[[pg]]  / iol$icu.cap$sum[st] *100
+                    state.min[[pg]]  <- state.min[[pg]]  / cap
+                    state.mean[[pg]] <- state.mean[[pg]] / cap
+                    state.max[[pg]]  <- state.max[[pg]]  / cap
                 }
                 
                 fill.dt <- paste(round(unique(state.list[[pg]][1,split.by]),3),collapse=" - ")
@@ -618,7 +631,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                 }
 
                 if (relative) {
-                    ref.data$cases <- ref.data$cases / iol$icu.cap$sum[st] *100
+                    ref.data$cases <- ref.data$cases / cap
                 }
                                 
                 ## Add line for observed data-----------------------------------                
@@ -883,6 +896,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
         }
         
         if (fix.lim) {
+            if ( ! is.null(y.max) ) { glob.max  <-  y.max }
             ii <- 1
             for ( st in region.ids ) {
                 plt[[ii]] <- plt[[ii]] + ylim(0,max(glob.max))

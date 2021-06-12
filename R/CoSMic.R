@@ -1667,35 +1667,39 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                            rr           = rr,
                            region       = "state",
                            fix.lim      = FALSE,
-                           filtered = TRUE,
+                           filtered     = FALSE,
                            Sec.Axis=c("RMS"),
                            silent=FALSE,
                            fk.cases=rep(1/ 7,  7),
                            fk.sec  =rep(1/15, 15),
                            ind.states   = c(1,2,3,4,5,6,7))
 
-            ## Every diagram its own scale ------------------------------
-            outfile <- paste0(ep$output.dir,
-                              "Rplots-ByState-iter=",sp$iter,"-sam_size=",
-                              pspace[["sam_size"]]$param[1],"-R0effects-",
-                              ep$export_name,".pdf",sep="")
-            
-            plots.by.state(outfile      = outfile,
-                           sp           = sp,
-                           seed_icu     = iol$icu.cases.by.state,
-                           seed_dea     = op$opt.target$dea.bs,
-                           iol          = iol,
-                           pspace       = pspace,
-                           rr           = rr,
-                           region       = "state",
-                           fix.lim      = FALSE,
-                           filtered     = FALSE,
-                           Sec.Axis=c("R0effect","R0effect.daily"),
-                           silent=FALSE,
-                           fk.cases=rep(1/ 7,  7),
-                           fk.sec  =rep(1/15, 15),
-                           ind.states   = c(5))
 
+            ## Every diagram its own scale with R0effects ----------------------
+            ## This is only meaningfull if R0effects vary on state level -------
+            if ( R0effect.region == "state" ) {
+                outfile <- paste0(ep$output.dir,
+                                  "Rplots-ByState-iter=",sp$iter,"-sam_size=",
+                                  pspace[["sam_size"]]$param[1],"-R0effects-",
+                                  ep$export_name,".pdf",sep="")
+                
+                plots.by.state(outfile      = outfile,
+                               sp           = sp,
+                               seed_icu     = iol$icu.cases.by.state,
+                               seed_dea     = op$opt.target$dea.bs,
+                               iol          = iol,
+                               pspace       = pspace,
+                               rr           = rr,
+                               region       = "state",
+                               fix.lim      = FALSE,
+                               filtered     = FALSE,
+                               Sec.Axis     = c("R0effect","R0effect.daily"),
+                               silent       = FALSE,
+                               fk.cases     = rep(1/ 7,  7),
+                               fk.sec       = rep(1/15, 15),
+                               ind.states   = c(5))
+            }
+            
             ## Global fixed scale accross all diagramms -----------------
             outfile <- paste0(ep$output.dir,
                               "Rplots-ByState-iter=",sp$iter,"-sam_size=",
@@ -1741,25 +1745,29 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                            silent=FALSE,
                            ind.states   = c(1,2,3,4,5,6,7))
             
-            ## Every diagram its own scale ------------------------------
-            outfile <- paste0(ep$output.dir,
-                              "Rplots-ByNUTS2-iter=",sp$iter,"-sam_size=",
-                              pspace[["sam_size"]]$param[1],"-R0effect-",
-                              ep$export_name,".pdf",sep="")
+            ## Every diagram its own scale with R0effects ---------------
+            ## This is only meaningfull if R0effects vary on nuts2 level -------
+            if ( R0effect.region == "nuts2" ) {
+                
+                outfile <- paste0(ep$output.dir,
+                                  "Rplots-ByNUTS2-iter=",sp$iter,"-sam_size=",
+                                  pspace[["sam_size"]]$param[1],"-R0effect-",
+                                  ep$export_name,".pdf",sep="")
+                
+                plots.by.state(outfile      = outfile,
+                               sp           = sp,
+                               seed_icu     = op$opt.target$icu.nuts2,
+                               seed_dea     = NULL,
+                               iol          = iol,
+                               pspace       = pspace,
+                               rr           = rr,
+                               region       = "nuts2",
+                               fix.lim      = FALSE,
+                               filtered = FALSE,
+                               Sec.Axis=c("R0effect"),
+                               ind.states   = c(1,2,3,4,5,6,7))
+            }
             
-            plots.by.state(outfile      = outfile,
-                           sp           = sp,
-                           seed_icu     = op$opt.target$icu.nuts2,
-                           seed_dea     = NULL,
-                           iol          = iol,
-                           pspace       = pspace,
-                           rr           = rr,
-                           region       = "nuts2",
-                           fix.lim      = FALSE,
-                           filtered = FALSE,
-                           Sec.Axis=c("R0effect"),
-                           ind.states   = c(1,2,3,4,5,6,7))
-
             ## Global fixed scale accross all diagramms -----------------
             outfile <- paste0(ep$output.dir,
                               "Rplots-ByNUTS2-iter=",sp$iter,"-sam_size=",
