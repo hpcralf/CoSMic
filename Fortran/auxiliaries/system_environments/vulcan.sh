@@ -44,3 +44,7 @@ module load compiler/gnu/11.1.0
 
 # MPI environment ------------------------
 module load mpi/openmpi/4.1.1-gnu-11.1.0
+
+# Autotools ------------------------------
+export PATH=/opt/tools/autotools-2020-05-06/bin:$PATH
+

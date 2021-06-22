@@ -196,6 +196,12 @@ Contains
     Call MPI_COMM_SIZE(MPI_COMM_WORLD,size_of_process,ierror)
     Call MPI_COMM_RANK(MPI_COMM_WORLD,my_rank,ierror)
 
+    if ( size_of_process < 2 ) then
+       write(*,*)"Sorry this application requires at least 2 MPI-Processes"
+       write(*,*)"Programm halted !!!"
+       goto 1000
+    end if
+    
     Allocate(req(size_of_process))
 
     seed_in_inner_loop = .False.
@@ -1628,9 +1634,6 @@ Contains
     End If
 
 !!$OMP END PARALLEL DO
-    Call MPI_Finalize(ierror)
-    !call write_data()
-
 
     If (my_rank == 0)Then
        iter_pass_handle = (/lhc(1,iter),lhc(2,iter),lhc(3,iter),&
@@ -1646,6 +1649,10 @@ Contains
        Call write_data_v2(immune_cases_final,iter_pass_handle,pspace%ROeffect_ps%param,counties_index,6)
        Call write_data_v2(dead_cases_final,iter_pass_handle,pspace%ROeffect_ps%param,counties_index,7)
     End If
+
+    1000 continue
+    Call MPI_Finalize(ierror)
+
   End Subroutine COVID19_Spatial_Microsimulation_for_Germany
 
 

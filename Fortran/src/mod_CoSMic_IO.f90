@@ -44,6 +44,7 @@
 !###############################################################################
 module CoSMic_IO
 
+  Use global_constants
   Use global_types
   Use support_fun, Only: get_file_N
   
@@ -64,8 +65,14 @@ contains
     Character(Len=1024),Allocatable,Dimension(:)  :: lines
     
     !---------------------------------------------------------------------------
-    Open(newunit=un_spi, file=ep_infile, action="read", status="old")
+    Open(newunit=un_spi, file=ep_infile, action="read", status="old", &
+         iostat=io_stat)
 
+    if (io_stat .ne. 0 ) then
+       write(*,fmt_file_missing)ep_infile
+       stop
+    end if
+    
     n_lines = get_file_N(un_spi)
 
     Allocate(lines(n_lines))
@@ -146,8 +153,14 @@ contains
     character(len=64), Dimension(4)        :: c64_x_4
 
     !---------------------------------------------------------------------------
-    Open(newunit=un_spi, file=sp_infile, action="read", status="old")
+    Open(newunit=un_spi, file=sp_infile, action="read", status="old", &
+         iostat=io_stat)
 
+    if (io_stat .ne. 0 ) then
+       write(*,fmt_file_missing)sp_infile
+       stop
+    end if
+    
     n_lines = get_file_N(un_spi)
 
     Allocate(lines(n_lines))
@@ -170,7 +183,7 @@ contains
 
           if (allocated(sp%sim_regions)) then
 
-             write(*,*)"sp%sim_regions already allocated! Didi you specify #sim_regions twice?"
+             write(*,*)"sp%sim_regions already allocated! Did you specify #sim_regions twice?"
              stop
 
           End if
@@ -181,12 +194,13 @@ contains
           Do jj = 1, (no_sim_regions-1) / 4 + 1
 
              c64_x_4 = ""
-             Read(lines(jj),*,iostat=io_stat)c64_x_4
+             Read(lines(ii+jj),*,iostat=io_stat)c64_x_4
              sp%sim_regions(pos:pos+3) = c64_x_4
              pos = pos + 4
-             ii = ii + 1
 
           End Do
+          
+          ii = ii +  (no_sim_regions-1) / 4 + 1
 
        else if (trim(lines(ii)) == "#country") then !---------------------------
           ii = ii + 1
@@ -308,10 +322,15 @@ contains
     !!
     ! read data from file to tran_pr
     Open(newunit=un_in, file=trim(ep%data_dir)//trim(sp%trans_pr),&
-         access='sequential',form="formatted",iostat=k)
+         access='sequential',form="formatted",iostat=k, status="old")
 
+    if (k .ne. 0 ) then
+       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
+       stop
+    end if
+    
     index = get_file_N(un_in)
-    write(*,*)index
+
     ! allocation for the readin variables
     Allocate(iol%transpr_age_gr(index-1))
     Allocate(iol%transpr_sex(index-1))
@@ -330,7 +349,12 @@ contains
 
     !read data from file to pop
     Open(13,file=Trim(ep%data_dir)//trim(sp%pop_data),&
-         access='sequential',form="formatted",iostat=k)
+         access='sequential',form="formatted",iostat=k, status="old")
+    if (k .ne. 0 ) then
+       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%pop_data)
+       stop
+    end if
+    
     index = get_file_N(13)
     ! allocation for the readin variables
     Allocate(iol%pop_distid(index-1))
@@ -348,7 +372,7 @@ contains
     Close(13)
 
     !read data from file to seed
-    Open(14,file=Trim(ep%data_dir)//trim(sp%inf_cases),access='sequential',form="formatted",iostat=k)
+    Open(14,file=Trim(ep%data_dir)//trim(sp%inf_cases),access='sequential',form="formatted",iostat=k, status="old")
     index = get_file_N(14)
     ! allocation for the readin variables
     Allocate(iol%seed_distid(index-1))
@@ -365,7 +389,7 @@ contains
     !read data from file to seeddeath
 
     Open(15,file=Trim(ep%data_dir)//trim(sp%dead_cases), &
-         access='sequential',form="formatted",iostat=k)
+         access='sequential',form="formatted",iostat=k, status="old")
     index = get_file_N(15)
     ! allocation for the readin variables
     Allocate(iol%death_distid(index-1))
@@ -383,7 +407,7 @@ contains
     !read data from file to connect_total
 
     Open(16,file=Trim(ep%data_dir)//trim(sp%connect_total), &
-         access='sequential',form="formatted",iostat=k)
+         access='sequential',form="formatted",iostat=k, status="old")
 
     Read(16,*,iostat= k) iol%connect_titel,iol%connect_total_name(:)
     Do i = 1,Size(iol%connect_total_distid)
@@ -393,7 +417,7 @@ contains
 
     !read data from file to connect_total
 
-    Open(17,file=Trim(ep%data_dir)//trim(sp%connect_work),access='sequential',form="formatted",iostat=k)
+    Open(17,file=Trim(ep%data_dir)//trim(sp%connect_work),access='sequential',form="formatted",iostat=k, status="old")
 
     Read(17,*,iostat= k) iol%connect_titel,iol%connect_work_name(:)
     Do i = 1,Size(iol%connect_work_distid)
@@ -404,7 +428,7 @@ contains
     Close(17)
     !read data from file to connect_total
     Open(18,file=Trim(ep%data_dir)//trim(sp%states), &
-         access='sequential',form="formatted",iostat=k)
+         access='sequential',form="formatted",iostat=k, status="old")
     index = get_file_N(18)
     ! allocation for the readin variables
     Allocate(iol%states_code(index-1))
@@ -417,7 +441,7 @@ contains
     Enddo
     Close(18)
 
-    Open(19,file=Trim(ep%data_dir)//trim(sp%counties),access='sequential',form="formatted",iostat=k)
+    Open(19,file=Trim(ep%data_dir)//trim(sp%counties),access='sequential',form="formatted",iostat=k, status="old")
     index = get_file_N(19)
     ! allocation for the readin variables
     Allocate(iol%counties_dist_id(index-1))
@@ -467,7 +491,7 @@ contains
     !ROeffect_ps
     !open(20,file=trim(dir)//"/R0effect_R3.5-Opt-35-4.3.2.csv",&
     Open(20,file=Trim(ep%data_dir)//"/R0effect_W60+1_constant_states.csv",&
-         access='sequential',form="formatted",iostat=k)
+         access='sequential',form="formatted",iostat=k, status="old")
     index = get_file_N(20)
 
     Allocate(pspace%ROeffect_ps%param_char(17,index))

@@ -46,6 +46,8 @@ Module global_constants
 
   Implicit None
 
-
+  character(len=*), parameter :: fmt_file_missing = '("File:",/,A,/,&
+                                                    & "not found.",/,&
+                                                    & "Program halted !!!")'
   
 End Module global_constants
