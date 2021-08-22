@@ -46,8 +46,15 @@ Module global_constants
 
   Implicit None
 
-  character(len=*), parameter :: fmt_file_missing = '("File:",/,A,/,&
-                                                    & "not found.",/,&
-                                                    & "Program halted !!!")'
+  character(len=*), parameter :: fmt_file_missing = &
+       '("Operation on file:",/,A,/, "failed.",/, "Program halted !!!")'
   
+  character(len=*), parameter :: fmt_timing = &
+       '(A,T40,"finished in",F10.3,"sec.")'
+
+  character(len=*),Dimension( 9),parameter :: mandatory_params = &
+       ["trans_pr     ", "pop_data     ", "inf_cases    ", "dead_cases   ",&
+       "connect_total", "connect_work ", "states       ", "counties     ",&
+       "R0_effects   "]
+ 
 End Module global_constants

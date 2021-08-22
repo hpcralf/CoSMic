@@ -70,10 +70,6 @@ contains
     integer                 :: i
 
     !---------------------------------------------------------------------------
-    if (import_R0_matrix) then
-       !read file here needs to be implemented
-    end if
-
     !list of all counties codes
     all_counties = get_unique(iol%pop_distid)
 
@@ -82,11 +78,12 @@ contains
        ! don't know how to implement it wisely
        ! just leave blank here, since it wouldn't
        ! affect the code
-       write(*,*)sp%sim_regions
+
        state_code_index = get_index_mul_char(iol%states_name,sp%sim_regions)
 
        !             print *,state_code_index
        counties_index   = get_index_mul_integer(all_counties/1000,iol%states_code(state_code_index))
+
        !             allocate(counties_integer(size(counties_index)))
        counties_integer = all_counties(counties_index)
 

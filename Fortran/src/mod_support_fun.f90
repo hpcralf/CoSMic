@@ -525,6 +525,7 @@ integer function get_file_N(iFileUnit)
 implicit none
 integer, Intent(IN) :: iFileUnit
 character*1         :: cDummy
+write(*,*)"operating on unit:",iFileUnit
 get_file_N = 0
 rewind(iFileUnit)
 

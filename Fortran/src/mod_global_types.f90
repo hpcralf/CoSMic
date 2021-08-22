@@ -128,14 +128,12 @@ module global_types
 
   end type exec_parameters
 
-  !-------------------------------------------------------------------------------
-  !> Type to hold static parameters
   type static_parameters
 
      character(len=mcl), Dimension(:), Allocatable :: sim_regions
 
-     character(len=mcl)                            :: country
-     character(len=10)                             :: seed_date
+     character(len=mcl)                            :: country    = "Germany"
+     character(len=10)                             :: seed_date  = "2021-03-09"
      Logical                                       :: restrict
      integer                                       :: lhc_samples
 
@@ -148,11 +146,10 @@ module global_types
      character(len=mcl)                            :: connect_work="" 
      character(len=mcl)                            :: states=""       
      character(len=mcl)                            :: counties=""     
-     character(len=mcl)                            :: R0_matrix_inp=""
+     character(len=mcl)                            :: R0_effects=""   
      
   end type static_parameters
 
   integer                       :: time_n
-  logical                       :: import_R0_matrix
 
 end module global_types

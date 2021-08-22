@@ -81,9 +81,6 @@ contains
 
     Close(un_spi)
 
-    !Do ii = 1, n_lines
-    !   write(*,*)trim(lines(ii))
-    !End Do
     !-------------------------------------------------------
 
     ii = 1
@@ -175,7 +172,7 @@ contains
     !-------------------------------------------------------
 
     ii = 1
-    Do while (ii < n_lines)
+    Do while (ii <= n_lines)
 
        if (lines(ii)(1:12) == "#sim_regions") then !----------------------------
 
@@ -217,7 +214,11 @@ contains
        else if (trim(lines(ii)) == "#trans_pr") then !--------------------------
           ii = ii + 1
           sp%trans_pr = lines(ii)
-
+          
+       else if (trim(lines(ii)) == "#lhc_samples") then !--------------------------
+          ii = ii + 1
+          Read(lines(ii),*)sp%lhc_samples
+          
        else if (trim(lines(ii)) == "#pop_data") then !--------------------------
           ii = ii + 1
           sp%pop_data = lines(ii)
@@ -246,9 +247,9 @@ contains
           ii = ii + 1
           sp%counties = lines(ii)
 
-       else if (trim(lines(ii)) == "#R0_matrix_inp") then !---------------------
+       else if (trim(lines(ii)) == "#R0_effects") then !---------------------
           ii = ii + 1
-          sp%R0_matrix_inp = lines(ii)
+          sp%R0_effects = lines(ii)
 
        else  !-- Unknown keyword -----------------------------------------------
 
@@ -262,10 +263,12 @@ contains
 
           End Do
 
+          ii = ii - 1
+             
        End if
 
        ii = ii + 1
-
+       
     End Do
 
   end Subroutine load_static_parameters
@@ -282,6 +285,8 @@ contains
     character(len=*),parameter                    :: lcl = '(A,T18,"| ",L)'
     character(len=*),parameter                    :: tab_h = '(17("-"),"+",42("-"))'
 
+    integer                                       :: ii
+    
     write(*,'(60("-"))')    
     write(*,'("--",1X,A)')"static parameters"
     write(*,tab_h)
@@ -297,7 +302,12 @@ contains
     write(*,lca)"connect_work" , trim(sp%connect_work )
     write(*,lca)"states"       , trim(sp%states       )
     write(*,lca)"counties"     , trim(sp%counties     )
-    write(*,lca)"R0_matrix_inp", trim(sp%R0_matrix_inp)
+    write(*,lca)"R0_effects"   , trim(sp%R0_effects   )
+    write(*,tab_h)
+    write(*,lci)"# sim_regions", size(sp%sim_regions  )
+    do ii = 1, size(sp%sim_regions)
+       write(*,lca)" ",trim(sp%sim_regions(ii))
+    End do
     write(*,tab_h)
     write(*,*)
      
@@ -316,8 +326,6 @@ contains
     Type(iols)                 :: iol
     Type(pspaces)              :: pspace
 
-    import_R0_matrix = .False.
-
     !first version, set the array length manually
     !!
     ! read data from file to tran_pr
@@ -330,7 +338,7 @@ contains
     end if
     
     index = get_file_N(un_in)
-
+    
     ! allocation for the readin variables
     Allocate(iol%transpr_age_gr(index-1))
     Allocate(iol%transpr_sex(index-1))
@@ -372,7 +380,13 @@ contains
     Close(13)
 
     !read data from file to seed
-    Open(14,file=Trim(ep%data_dir)//trim(sp%inf_cases),access='sequential',form="formatted",iostat=k, status="old")
+    Open(14,file=Trim(ep%data_dir)//trim(sp%inf_cases),access='sequential',&
+         form="formatted",iostat=k, status="old")
+    if (k .ne. 0 ) then
+       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
+       stop
+    end if
+
     index = get_file_N(14)
     ! allocation for the readin variables
     Allocate(iol%seed_distid(index-1))
@@ -390,6 +404,11 @@ contains
 
     Open(15,file=Trim(ep%data_dir)//trim(sp%dead_cases), &
          access='sequential',form="formatted",iostat=k, status="old")
+    if (k .ne. 0 ) then
+       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
+       stop
+    end if
+
     index = get_file_N(15)
     ! allocation for the readin variables
     Allocate(iol%death_distid(index-1))
@@ -408,6 +427,10 @@ contains
 
     Open(16,file=Trim(ep%data_dir)//trim(sp%connect_total), &
          access='sequential',form="formatted",iostat=k, status="old")
+    if (k .ne. 0 ) then
+       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
+       stop
+    end if
 
     Read(16,*,iostat= k) iol%connect_titel,iol%connect_total_name(:)
     Do i = 1,Size(iol%connect_total_distid)
@@ -417,7 +440,12 @@ contains
 
     !read data from file to connect_total
 
-    Open(17,file=Trim(ep%data_dir)//trim(sp%connect_work),access='sequential',form="formatted",iostat=k, status="old")
+    Open(17,file=Trim(ep%data_dir)//trim(sp%connect_work),access='sequential',&
+         form="formatted",iostat=k, status="old")
+    if (k .ne. 0 ) then
+       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
+       stop
+    end if
 
     Read(17,*,iostat= k) iol%connect_titel,iol%connect_work_name(:)
     Do i = 1,Size(iol%connect_work_distid)
@@ -429,6 +457,11 @@ contains
     !read data from file to connect_total
     Open(18,file=Trim(ep%data_dir)//trim(sp%states), &
          access='sequential',form="formatted",iostat=k, status="old")
+    if (k .ne. 0 ) then
+       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
+       stop
+    end if
+
     index = get_file_N(18)
     ! allocation for the readin variables
     Allocate(iol%states_code(index-1))
@@ -441,7 +474,13 @@ contains
     Enddo
     Close(18)
 
-    Open(19,file=Trim(ep%data_dir)//trim(sp%counties),access='sequential',form="formatted",iostat=k, status="old")
+    Open(19,file=Trim(ep%data_dir)//trim(sp%counties),access='sequential',&
+         form="formatted",iostat=k, status="old")
+    if (k .ne. 0 ) then
+       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
+       stop
+    end if
+
     index = get_file_N(19)
     ! allocation for the readin variables
     Allocate(iol%counties_dist_id(index-1))
@@ -455,9 +494,9 @@ contains
     Close(19)
 
 
-!!!!----initalizing pspace
+!!!!----initalizing pspace ============================================
     !sam_size
-    pspace%Ps_scalar_list(1)%param                 = 1660380
+    pspace%Ps_scalar_list(1)%param                 = 232000
     pspace%Ps_scalar_list(1)%var_type              = "direct"
     pspace%Ps_scalar_list(1)%name                  = "same_size"
     !R0
@@ -489,9 +528,14 @@ contains
     pspace%Ps_scalar_list(8)%var_type              = "direct"
     pspace%Ps_scalar_list(8)%name                  = "w_obs_by_state"
     !ROeffect_ps
-    !open(20,file=trim(dir)//"/R0effect_R3.5-Opt-35-4.3.2.csv",&
-    Open(20,file=Trim(ep%data_dir)//"/R0effect_W60+1_constant_states.csv",&
+
+    Open(20,file=Trim(ep%data_dir)//trim(sp%R0_effects),&
          access='sequential',form="formatted",iostat=k, status="old")
+    if (k .ne. 0 ) then
+       write(*,fmt_file_missing)Trim(ep%data_dir)//trim(sp%R0_effects)
+       stop
+    end if
+    
     index = get_file_N(20)
 
     Allocate(pspace%ROeffect_ps%param_char(17,index))

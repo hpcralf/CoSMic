@@ -41,6 +41,11 @@
 !###############################################################################
 Program CoSMic
 
+  !! Reworked Modules ------------------------------------------------
+  use param_tree
+  use timer
+  
+  !! Legacy Modules --------------------------------------------------
   Use global_constants
   Use global_types
   Use cosmic_io
@@ -53,36 +58,50 @@ Program CoSMic
   Type(pspaces)                 :: pspace
   Integer                       :: iter
   Integer,Allocatable           :: counties_integer(:)
-  Real                          :: time_start,time_end
 
   Type(static_parameters)       :: sp
   Type(exec_parameters)         :: ep
 
+  call start_timer("CoSMic")
   call print_cosmic_head()
   
-  Call cpu_Time(time_start)
-  
+  !=============================================================================
+  ! Load Parameters ============================================================
+  Call start_timer("Read parameters")
+  Call read_param_file("exec_parameters.dat")
+  Call read_param_file("static_parameters.dat")
+
+  call write_param_tree(6)
+
   Call load_exec_parameters(ep,"exec_parameters.dat")
   Call log_exec_parameters(ep)
-  
+
+  !=============================================================================
+  ! Load Static Parameters =====================================================
   Call load_static_parameters   (sp,"static_parameters.dat")
   Call log_static_parameters(sp)
-  
-  Call cpu_Time(time_end)
-
-  
-  Write(*,*)" Reading parameters took : ",time_end-time_start,"s"
-
-  iter = 4
-
+  Call end_timer("Read parameters")
+stop
+  !=============================================================================
+  ! Load Inout data ============================================================
+  Call start_Timer("Load data")
   Call loaddata(iol, pspace, ep, sp)
+  Call end_Timer("Load data")
 
+  !=============================================================================
+  ! Prepare input data =========================================================
+  Call start_Timer("Prepare data")
   Call data_prepro(iol,counties_integer,sp)
+  Call end_Timer("Prepare data")
+  
+  !=============================================================================
+  ! Execute model ==============================================================
+  Call start_Timer("Exec. Simulation") 
+  Call COVID19_Spatial_Microsimulation_for_Germany(sp,iol,pspace,counties_integer)
+  Call end_Timer("Exec. Simulation")
 
-  Call cpu_Time(time_start)
-  Call COVID19_Spatial_Microsimulation_for_Germany(sp,iol,pspace,iter,counties_integer)
-  Call cpu_Time(time_end)
+  call end_timer("CoSMic")
 
-  Print *,"time_used ",time_end-time_start,"s"
-
+  call write_timelist()
+  
 End Program CoSMic
