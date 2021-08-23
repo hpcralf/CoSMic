@@ -44,19 +44,18 @@
 !###############################################################################
 module data_preprocessing
 
+  use param_tree
+  
   use global_constants
   use global_types
   use support_fun
-
+  
   implicit none
   
 contains
 
   !=============================================================================
-  subroutine data_prepro(iol,counties_integer, &
-       sp)
-
-    Type(static_parameters), intent(in) :: sp
+  subroutine data_prepro(iol,counties_integer)
 
     type(iols)              :: iol
     integer,allocatable     :: counties_integer(:)
@@ -68,18 +67,25 @@ contains
     real,allocatable        :: connect_work(:,:)
 
     integer                 :: i
+    Logical                 :: restrict
 
+    Character(len=:),Dimension(:),allocatable :: sim_regions
     !---------------------------------------------------------------------------
+
+    call pt_get("#restrict",restrict)
+
+    call pt_get("#sim_regions",sim_regions)
+
     !list of all counties codes
     all_counties = get_unique(iol%pop_distid)
 
-    if (sp%restrict) then
+    if (restrict) then
        !if(all(counties == "none"))
        ! don't know how to implement it wisely
        ! just leave blank here, since it wouldn't
        ! affect the code
 
-       state_code_index = get_index_mul_char(iol%states_name,sp%sim_regions)
+       state_code_index = get_index_mul_char(iol%states_name,sim_regions)
 
        !             print *,state_code_index
        counties_index   = get_index_mul_integer(all_counties/1000,iol%states_code(state_code_index))
@@ -104,7 +110,7 @@ contains
 
 
     ! connectitvity data
-    if (sp%restrict) then
+    if (restrict) then
        temp_index = get_index_mul_integer(iol%connect_total_distid,counties_integer)
        !     allocate(connect_total(size(temp_index),size(temp_index)))
        connect_total = iol%connect_total(temp_index,temp_index)

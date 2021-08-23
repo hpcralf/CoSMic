@@ -1,0 +1,28 @@
+#sim_regions , c, 4
+"Schleswig-Holstein","Hamburg","Niedersachsen","Bremen"
+#country,c,1
+Germany
+#seed_date, c ,1
+2020-03-09
+#restrict,l,1
+TRUE
+#trans_pr,c,1
+"trans_probs_1.6death_3.0_icu.csv"
+#pop_data,c,1
+181231_pop_age_sex_distr_ger.csv
+#inf_cases,c,1
+cases.csv
+#dead_cases,c,1
+deaths.csv
+#connect_work,c,1
+2019_comm_mat_tot_pop.csv 
+#connect_total,c,1
+2019_comm_mat_work_pop.csv
+#states,c,1
+states.csv
+#counties,c,1
+counties_nuts2.csv
+#R0_effects,c,1
+R0effect_W75+0_prog.RKI_states.csv
+#iter, i,1
+2

@@ -1,6 +1,6 @@
 !==============================================================================
 !> \file mod_pt.f90
-!> Type modules for the param tree input-data handling library.
+!> Module for the param tree input-data handling library.
 !>
 !> \author Ralf Schneider
 !> \date 20.08.2021
@@ -17,6 +17,10 @@
 !>
 Module param_tree
 
+  Use ISO_FORTRAN_ENV
+  
+  use strings
+  
   Use pt_constants
   Use pt_types
 
@@ -30,14 +34,25 @@ Module param_tree
   !== Interfaces
   !> Getter functions to retrieve values from pt to local variables
   interface pt_get
-     module procedure pt_get_1d_char
-     module procedure pt_get_scalar_char
      module procedure pt_get_1d_i8
      module procedure pt_get_scalar_i8
+
+     module procedure pt_get_2d_r8
+     
+     module procedure pt_get_1d_char
+     module procedure pt_get_scalar_char
+
+     module procedure pt_get_scalar_l
   end interface pt_get
 
+  !! -----------------------------------
+  !> The parameter tree
   Type(pt_branch), Private, Save :: pt
 
+  !! -----------------------------------
+  !> Monitor- / Logfile unit
+  Integer                       :: pt_umon  = OUTPUT_UNIT
+  
 Contains
 
   !############################################################################
@@ -47,47 +62,124 @@ Contains
   
   !! ===========================================================================
   !> Subroutine to rerieve a scalar integer 8 value from pt
-  Subroutine pt_get_scalar_i8(p_name,arr)
+  Subroutine pt_get_scalar_i8(p_name,arr,success)
 
     character(len=*)               , intent(in)   :: p_name
     integer(kind=pt_ik)            , intent(out)  :: arr
 
-    call get_scalar_i8(p_name,pt,arr)
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+
+    
+    call get_scalar_i8(p_name,pt,arr,loc_success)
+
+    if (.not.present(success)) then
+       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+    else
+       success = loc_success
+    End if
 
   End Subroutine pt_get_scalar_i8
 
   !! ===========================================================================
   !> Subroutine to rerieve a 1D integer 8 value from pt
-  Subroutine pt_get_1d_i8(p_name,arr)
+  Subroutine pt_get_1d_i8(p_name,arr,success)
 
     character(len=*)               , intent(in)   :: p_name
     integer(kind=pt_ik),allocatable, Dimension(:) :: arr
 
-    call get_1d_i8(p_name,pt,arr)
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+    
+    call get_1d_i8(p_name,pt,arr,loc_success)
+
+    if (.not.present(success)) then
+       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+    else
+       success = loc_success
+    End if
 
   End Subroutine pt_get_1d_i8
+  !! ===========================================================================
+  !> Subroutine to rerieve a 2D real 8 value from pt
+  Subroutine pt_get_2d_r8(p_name,arr,success)
+
+    character(len=*)               , intent(in)   :: p_name
+    Real(kind=pt_rk),allocatable, Dimension(:,:)  :: arr
+
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+    
+    call get_2d_r8(p_name,pt,arr,loc_success)
+
+    if (.not.present(success)) then
+       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+    else
+       success = loc_success
+    End if
+
+  End Subroutine pt_get_2d_r8
 
   !! ===========================================================================
   !> Subroutine to rerieve a scalar character value from pt
-  Subroutine pt_get_scalar_char(p_name,arr)
+  Subroutine pt_get_scalar_char(p_name,arr,success)
 
-    character(len=*)               , intent(in)   :: p_name
-    character(len=:),allocatable   , intent(out)  :: arr
+    character(len=*)               , intent(in)     :: p_name
+    character(len=:),allocatable   , intent(inout)  :: arr
 
-    call get_scalar_char(p_name,pt,arr)
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+    
+    call get_scalar_char(p_name,pt,arr,loc_success)
 
+    if (.not.present(success)) then
+       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+    else
+       success = loc_success
+    End if
+    
   End Subroutine pt_get_scalar_char
 
   !! ===========================================================================
   !> Subroutine to rerieve a 1D character value from pt
-  Subroutine pt_get_1d_char(p_name,char_arr)
+  Subroutine pt_get_1d_char(p_name,char_arr,success)
 
     character(len=*)            , intent(in)   :: p_name
     character(len=:),allocatable, Dimension(:) :: char_arr
 
-    call get_1d_char(p_name,pt,char_arr)
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+    
+    call get_1d_char(p_name,pt,char_arr,loc_success)
+
+    if (.not.present(success)) then
+       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+    else
+       success = loc_success
+    End if
 
   End Subroutine pt_get_1d_char
+
+  !! ===========================================================================
+  !> Subroutine to rerieve a scalar logical value from pt
+  Subroutine pt_get_scalar_l(p_name,arr,success)
+    
+    character(len=*)               , intent(in)     :: p_name
+    logical                        , intent(inout)  :: arr
+
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+    
+    call get_scalar_l(p_name,pt,arr,loc_success)
+
+    if (.not.present(success)) then
+       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+    else
+       success = loc_success
+    End if
+    
+  End Subroutine pt_get_scalar_l
+  
   !> @}
 
   !============================================================================
@@ -98,16 +190,17 @@ Contains
   
   !! ===========================================================================
   !> Subroutine to rerieve a scalar integer 8 value from a branch
-  Recursive subroutine get_scalar_i8(p_name,branch,arr)
+  Recursive subroutine get_scalar_i8(p_name,branch,arr,success)
 
     character(len=*)   , intent(in)  :: p_name
     Type(pt_branch)    , intent(in)  :: branch
     integer(kind=pt_ik), intent(out) :: arr
+    Logical            , intent(inout)              :: success
 
     integer                          :: ii, jj, c_len
 
     do ii = 1, branch%no_branches
-       call  get_scalar_i8(p_name,branch%branches(ii),arr)
+       call  get_scalar_i8(p_name,branch%branches(ii),arr,success)
     End do
 
     do ii = 1, branch%no_leaves
@@ -115,7 +208,8 @@ Contains
        if (p_name == trim(branch%leaves(ii)%name)) then
 
           arr = branch%leaves(ii)%i8(1)
-
+          success = .TRUE.
+         
        end if
 
     End do
@@ -124,16 +218,17 @@ Contains
 
   !! ===========================================================================
   !> Subroutine to rerieve a 1D integer 8 value from a branch
-  Recursive subroutine get_1d_i8(p_name,branch,arr)
+  Recursive subroutine get_1d_i8(p_name,branch,arr,success)
 
     character(len=*)   , intent(in)                            :: p_name
     Type(pt_branch)    , intent(in)                            :: branch
     integer(kind=pt_ik), Allocatable, Dimension(:),intent(out) :: arr
+    Logical            , intent(inout)              :: success
 
     integer                                    :: ii, jj, c_len
 
     do ii = 1, branch%no_branches
-       call  get_1d_i8(p_name,branch%branches(ii),arr)
+       call  get_1d_i8(p_name,branch%branches(ii),arr,success)
     End do
 
     do ii = 1, branch%no_leaves
@@ -141,25 +236,60 @@ Contains
        if (p_name == trim(branch%leaves(ii)%name)) then
 
           arr = branch%leaves(ii)%i8
-
+          success = .TRUE.
+          
        end if
 
     End do
 
   End subroutine get_1d_i8
+  
+  !! ===========================================================================
+  !> Subroutine to rerieve a 1D integer 8 value from a branch
+  Recursive subroutine get_2d_r8(p_name,branch,arr,success)
 
+    character(len=*)   , intent(in)                            :: p_name
+    Type(pt_branch)    , intent(in)                            :: branch
+    Real(kind=pt_rk), Allocatable, Dimension(:,:),intent(out)  :: arr
+    Logical            , intent(inout)                         :: success
+
+    integer                                    :: ii, jj, c_len
+
+    do ii = 1, branch%no_branches
+       call  get_2d_r8(p_name,branch%branches(ii),arr,success)
+    End do
+
+    do ii = 1, branch%no_leaves
+
+       if (p_name == trim(branch%leaves(ii)%name)) then
+
+          arr = reshape(&
+               branch%leaves(ii)%r8,&
+               [branch%leaves(ii)%dat_no(1),branch%leaves(ii)%dat_no(2)]&
+               )
+          success = .TRUE.
+          
+       end if
+
+    End do
+
+  End subroutine get_2d_r8
+  
   !! ===========================================================================
   !> Subroutine to rerieve a scalar character value from a branch
-  Recursive subroutine get_scalar_char(p_name,branch,arr)
+  Recursive subroutine get_scalar_char(p_name,branch,arr,success)
 
     character(len=*)   , intent(in)  :: p_name
     Type(pt_branch)    , intent(in)  :: branch
-    character(len=:)   , intent(out), allocatable :: arr
-
+    character(len=:)   , intent(inout), allocatable :: arr
+    Logical            , intent(inout)              :: success
+    
     integer                          :: ii, jj, c_len
 
+    success = .FALSE.
+    
     do ii = 1, branch%no_branches
-       call  get_scalar_char(p_name,branch%branches(ii),arr)
+       call  get_scalar_char(p_name,branch%branches(ii),arr,success)
     End do
 
     do ii = 1, branch%no_leaves
@@ -167,7 +297,8 @@ Contains
        if (p_name == trim(branch%leaves(ii)%name)) then
 
           arr = trim(branch%leaves(ii)%ch(1))
-
+          success = .TRUE.
+          
        end if
 
     End do
@@ -176,16 +307,17 @@ Contains
 
   !! ===========================================================================
   !> Subroutine to rerieve a 1D character value
-  Recursive subroutine get_1d_char(p_name,branch,char_arr)
+  Recursive subroutine get_1d_char(p_name,branch,char_arr,success)
 
     character(len=*)     , intent(in)                      :: p_name
     Type(pt_branch)      , intent(in)                      :: branch
     character(len=:),allocatable, Dimension(:),intent(out) :: char_arr
+    Logical              , intent(inout)                   :: success
 
     integer                                    :: ii, jj, c_len
 
     do ii = 1, branch%no_branches
-       call  get_1d_char(p_name,branch%branches(ii),char_arr)
+       call  get_1d_char(p_name,branch%branches(ii),char_arr,success)
     End do
 
     do ii = 1, branch%no_leaves
@@ -201,11 +333,43 @@ Contains
              char_arr(jj) = branch%leaves(ii)%ch(jj)(1:c_len)
           End Do
 
+          success = .TRUE.
+          
        end if
 
     End do
 
   End subroutine get_1d_char
+
+  !! ===========================================================================
+  !> Subroutine to rerieve a scalar logical value from a branch
+  Recursive subroutine get_scalar_l(p_name,branch,arr,success)
+
+    character(len=*)   , intent(in)    :: p_name
+    Type(pt_branch)    , intent(in)    :: branch
+    Logical            , intent(inout) :: arr
+    Logical            , intent(inout) :: success
+    
+    integer                            :: ii, jj, c_len
+
+    success = .FALSE.
+    
+    do ii = 1, branch%no_branches
+       call  get_scalar_l(p_name,branch%branches(ii),arr,success)
+    End do
+
+    do ii = 1, branch%no_leaves
+
+       if (p_name == trim(branch%leaves(ii)%name)) then
+
+          arr = branch%leaves(ii)%l(1)
+          success = .TRUE.
+          
+       end if
+
+    End do
+
+  End subroutine get_scalar_l
   !> @}
   
   !! ===========================================================================
@@ -214,9 +378,9 @@ Contains
 
     Integer         , Intent(in)            :: unit_lf
    
-    write(*,'(80("#"))')
+    write(pt_umon,'(80("#"))')
     call log_pt_branch(branch=pt,unit_lf=unit_lf,data=.TRUE.)
-    write(*,'(80("#"))')
+    write(pt_umon,'(80("#"))')
     
   End Subroutine write_param_tree
 
@@ -265,7 +429,7 @@ Contains
     
     Write(b_sep,'(A,I0,A)')"('"//fmt_str(1:len_fmt_str-1)//"|   +----------',",LT_desc,"('-'),'-+')"
     
-    Write(*, b_sep)
+    write(pt_umon, b_sep)
     Write(unit_lf, "('"//fmt_str(1:len_fmt_str-1)//"+---|',A,A,A)") ' Branch : ',Trim(branch%desc),' |'
 
     Write(b_sep,'(A,I0,A)')"('"//fmt_str(1:len_fmt_str)//"   +----------',",LT_desc,"('-'),'-+')"
@@ -360,11 +524,79 @@ Contains
     Type(pt_Leaf)     , Intent(In) :: leaf
     Character(Len=*)  , Intent(In) :: fmt_str
     
-    Integer :: ii, pos, cpos
-       
+    Character(Len=pt_mcl)          :: fmt_space
+
+    Integer :: ii, pos, n_data
+    
     Write(un_lf, "('"//fmt_str//"   |')")
     Write(un_lf, "('"//fmt_str//"   +',170('-'),('+'))")
     Write(un_lf, "('"//fmt_str//"   |',' Leaf Data ',159(' '),('|'))")
+
+    n_data = 1
+    
+    Do ii = 1, size(leaf%dat_no)
+       n_data = n_data * leaf%dat_no(ii)
+    End Do
+       
+    !***********************************************************
+    !** n_data in [0,30] ***************************************
+    If (n_data <= 30) then
+
+       Write(un_lf, "('"//fmt_str//"   |')",ADVANCE='NO')
+
+       pos = 1
+       
+       Select Case (leaf%dat_ty)
+
+       Case ("I","R","L")
+          
+          Do ii = 1, n_data
+
+             Select Case (leaf%dat_ty)
+             Case ("I")          
+                Write(un_lf, "(I16,' ')", ADVANCE='NO')leaf%i8(ii)
+             Case ("R")
+                Write(un_lf, "(I16,' ')", ADVANCE='NO')leaf%r8(ii)
+             Case ("L")
+                Write(un_lf, "(L16,' ')", ADVANCE='NO')leaf%l(ii)
+             End Select
+             
+             If ( mod(pos,10) == 0) then
+                Write(un_lf, "('|')")
+                Write(un_lf, "('"//fmt_str//"   |')",ADVANCE='NO')
+                pos = 0
+             End If
+             pos = pos + 1
+             
+          End Do
+
+          Do ii = 1, 10-mod(n_data,10)
+             Write(un_lf, "(17(' '))", ADVANCE='NO')
+          End Do
+          Write(un_lf, "('|')")
+          
+       Case ("C")
+
+          Do ii = 1, n_data
+
+             pos = pos + len_trim(leaf%ch(ii))+2
+             If ( pos >= 169 ) then
+                Write(un_lf, "('|')")
+                Write(un_lf, "('"//fmt_str//"   |')",ADVANCE='NO')
+                pos = 1
+             End If
+ 
+             Write(un_lf, "('|',A,'|')", ADVANCE='NO')trim(leaf%ch(ii))
+                         
+          End Do
+
+          Write(fmt_space, "(A,I0,A)")"(",170-pos+1,"(' '))"
+          Write(un_lf,fmt_space, ADVANCE='NO')
+          Write(un_lf, "('|')")
+
+       End Select
+          
+    End If
 
     Write(un_lf, "('"//fmt_str//"   +',170('-'),('+'))")
 
@@ -394,16 +626,16 @@ Contains
          action="read", iostat=io_stat )
 
     If (io_stat /= 0) Then
-       Write(*,PTF_file_missing)Trim(name)
+       write(pt_umon,PTF_file_missing)Trim(name)
        Stop
     End If
 
-    write(*,PTF_sep)
-    Write(*,PTF_M_A)"Reading file:"//trim(name)
+    write(pt_umon,PTF_sep)
+    write(pt_umon,PTF_M_A)"Reading file:"//trim(name)
    
     n_lines =  get_lines_in_file(un)
 
-    Write(*,PTF_M_AI0)"Number of lines in file:",n_lines
+    write(pt_umon,PTF_M_AI0)"Number of lines in file:",n_lines
 
     Rewind(un)
 
@@ -438,8 +670,8 @@ Contains
        ii = ii + 1 
     End Do
 
-    Write(*,PTF_M_AI0)"Number of parameters in file:",n_params
-    Write(*,*)
+    write(pt_umon,PTF_M_AI0)"Number of parameters in file:",n_params
+    write(pt_umon,*)
     
     !! Read parameters ----------------------------------------------
     Allocate(pt%branches(n_files)%leaves(n_params))
@@ -472,22 +704,22 @@ Contains
 
           Select Case (nn_fields)
           case(0)
-             write(*,PTF_SEP)
-             Write(*,PTF_E_A)"Something bad and unexpected happened!"
-             Write(*,PTF_E_A)"No fields were found in keyword line !"
-             Write(*,PTF_E_AI0)"Param no:",nn
-             Write(*,PTF_E_AI0)"Line no:" ,ii
-             Write(*,PTF_E_A)"Line image:"//lines(ii)
-             Write(*,PTF_E_STOP)
+             write(pt_umon,PTF_SEP)
+             write(pt_umon,PTF_E_A)"Something bad and unexpected happened!"
+             write(pt_umon,PTF_E_A)"No fields were found in keyword line !"
+             write(pt_umon,PTF_E_AI0)"Param no:",nn
+             write(pt_umon,PTF_E_AI0)"Line no:" ,ii
+             write(pt_umon,PTF_E_A)"Line image:"//lines(ii)
+             write(pt_umon,PTF_E_STOP)
              stop
 
           Case(1)
-             write(*,PTF_SEP)
-             Write(*,PTF_W_A)"Only found one field in keyword line."
-             Write(*,PTF_W_AI0)"Param no:",nn
-             Write(*,PTF_W_AI0)"Line no:" ,ii
-             Write(*,PTF_W_A)"Line image:"//trim(lines(ii))
-             Write(*,PTF_W_A)"Assuming a scalar string parameter."
+             write(pt_umon,PTF_SEP)
+             write(pt_umon,PTF_W_A)"Only found one field in keyword line."
+             write(pt_umon,PTF_W_AI0)"Param no:",nn
+             write(pt_umon,PTF_W_AI0)"Line no:" ,ii
+             write(pt_umon,PTF_W_A)"Line image:"//trim(lines(ii))
+             write(pt_umon,PTF_W_A)"Assuming a scalar string parameter."
 
              keyword = str_arr(1)
              dat_ty  = "c"
@@ -497,12 +729,12 @@ Contains
              pt%branches(n_files)%leaves(nn)%dat_no = 1
 
           Case(2)
-             write(*,PTF_SEP)
-             Write(*,PTF_W_A)"Only found two fields in keyword line."
-             Write(*,PTF_W_AI0)"Param no:",nn
-             Write(*,PTF_W_AI0)"Line no:" ,ii
-             Write(*,PTF_W_A)"Line image:"//trim(lines(ii))
-             Write(*,PTF_W_A)"Assuming a scalar parameter."
+             write(pt_umon,PTF_SEP)
+             write(pt_umon,PTF_W_A)"Only found two fields in keyword line."
+             write(pt_umon,PTF_W_AI0)"Param no:",nn
+             write(pt_umon,PTF_W_AI0)"Line no:" ,ii
+             write(pt_umon,PTF_W_A)"Line image:"//trim(lines(ii))
+             write(pt_umon,PTF_W_A)"Assuming a scalar parameter."
 
              keyword = str_arr(1)
              dat_ty  = ToUpperCase(str_arr(2))
@@ -522,13 +754,13 @@ Contains
                 Read(str_arr(kk),*,iostat=io_stat)pt%branches(n_files)%leaves(nn)%dat_no(kk-2)
 
                 if (io_stat /= 0) then
-                   write(*,PTF_SEP)
-                   Write(*,PTF_W_A)"Reading field with number of parameters failed."
-                   Write(*,PTF_W_AI0)"Field no:",kk
-                   Write(*,PTF_W_AI0)"Param no:",nn
-                   Write(*,PTF_W_AI0)"Line no:" ,ii
-                   Write(*,PTF_W_A)"Line image:"//trim(lines(ii))
-                   Write(*,PTF_W_A)"Skipping read."
+                   write(pt_umon,PTF_SEP)
+                   write(pt_umon,PTF_W_A)"Reading field with number of parameters failed."
+                   write(pt_umon,PTF_W_AI0)"Field no:",kk
+                   write(pt_umon,PTF_W_AI0)"Param no:",nn
+                   write(pt_umon,PTF_W_AI0)"Line no:" ,ii
+                   write(pt_umon,PTF_W_A)"Line image:"//trim(lines(ii))
+                   write(pt_umon,PTF_W_A)"Skipping read."
 
                    !! Save elements of tree structure from shortened variables ----------
                    pt%branches(n_files)%leaves(nn)%name    = keyword
@@ -575,13 +807,13 @@ Contains
 
           Case default
 
-             write(*,PTF_SEP)
-             Write(*,PTF_W_A)"Don't know how to handle dat_ty"
-             Write(*,PTF_W_A)trim(dat_ty)
-             Write(*,PTF_W_AI0)"Param no:",nn
-             Write(*,PTF_W_AI0)"Line no:" ,ii
-             Write(*,PTF_W_A)"Line image:"//trim(lines(ii))
-             Write(*,PTF_W_A)"Allocating no data elements."
+             write(pt_umon,PTF_SEP)
+             write(pt_umon,PTF_W_A)"Don't know how to handle dat_ty"
+             write(pt_umon,PTF_W_A)trim(dat_ty)
+             write(pt_umon,PTF_W_AI0)"Param no:",nn
+             write(pt_umon,PTF_W_AI0)"Line no:" ,ii
+             write(pt_umon,PTF_W_A)"Line image:"//trim(lines(ii))
+             write(pt_umon,PTF_W_A)"Allocating no data elements."
 
              ii = ii + 1
              cycle Line_Loop
@@ -602,14 +834,14 @@ Contains
 
              if ( elems_read + nn_fields > n_elem ) then
 
-                write(*,PTF_SEP)
-                Write(*,PTF_W_A)"Number of elements given is apparently larger than"
-                Write(*,PTF_W_A)"the number of elemets specified in keyword line."
-                Write(*,PTF_W_AI0)"# elems to read:",elems_read + nn_fields
-                Write(*,PTF_W_AI0)"# elems in keyword line:",pt%branches(n_files)%leaves(nn)%dat_no
-                Write(*,PTF_W_AI0)"Param no:",nn
-                Write(*,PTF_W_AI0)"Line no:" ,ii
-                Write(*,PTF_W_A)"Line image:"//trim(lines(ii))
+                write(pt_umon,PTF_SEP)
+                write(pt_umon,PTF_W_A)"Number of elements given is apparently larger than"
+                write(pt_umon,PTF_W_A)"the number of elemets specified in keyword line."
+                write(pt_umon,PTF_W_AI0)"# elems to read:",elems_read + nn_fields
+                write(pt_umon,PTF_W_AI0)"# elems in keyword line:",pt%branches(n_files)%leaves(nn)%dat_no
+                write(pt_umon,PTF_W_AI0)"Param no:",nn
+                write(pt_umon,PTF_W_AI0)"Line no:" ,ii
+                write(pt_umon,PTF_W_A)"Line image:"//trim(lines(ii))
 
                 nn_fields = n_elem  - elems_read
 
@@ -645,12 +877,12 @@ Contains
              End Select
 
              if (io_stat /= 0) then
-                write(*,PTF_SEP)
-                Write(*,PTF_W_A)"Reading of data elements failed"
-                Write(*,PTF_W_AI0)"Param no:",nn
-                Write(*,PTF_W_AI0)"Line no:" ,ii
-                Write(*,PTF_W_A)"Line image:"//trim(lines(ii))
-                Write(*,PTF_W_A)"Skipping read in of further data."
+                write(pt_umon,PTF_SEP)
+                write(pt_umon,PTF_W_A)"Reading of data elements failed"
+                write(pt_umon,PTF_W_AI0)"Param no:",nn
+                write(pt_umon,PTF_W_AI0)"Line no:" ,ii
+                write(pt_umon,PTF_W_A)"Line image:"//trim(lines(ii))
+                write(pt_umon,PTF_W_A)"Skipping read in of further data."
 
                 ii = ii + 1
                 cycle Line_Loop
@@ -665,133 +897,8 @@ Contains
 
     End Do Line_Loop
 
-    write(*,*)
+    write(pt_umon,*)
     
   End Subroutine read_param_file
-
-  !! ---------------------------------------------------------------------------
-  !> Function to determine number of lines in ASCII file
-  Function get_lines_in_file(un) Result(nn)
-
-    Integer, Intent(in) :: un
-    Integer             :: nn
-
-    Character           :: cDummy
-
-    nn = 0
-
-    Rewind(un)
-
-    Do
-       Read(un,*,End= 999,Err = 999) cDummy
-       nn = nn + 1
-    End Do
-
-999 Rewind(un)
-
-  End Function get_lines_in_file
-
-  !! ---------------------------------------------------------------------------
-  !> Function to determine the positions of a given character in a string
-  Function strtok(string,char) Result(str_arr)
-
-    character(len=*)     , Intent(in) :: string
-    character            , Intent(in) :: char
-
-    integer, Dimension(:),allocatable :: pos_arr
-
-    character(len=:),Dimension(:),allocatable :: str_arr
-
-    integer                           :: ii, nn, lpos
-    integer                           :: maxlen, str_len, nf, fnsc
-
-    !---------------------------------------------------------------------------
-
-    str_len = len(string)
-
-    !! Determine number of seperators in string ----------------------
-    nn = 0
-    Do ii = 1, str_len
-       if (string(ii:ii) == char) nn = nn + 1 
-    End Do
-
-    !! Number of fields = number of seperators + 1 -------------------
-    nf = nn + 1
-
-    !! Save position of chars in string ------------------------------
-    if (str_len > 0) then
-
-       lpos   = 0
-       maxlen = -huge(maxlen)
-
-       Allocate(pos_arr(nf+1))
-       pos_arr(1) = 0
-
-       nn = 1
-
-       Do ii = 1, str_len
-          if (string(ii:ii) == char) then
-             nn = nn + 1
-             pos_arr(nn) = ii
-             maxlen = max(maxlen,ii-lpos-1)
-             lpos = ii
-          End if
-       End Do
-
-       maxlen = max(maxlen,str_len-lpos-1)
-
-       pos_arr(NF+1) = str_len+1
-
-       Allocate(str_arr(nf),mold=string(1:maxlen))
-
-       Do ii = 1, nf
-
-          str_arr(ii) = string((pos_arr(ii)+1):pos_arr(ii+1)-1)
-
-          !! Ajust string to the left --------------------------------
-          fnsc = scan(str_arr(ii)," ")
-          if (fnsc < len_trim(str_arr(ii))) then
-             str_arr(ii) = str_arr(ii)(fnsc+1:len_trim(str_arr(ii)))
-          End if
-
-       End Do
-
-    else
-
-       Allocate(str_arr(0),mold="")
-
-    End if
-
-  End Function strtok
-
-  !! ---------------------------------------------------------------------------
-  !> Function to convert characters to lower case
-  Function ToLowerCase(chr) Result(lc_chr)
-
-    character, intent(in) :: chr
-    character             :: lc_chr
-
-    if ( (65 <= ichar(chr)) .AND. (ichar(chr) <= 90) ) then
-       lc_chr = achar(ichar(chr)+32)
-    Else
-       lc_chr = chr
-    End if
-
-  End Function ToLowerCase
-
-  !! ---------------------------------------------------------------------------
-  !> Function to convert characters to upper case
-  Function ToUpperCase(chr) Result(uc_chr)
-
-    character, intent(in) :: chr
-    character             :: uc_chr
-
-    if ( (97 <= ichar(chr)) .AND. (ichar(chr) <= 122) ) then
-       uc_chr = achar(ichar(chr)-32)
-    Else
-       uc_chr = chr
-    End if
-
-  End Function ToUpperCase
 
 End Module param_tree

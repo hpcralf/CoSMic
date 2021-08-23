@@ -44,19 +44,23 @@
 !###############################################################################
 Module kernel
 
+  use timer
+  use param_tree
+
   Use global_constants
   use global_types
+  use global_vars
+  
   Use list_variable
   Use support_fun
-  use timer
   
   Implicit None
 
 Contains
   
   Subroutine COVID19_Spatial_Microsimulation_for_Germany( &
-       sp, &
-       iol, pspace, counties_index)
+       iol, pspace, counties_index &
+       )
 
     !===========================================================================
     ! Declaration
@@ -68,6 +72,7 @@ Contains
 
     Type(pspaces)       :: pspace
     Type(iols)          :: iol
+    
     Integer             :: i, j, k, index, temp_int,icounty,county,it_ss,iter,status
     Character*1         :: mod1,mod2
     Integer,Dimension(:):: counties_index
@@ -187,7 +192,8 @@ Contains
     Character*2,Allocatable         :: ch_age(:)
     Character*5,Allocatable         :: ch_sex(:)
     Integer                         :: max_date,n_change
-    Character*10                    :: temp_mod, seed_date
+    Character*10                    :: temp_mod
+    character(len=:),allocatable    :: seed_date
     Integer                         :: ierror,size_of_process,my_rank
     Integer                         :: index_final(7),block_size
     Integer,Allocatable             :: req(:)
@@ -196,7 +202,11 @@ Contains
 
     Type(tTimer)                    :: timer
     Integer, Dimension(8)           :: rt
-integer                                        :: tar
+
+    integer                         :: tar
+
+    Real(kind=pt_rk),Dimension(:,:),Allocatable :: R0_effects
+    
     ! should import some reliable romdon seed generation code here
     !seed_base = ??
 
@@ -205,7 +215,7 @@ integer                                        :: tar
     !===========================================================================
     ! Implementation
     !===========================================================================
-    iter = 2
+    call pt_get("#iter",iter)
 
     index_final = 1
 
@@ -265,7 +275,10 @@ integer                                        :: tar
 !!!!!-----7.  Define whether transition probabilities should differ by age and sex
     control_age_sex     = "age"
     days             = 1
-    seed_date        = add_date(sp%seed_date,days)
+
+    call pt_get("#seed_date",seed_date)
+    seed_date        = add_date(seed_date,days)
+
     days             = -1-seed_before
     seed_before_char = add_date(seed_date,days)
     seed_seq         = generate_seq(seed_before_char,seed_date)
@@ -302,7 +315,7 @@ integer                                        :: tar
     End If
 
     If (n_directl > 0) Then
-       size_lhc = size_lhc + Size(pspace%ROeffect_ps%param)
+       size_lhc = size_lhc + Size(iol%R0_effect%data)
     End If
 
     Allocate(lhc(size_lhc,iter))
@@ -314,7 +327,8 @@ integer                                        :: tar
 
 
     Do i = 1,iter
-       lhc(n_direct+1:Size(lhc,dim=1),i) = Reshape(pspace%ROeffect_ps%param,Shape(lhc(n_direct+1:Size(lhc,dim=1),1)))
+       lhc(n_direct+1:Size(lhc,dim=1),i) = Reshape(iol%R0_effect%data,&
+            Shape(lhc(n_direct+1:Size(lhc,dim=1),1)))
     End Do
     ! print *, "after reshape is",reshape(pspace%ROeffect_ps%param,shape(lhc(n_direct+1:size(lhc,dim=1),1)))
     Allocate(lhc_name(size_lhc))
@@ -1392,13 +1406,13 @@ integer                                        :: tar
     iter_pass_handle = (/lhc(1,iter),lhc(2,iter),lhc(3,iter),&
          lhc(6,iter),lhc(7,iter),lhc(8,iter)/)
 
-    Call write_data_v2(healthy_cases_final,iter_pass_handle,pspace%ROeffect_ps%param,counties_index,1)
-    Call write_data_v2(inf_noncon_cases_final,iter_pass_handle,pspace%ROeffect_ps%param,counties_index,2)
-    Call write_data_v2(inf_contag_cases_final,iter_pass_handle,pspace%ROeffect_ps%param,counties_index,3)
-    Call write_data_v2(ill_contag_cases_final,iter_pass_handle,pspace%ROeffect_ps%param,counties_index,4)
-    Call write_data_v2(ill_ICU_cases_final,iter_pass_handle,pspace%ROeffect_ps%param,counties_index,5)
-    Call write_data_v2(immune_cases_final,iter_pass_handle,pspace%ROeffect_ps%param,counties_index,6)
-    Call write_data_v2(dead_cases_final,iter_pass_handle,pspace%ROeffect_ps%param,counties_index,7)
+    Call write_data_v2(healthy_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,1)
+    Call write_data_v2(inf_noncon_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,2)
+    Call write_data_v2(inf_contag_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,3)
+    Call write_data_v2(ill_contag_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,4)
+    Call write_data_v2(ill_ICU_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,5)
+    Call write_data_v2(immune_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,6)
+    Call write_data_v2(dead_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,7)
 !!$    End If
 
 1000 continue

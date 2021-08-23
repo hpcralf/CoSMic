@@ -38,10 +38,35 @@
 !# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 !#
 !###############################################################################
-!
-! Module with globally used derived data-types
-!
-!###############################################################################
+
+!===============================================================================
+!> \file mod_globals.f90
+!> Modules with global constants, types and variables.
+!>
+!> \author Ralf Schneider
+!> \date 20.08.2021
+
+!===============================================================================
+!> Module with globally used constants
+Module global_constants
+
+  Implicit None
+
+  character(len=*), parameter :: fmt_file_missing = &
+       '("Operation on file:",/,A,/, "failed.",/, "Program halted !!!")'
+  
+  character(len=*), parameter :: fmt_timing = &
+       '(A,T40,"finished in",F10.3,"sec.")'
+
+  character(len=*),Dimension( 9),parameter :: mandatory_params = &
+       ["trans_pr     ", "pop_data     ", "inf_cases    ", "dead_cases   ",&
+       "connect_total", "connect_work ", "states       ", "counties     ",&
+       "R0_effects   "]
+ 
+End Module global_constants
+
+!===============================================================================
+!> Module with globally used derived data-types
 module global_types
 
   use precision
@@ -51,9 +76,20 @@ module global_types
 
   public
   save
-
+  
+  type TableData
+ 
+     character(len=:), Dimension(:)  , allocatable :: head
+     character(len=:), Dimension(:)  , allocatable :: rownames
+     Real            , Dimension(:,:), Allocatable :: data
+          
+  End type TableData
+  
   !! !!!!!!variables for iol which is a list in R code
   type iols
+
+     Type(TableData)                       :: R0_effect
+     
      ! variables for trans_pr
      character*15,allocatable,dimension(:) :: transpr_age_gr
      character*15,allocatable,dimension(:) :: transpr_sex
@@ -96,6 +132,7 @@ module global_types
      character*50,allocatable,dimension(:) :: counties_name
      real,allocatable,dimension(:)         :: counties_area
      integer,allocatable,dimension(:)      :: counties_inhabitants
+
   end type iols
 
   !variable declaration for pspace
@@ -149,7 +186,22 @@ module global_types
      character(len=mcl)                            :: R0_effects=""   
      
   end type static_parameters
-
-  integer                       :: time_n
-
+  
 end module global_types
+
+!===============================================================================
+!> Module with globally used variables
+module global_vars
+
+  Use ISO_FORTRAN_ENV
+  
+  use precision
+  use global_constants
+  use global_types
+
+  implicit none
+
+  integer :: time_n
+  integer :: un_lf  = OUTPUT_UNIT
+  
+End module global_vars

@@ -91,50 +91,50 @@ end interface
 
 contains
 
-function get_unique(array_in) result(array_out)
+  function get_unique(array_in) result(array_out)
 
-implicit none
+    implicit none
+    
+    integer             :: size_in,j,index
+    integer,dimension(:):: array_in
+    integer,dimension(size(array_in))   :: temp_in,idx_in
+    integer,allocatable :: array_out(:)
+    
+    if (size(array_in) == 0)then
+       allocate(array_out(0))
+       return
+    end if
+    
+    if (size(array_in) == 1)then
+       array_out = (/1/)
+       return
+    end if
+    
 
-integer             :: size_in,j,index
-integer,dimension(:):: array_in
-integer,dimension(size(array_in))   :: temp_in,idx_in
-integer,allocatable :: array_out(:)
-
-if (size(array_in) == 0)then
-    allocate(array_out(0))
-    return
-end if
-
-if (size(array_in) == 1)then
-    array_out = (/1/)
-    return
-end if
-
-
-index = 1
-size_in = size(array_in)
-! call QsortC(temp_in)
-call SORTRX(size(array_in),array_in,idx_in)
-temp_in = array_in(idx_in)
-!detemine dimension of array_out
-do j=2,size_in
-    if (temp_in(j)/=temp_in(j-1)) then
-            index = index + 1
-    endif
-enddo
-!allocate array and reset index number
-allocate(array_out(index))
-index = 1
-array_out(index) = temp_in(index)
-do j=2,size_in
-    if (temp_in(j)/=temp_in(j-1)) then
-            index = index + 1
-            array_out(index) = temp_in(j)
-    endif
-enddo
-
-end function get_unique
-
+    index = 1
+    size_in = size(array_in)
+    ! call QsortC(temp_in)
+    call SORTRX(size(array_in),array_in,idx_in)
+    temp_in = array_in(idx_in)
+    !detemine dimension of array_out
+    do j=2,size_in
+       if (temp_in(j)/=temp_in(j-1)) then
+          index = index + 1
+       endif
+    enddo
+    !allocate array and reset index number
+    allocate(array_out(index))
+    index = 1
+    array_out(index) = temp_in(index)
+    do j=2,size_in
+       if (temp_in(j)/=temp_in(j-1)) then
+          index = index + 1
+          array_out(index) = temp_in(j)
+       endif
+    enddo
+    
+  end function get_unique
+  
 function get_index_single_char(array_in,tar)result(array_index)
 implicit none
 integer size_in,index,i

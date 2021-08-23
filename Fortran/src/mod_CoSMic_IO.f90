@@ -44,10 +44,13 @@
 !###############################################################################
 module CoSMic_IO
 
+  Use param_tree
+  Use strings
+  
   Use global_constants
   Use global_types
   Use support_fun, Only: get_file_N
-  
+
   implicit none
 
 contains
@@ -63,7 +66,7 @@ contains
     Integer                                :: un_spi, io_stat, pos, spos, ll, ii
     INteger                                :: no_sim_regions, n_lines
     Character(Len=1024),Allocatable,Dimension(:)  :: lines
-    
+
     !---------------------------------------------------------------------------
     Open(newunit=un_spi, file=ep_infile, action="read", status="old", &
          iostat=io_stat)
@@ -72,7 +75,7 @@ contains
        write(*,fmt_file_missing)ep_infile
        stop
     end if
-    
+
     n_lines = get_file_N(un_spi)
 
     Allocate(lines(n_lines))
@@ -90,28 +93,27 @@ contains
        if (lines(ii)(1:9) == "#data_dir") then !---------------------------------
           ii = ii + 1
           ep%data_dir = lines(ii)
-          
+
        else  !-- Unknown keyword -----------------------------------------------
 
-          
           write(*,*)"Found unknown keyword: ",trim(lines(ii))
           ii = ii + 1
-          
+
           Do while ((lines(ii)(1:1) .NE. "#") .AND. (io_stat==0)) 
 
              Write(*,*)"Line image in unknown keyword:",trim(lines(ii))
              ii = ii +1 
 
           End Do
-          
+
        End if
 
        ii = ii + 1
-       
+
     End Do
-    
+
     close(un_spi)
-        
+
   end Subroutine load_exec_parameters
 
   !=============================================================================
@@ -125,16 +127,16 @@ contains
     character(len=*),parameter                    :: lci = '(A,T18,"| ",I0)'
     character(len=*),parameter                    :: lcl = '(A,T18,"| ",L)'
     character(len=*),parameter                    :: tab_h = '(17("-"),"+",42("-"))'
-    
+
     write(*,'(60("-"))')    
     write(*,'("--",1X,A)')"execution parameters"
     write(*,tab_h)
     write(*,lca)"data_dir"     , trim(ep%data_dir)
     write(*,tab_h)
     write(*,*)
-     
+
   End Subroutine log_exec_parameters
-  
+
   !=============================================================================
   ! Subroutine to load static input data
   !=============================================================================
@@ -157,7 +159,7 @@ contains
        write(*,fmt_file_missing)sp_infile
        stop
     end if
-    
+
     n_lines = get_file_N(un_spi)
 
     Allocate(lines(n_lines))
@@ -184,7 +186,7 @@ contains
              stop
 
           End if
-          
+
           Allocate(sp%sim_regions(no_sim_regions))
 
           pos=1
@@ -196,7 +198,7 @@ contains
              pos = pos + 4
 
           End Do
-          
+
           ii = ii +  (no_sim_regions-1) / 4 + 1
 
        else if (trim(lines(ii)) == "#country") then !---------------------------
@@ -214,11 +216,11 @@ contains
        else if (trim(lines(ii)) == "#trans_pr") then !--------------------------
           ii = ii + 1
           sp%trans_pr = lines(ii)
-          
+
        else if (trim(lines(ii)) == "#lhc_samples") then !--------------------------
           ii = ii + 1
           Read(lines(ii),*)sp%lhc_samples
-          
+
        else if (trim(lines(ii)) == "#pop_data") then !--------------------------
           ii = ii + 1
           sp%pop_data = lines(ii)
@@ -255,7 +257,7 @@ contains
 
           write(*,*)"Found unknown keyword: ",trim(lines(ii))
           ii = ii + 1
-          
+
           Do while ((lines(ii)(1:1) .NE. "#") .AND. (io_stat==0)) 
 
              Write(*,*)"Line image in unknown keyword:",trim(lines(ii))
@@ -264,11 +266,11 @@ contains
           End Do
 
           ii = ii - 1
-             
+
        End if
 
        ii = ii + 1
-       
+
     End Do
 
   end Subroutine load_static_parameters
@@ -286,7 +288,7 @@ contains
     character(len=*),parameter                    :: tab_h = '(17("-"),"+",42("-"))'
 
     integer                                       :: ii
-    
+
     write(*,'(60("-"))')    
     write(*,'("--",1X,A)')"static parameters"
     write(*,tab_h)
@@ -310,13 +312,13 @@ contains
     End do
     write(*,tab_h)
     write(*,*)
-     
+
   End Subroutine log_static_parameters
 
   !=============================================================================
   ! Subroutine to load input data from files
   !=============================================================================
-  Subroutine loaddata(iol, pspace, ep, sp)
+  Subroutine loaddata(iol, ep, sp)
 
     Type(exec_parameters)  , intent(in) :: ep
     Type(static_parameters), intent(in) :: sp
@@ -324,28 +326,27 @@ contains
     Integer                    :: i,j,k,it_ss
     Integer                    :: index, un_in
     Type(iols)                 :: iol
-    Type(pspaces)              :: pspace
 
-    !first version, set the array length manually
-    !!
-    ! read data from file to tran_pr
-    Open(newunit=un_in, file=trim(ep%data_dir)//trim(sp%trans_pr),&
-         access='sequential',form="formatted",iostat=k, status="old")
+    !=================================================================
+    Character(len=:), allocatable :: data_dir
+    Character(len=:), allocatable :: filename
+    !=================================================================
 
-    if (k .ne. 0 ) then
-       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
-       stop
-    end if
-    
-    index = get_file_N(un_in)
-    
-    ! allocation for the readin variables
+    call pt_get("#data_dir",data_dir)
+
+    ! Read data from file: Transition probabilities ------------------
+    call pt_get("#trans_pr",filename)
+
+    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
+
+    ! allocation for the readin variables ------------------
     Allocate(iol%transpr_age_gr(index-1))
     Allocate(iol%transpr_sex(index-1))
     Allocate(iol%transpr_surv_ill(index-1))
     Allocate(iol%transpr_icu_risk(index-1))
     Allocate(iol%transpr_surv_icu(index-1))
-    ! read the first line(character)
+
+    ! read the first line(character) -----------------------
     Read(un_in,*,iostat= k) iol%titel
 
     Do i = 1, index-1
@@ -355,225 +356,267 @@ contains
     End Do
     Close(un_in)
 
-    !read data from file to pop
-    Open(13,file=Trim(ep%data_dir)//trim(sp%pop_data),&
-         access='sequential',form="formatted",iostat=k, status="old")
-    if (k .ne. 0 ) then
-       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%pop_data)
-       stop
-    end if
-    
-    index = get_file_N(13)
-    ! allocation for the readin variables
+    !read data from file to pop --------------------------------------
+    call pt_get("#pop_data",filename)
+
+    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
+
+    ! allocation for the readin variables ------------------
     Allocate(iol%pop_distid(index-1))
     Allocate(iol%pop_date(index-1))
     Allocate(iol%pop_sex(index-1))
     Allocate(iol%pop_age(index-1))
     Allocate(iol%pop_total(index-1))
-    ! read the first line(character)
-    Read(13,*,iostat= k) iol%titel
+
+    ! read the first line(character) -----------------------
+    Read(un_in,*,iostat= k) iol%titel
 
     Do i = 1,index-1
-       Read(13,*,iostat=k) iol%pop_distid(i),iol%pop_date(i),iol%pop_sex(i),&
+       Read(un_in,*,iostat=k) iol%pop_distid(i),iol%pop_date(i),iol%pop_sex(i),&
             iol%pop_age(i),iol%pop_total(i)
     Enddo
-    Close(13)
+    Close(un_in)
 
-    !read data from file to seed
-    Open(14,file=Trim(ep%data_dir)//trim(sp%inf_cases),access='sequential',&
-         form="formatted",iostat=k, status="old")
-    if (k .ne. 0 ) then
-       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
-       stop
-    end if
+    !read data from file to seed ---------------------------
+    call pt_get("#inf_cases",filename)
 
-    index = get_file_N(14)
-    ! allocation for the readin variables
+    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
+
+    ! allocation for the readin variables ------------------
     Allocate(iol%seed_distid(index-1))
     Allocate(iol%seed_date(index-1))
     Allocate(iol%seed_cases(index-1))
     ! read the first line(character)
-    Read(14,*,iostat= k) iol%seed_titel
+    Read(un_in,*,iostat= k) iol%seed_titel
 
     Do i = 1,index-1
-       Read(14,*,iostat=k) iol%seed_distid(i),iol%seed_date(i),iol%seed_cases(i)
+       Read(un_in,*,iostat=k) iol%seed_distid(i),iol%seed_date(i),iol%seed_cases(i)
     Enddo
-    Close(14)
+    Close(un_in)
 
-    !read data from file to seeddeath
+    !read data from file to seeddeath --------------------------------
+    call pt_get("#inf_cases",filename)
 
-    Open(15,file=Trim(ep%data_dir)//trim(sp%dead_cases), &
-         access='sequential',form="formatted",iostat=k, status="old")
-    if (k .ne. 0 ) then
-       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
-       stop
-    end if
+    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
 
-    index = get_file_N(15)
-    ! allocation for the readin variables
+    ! allocation for the readin variables ------------------
     Allocate(iol%death_distid(index-1))
     Allocate(iol%death_date(index-1))
     Allocate(iol%death_cases(index-1))
-    ! read the first line(character)
-    Read(15,*,iostat= k) iol%seed_titel
+    
+    ! read the first line(character) -----------------------
+    Read(un_in,*,iostat= k) iol%seed_titel
 
     Do i = 1,Size(iol%death_distid)
-       Read(15,*,iostat=k) iol%death_distid(i),iol%death_date(i),iol%death_cases(i)
+       Read(un_in,*,iostat=k) iol%death_distid(i),iol%death_date(i),iol%death_cases(i)
     Enddo
-    Close(15)
+    Close(un_in)
 
+    !read data from file to connect_total  ---------------------------
+    call pt_get("#connect_total",filename)
 
-    !read data from file to connect_total
+    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
 
-    Open(16,file=Trim(ep%data_dir)//trim(sp%connect_total), &
-         access='sequential',form="formatted",iostat=k, status="old")
-    if (k .ne. 0 ) then
-       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
-       stop
-    end if
-
-    Read(16,*,iostat= k) iol%connect_titel,iol%connect_total_name(:)
+    Read(un_in,*,iostat= k) iol%connect_titel,iol%connect_total_name(:)
     Do i = 1,Size(iol%connect_total_distid)
-       Read(16,*,iostat=k) iol%connect_total_distid(i),iol%connect_total(:,i)
+       Read(un_in,*,iostat=k) iol%connect_total_distid(i),iol%connect_total(:,i)
     Enddo
-    Close(16)
+    Close(un_in)
 
-    !read data from file to connect_total
+    !read data from file to connect_work -----------------------------
+    call pt_get("#connect_work",filename)
 
-    Open(17,file=Trim(ep%data_dir)//trim(sp%connect_work),access='sequential',&
-         form="formatted",iostat=k, status="old")
-    if (k .ne. 0 ) then
-       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
-       stop
-    end if
+    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
 
-    Read(17,*,iostat= k) iol%connect_titel,iol%connect_work_name(:)
+    Read(un_in,*,iostat= k) iol%connect_titel,iol%connect_work_name(:)
     Do i = 1,Size(iol%connect_work_distid)
-       Read(17,*,iostat=k) iol%connect_work_distid(i),iol%connect_work(:,i)
+       Read(un_in,*,iostat=k) iol%connect_work_distid(i),iol%connect_work(:,i)
     Enddo
 
+    Close(un_in)
 
-    Close(17)
-    !read data from file to connect_total
-    Open(18,file=Trim(ep%data_dir)//trim(sp%states), &
-         access='sequential',form="formatted",iostat=k, status="old")
-    if (k .ne. 0 ) then
-       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
-       stop
-    end if
+    !read data from file to states -----------------------------------
+    call pt_get("#states",filename)
 
-    index = get_file_N(18)
-    ! allocation for the readin variables
+    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
+
+    ! allocation for the readin variables ------------------
     Allocate(iol%states_code(index-1))
     Allocate(iol%states_inhabitant(index-1))
     Allocate(iol%states_shortcut(index-1))
     Allocate(iol%states_name(index-1))
-    Read(18,*,iostat= k) iol%state_titel(:)
+    
+    Read(un_in,*,iostat= k) iol%state_titel(:)
     Do i = 1,index-1 
-       Read(18,*,iostat=k) iol%states_code(i),iol%states_inhabitant(i),iol%states_shortcut(i),iol%states_name(i)
+       Read(un_in,*,iostat=k) iol%states_code(i),iol%states_inhabitant(i),iol%states_shortcut(i),iol%states_name(i)
     Enddo
-    Close(18)
+    Close(un_in)
 
-    Open(19,file=Trim(ep%data_dir)//trim(sp%counties),access='sequential',&
-         form="formatted",iostat=k, status="old")
-    if (k .ne. 0 ) then
-       write(*,fmt_file_missing)trim(ep%data_dir)//trim(sp%trans_pr)
-       stop
-    end if
+    !read data from file to counties ---------------------------------
+    call pt_get("#counties",filename)
 
-    index = get_file_N(19)
-    ! allocation for the readin variables
+    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
+
+    ! allocation for the readin variables ------------------
     Allocate(iol%counties_dist_id(index-1))
     Allocate(iol%counties_name(index-1))
     Allocate(iol%counties_area(index-1))
     Allocate(iol%counties_inhabitants(index-1))
-    Read(19,*,iostat= k) iol%state_titel(:)
-    Do i = 1,index-1
-       Read(19,*,iostat=k) iol%counties_dist_id(i),iol%counties_name(i),iol%counties_area(i),iol%counties_inhabitants(i)
-    Enddo
-    Close(19)
-
-
-!!!!----initalizing pspace ============================================
-    !sam_size
-    pspace%Ps_scalar_list(1)%param                 = 232000
-    pspace%Ps_scalar_list(1)%var_type              = "direct"
-    pspace%Ps_scalar_list(1)%name                  = "same_size"
-    !R0
-    pspace%Ps_scalar_list(2)%param                 = 3.5
-    pspace%Ps_scalar_list(2)%var_type              = "direct"
-    pspace%Ps_scalar_list(2)%name                  = "R0"
-    !icu_dur
-    pspace%Ps_scalar_list(3)%param                 = 14
-    pspace%Ps_scalar_list(3)%var_type              = "direct"
-    pspace%Ps_scalar_list(3)%name                  = "icu_dur"
-    !mod_surv_ill
-    pspace%Ps_scalar_list(4)%param                 = 1
-    pspace%Ps_scalar_list(4)%var_type              = "direct"
-    pspace%Ps_scalar_list(4)%name                  = "mod_surv_ill"
-    !lcokdown_effect
-    pspace%Ps_scalar_list(5)%param                 = 0.39
-    pspace%Ps_scalar_list(5)%var_type              = "direct"
-    pspace%Ps_scalar_list(5)%name                  = "lcokdown_effect"
-    !w_int
-    pspace%Ps_scalar_list(6)%param                 = 0.9
-    pspace%Ps_scalar_list(6)%var_type              = "direct"
-    pspace%Ps_scalar_list(6)%name                  = "w_int"
-    !w_obs
-    pspace%Ps_scalar_list(7)%param                 = 0.0
-    pspace%Ps_scalar_list(7)%var_type              = "direct"
-    pspace%Ps_scalar_list(7)%name                  = "w_obs"
-    !w_obs_by_state
-    pspace%Ps_scalar_list(8)%param                 = 0.0
-    pspace%Ps_scalar_list(8)%var_type              = "direct"
-    pspace%Ps_scalar_list(8)%name                  = "w_obs_by_state"
-    !ROeffect_ps
-
-    Open(20,file=Trim(ep%data_dir)//trim(sp%R0_effects),&
-         access='sequential',form="formatted",iostat=k, status="old")
-    if (k .ne. 0 ) then
-       write(*,fmt_file_missing)Trim(ep%data_dir)//trim(sp%R0_effects)
-       stop
-    end if
     
-    index = get_file_N(20)
-
-    Allocate(pspace%ROeffect_ps%param_char(17,index))
-    Allocate(pspace%ROeffect_ps%param(16,index-1))
-    Read(20,*,iostat = k)
+    Read(un_in,*,iostat= k) iol%state_titel(:)
     Do i = 1,index-1
-       Read(20,*,iostat = k) pspace%ROeffect_ps%param_char(:,i)
-    End Do
+       Read(un_in,*,iostat=k) iol%counties_dist_id(i),iol%counties_name(i),&
+            iol%counties_area(i),iol%counties_inhabitants(i)
+    Enddo
+    Close(un_in)
 
-    Do i = 1,index-1
-       Do j= 1,16
-          Read(pspace%ROeffect_ps%param_char(j+1,i),"(f20.4)") pspace%ROeffect_ps%param(j,i)
-       End Do
-    End Do
-
-
-    pspace%ROeffect_ps%var_type = "directl"
-    ! convert character_param to numeric
-    ! some code here, should be here
+    !Read R0_effects -------------------------------------------------
+    call pt_get("#R0_effects",filename)
+    
+    call read_TableData( &
+         trim(data_dir)//trim(filename),sep=" ",head=.TRUE., &
+         rownames=.TRUE., data=iol%R0_effect &
+         )
 
   End Subroutine loaddata
 
 
-subroutine print_cosmic_head()
+  subroutine print_cosmic_head()
+
+    write(*,*)
+    write(*,'(A)')"!###############################################################################"
+    write(*,'(A)')"!###############################################################################"
+    write(*,'(A)')"!#      ___      __         _      "
+    write(*,'(A)')"!#     / __\___ / _\  /\/\ (_) ___ "
+    write(*,'(A)')"!#    / /  / _ \\ \  /    \| |/ __|"
+    write(*,'(A)')"!#   / /__| (_) |\ \/ /\/\ \ | (__ "
+    write(*,'(A)')"!#   \____/\___/\__/\/    \/_|\___|"
+    write(*,'(A)')"!#"
+    write(*,'(A)')"!#  COVID-19 Spatial Microsimulation  ---  For Germany  ########################"
+    write(*,'(A)')"!###############################################################################"
+    write(*,*)
+
+  end subroutine print_cosmic_head
+
+  subroutine open_and_index(path,un,index)
+
+    Integer         , intent(inout) :: un
+    character(len=*), intent(in)    :: path
+    integer, intent(out)            :: index
+
+    integer                         :: k
+
+    Open(newunit=un, file=Trim(path), &
+         access='sequential',form="formatted",iostat=k, status="old")
+    if (k .ne. 0 ) then
+       write(*,fmt_file_missing)trim(path)
+       stop
+    end if
+
+    index = get_file_N(un)
+
+  end subroutine open_and_index
+
+  !! ===========================================================================
+  !> Subroutine to read ASCII formatted table data
+  Subroutine read_TableData(filename,sep,head,rownames,data)
+
+    Character(len=*), intent(in)           :: filename
+        
+    Type(TableData) , intent(out)          :: data 
+
+    Character       , intent(in), optional :: sep   
+    Logical         , Intent(in), optional :: head, rownames
+    
+    Character                              :: loc_sep
+    Logical                                :: loc_head, loc_rownames
+
+    Integer                                :: io_stat, un, ii
+    Integer                                :: no_lines, dim1, dim2
+    character(len=2048)                    :: l_head
+    character(len=:),Dimension(:),allocatable :: str_arr
+
+    !---------------------------------------------------------------------------
+    if (present(sep)) then
+       loc_sep = sep
+    else
+       loc_sep = ","
+    End if
+
+    if (present(head)) then
+       loc_head = head
+    else
+       loc_head = .TRUE.
+    End if
+
+    if (present(rownames)) then
+       loc_rownames = rownames
+    else
+       loc_rownames = .FALSE.
+    End if
+
+    !! Open file -----------------------------------------------------
+    Open(newunit=un, file=Trim(filename), access='sequential', &
+         form="formatted",iostat=io_stat, status="old")
+    
+    if (io_stat .ne. 0 ) then
+       write(*,fmt_file_missing)trim(filename)
+       stop
+    end if
+
+    !! Get number of lines in file -------------------------
+    no_lines = get_file_N(un)
+
+    if (loc_head) then
+       !! If a headline is given: Number of lines - 1 gives dim1 ---------------
+       
+       dim1 = no_lines - 1
+
+       Read(un,'(A)')l_head
+
+       !! Warning in case maximum line length is almost used up ------
+       if (len_trim(l_head) >= (len(l_head)*0.9)) then
+          write(*,'("WW read_TableData:",A,I0)') &
+               "Length of header line reaches limit of ",len(l_head)
+       end if
+    
+       data%head = strtok(trim(l_head),loc_sep)
+    
+       dim2 = size(data%head)
+
+    Else
+       !! If we have no headline, determine dim2 from Number of seperators in --
+       !! first line. ----------------------------------------------------------
+       
+       dim1 = no_lines
+
+       Read(un,'(A)')l_head
+
+       !! Warning in case maximum line length is almost used up ------
+       if (len_trim(l_head) >= (len(l_head)*0.9)) then
+          write(*,'("WW read_TableData:",A,I0)') &
+               "Length of header line reaches limit of ",len(l_head)
+       end if
+    
+       str_arr = strtok(trim(l_head),loc_sep)
+    
+       dim2 = size(str_arr)
+
+       Rewind(un)
+       
+    End if
+
+    Allocate(data%data(dim1,dim2))
+    
+    if (loc_rownames) then
+       Allocate(data%rownames(dim1),mold=l_head(1:16))
+       Do ii = 1, dim1
+          Read(un,*)data%rownames(ii),data%data(ii,:)
+       End Do
+    Else
+       Read(un,*)data%data
+    end if
+
+  End Subroutine read_TableData
   
-  write(*,*)
-  write(*,'(A)')"!###############################################################################"
-  write(*,'(A)')"!###############################################################################"
-  write(*,'(A)')"!#      ___      __         _      "
-  write(*,'(A)')"!#     / __\___ / _\  /\/\ (_) ___ "
-  write(*,'(A)')"!#    / /  / _ \\ \  /    \| |/ __|"
-  write(*,'(A)')"!#   / /__| (_) |\ \/ /\/\ \ | (__ "
-  write(*,'(A)')"!#   \____/\___/\__/\/    \/_|\___|"
-  write(*,'(A)')"!#"
-  write(*,'(A)')"!#  COVID-19 Spatial Microsimulation  ---  For Germany  ########################"
-  write(*,'(A)')"!###############################################################################"
-  write(*,*)
-
-end subroutine print_cosmic_head
-
 end module CoSMic_IO
