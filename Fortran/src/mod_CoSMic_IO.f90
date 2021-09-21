@@ -333,7 +333,7 @@ contains
     !=================================================================
 
     call pt_get("#data_dir",data_dir)
-
+    
     ! Read data from file: Transition probabilities ------------------
     call pt_get("#trans_pr",filename)
 
@@ -395,7 +395,7 @@ contains
     Close(un_in)
 
     !read data from file to seeddeath --------------------------------
-    call pt_get("#inf_cases",filename)
+    call pt_get("#dead_cases",filename)
 
     call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
 
@@ -479,8 +479,9 @@ contains
          )
 
   End Subroutine loaddata
-
-
+  
+  !! ===========================================================================
+  !> Print the CoSMic application logotted file and return its line count 
   subroutine print_cosmic_head()
 
     write(*,*)
@@ -497,7 +498,9 @@ contains
     write(*,*)
 
   end subroutine print_cosmic_head
-
+  
+  !! ===========================================================================
+  !> Subroutine to open an ASCII formatted file and return its line count 
   subroutine open_and_index(path,un,index)
 
     Integer         , intent(inout) :: un

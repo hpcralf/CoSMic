@@ -1136,7 +1136,7 @@ integer,allocatable         :: output(:)
 
 total = 0
 do i = 1,size(array_in)
-    if (array_in(i) > cond) then
+    if (array_in(i) >= cond) then
         total = total + 1
     end if
 end do
@@ -1144,7 +1144,7 @@ end do
 allocate(output(total))
 total = 0
 do i = 1,size(array_in)
-    if (array_in(i) > cond) then
+    if (array_in(i) >= cond) then
         total  = total + 1
         output(total) = i
     end if

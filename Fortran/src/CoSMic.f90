@@ -91,11 +91,6 @@ Program CoSMic
   Call end_Timer("Load data")
 
 !!!!----initalizing pspace ============================================
-  !sam_size
-  pspace%Ps_scalar_list(1)%param                 = 232000
-  pspace%Ps_scalar_list(1)%var_type              = "direct"
-  pspace%Ps_scalar_list(1)%name                  = "same_size"
-  !R0
   pspace%Ps_scalar_list(2)%param                 = 3.5
   pspace%Ps_scalar_list(2)%var_type              = "direct"
   pspace%Ps_scalar_list(2)%name                  = "R0"
@@ -140,6 +135,6 @@ Program CoSMic
 
   call end_timer("CoSMic")
 
-  call write_timelist()
+  call write_timelist(unit=un_lf)
 
 End Program CoSMic

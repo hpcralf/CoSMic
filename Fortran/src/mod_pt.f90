@@ -25,7 +25,7 @@ Module param_tree
   Use pt_types
 
   Implicit None
-
+  
   !============================================================================
   !== Private routines
   
@@ -34,9 +34,11 @@ Module param_tree
   !== Interfaces
   !> Getter functions to retrieve values from pt to local variables
   interface pt_get
-     module procedure pt_get_1d_i8
      module procedure pt_get_scalar_i8
-
+     module procedure pt_get_1d_i8
+     module procedure pt_get_2d_i8
+     
+     module procedure pt_get_scalar_r8
      module procedure pt_get_2d_r8
      
      module procedure pt_get_1d_char
@@ -70,13 +72,18 @@ Contains
     Logical, optional, intent(out)                  :: success
     Logical                                         :: loc_success
 
+    loc_success=.FALSE.
     
     call get_scalar_i8(p_name,pt,arr,loc_success)
 
     if (.not.present(success)) then
-       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
     else
        success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
     End if
 
   End Subroutine pt_get_scalar_i8
@@ -90,16 +97,74 @@ Contains
 
     Logical, optional, intent(out)                  :: success
     Logical                                         :: loc_success
+
+    loc_success=.FALSE.
     
     call get_1d_i8(p_name,pt,arr,loc_success)
 
     if (.not.present(success)) then
-       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
     else
        success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
     End if
 
   End Subroutine pt_get_1d_i8
+  
+  !! ===========================================================================
+  !> Subroutine to rerieve a 2D integer 8 value from pt
+  Subroutine pt_get_2d_i8(p_name,arr,success)
+
+    character(len=*)               , intent(in)     :: p_name
+    integer(kind=pt_ik),allocatable, Dimension(:,:) :: arr
+
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+
+    loc_success=.FALSE.
+    
+    call get_2d_i8(p_name,pt,arr,loc_success)
+
+    if (.not.present(success)) then
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
+    else
+       success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
+    End if
+
+  End Subroutine pt_get_2d_i8
+  !! ===========================================================================
+  !> Subroutine to rerieve a scalar real 8 value from pt
+  Subroutine pt_get_scalar_r8(p_name,arr,success)
+
+    character(len=*)               , intent(in)   :: p_name
+    Real(kind=pt_rk)                              :: arr
+
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+
+    loc_success=.FALSE.
+    
+    call get_scalar_r8(p_name,pt,arr,loc_success)
+
+    if (.not.present(success)) then
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
+    else
+       success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
+    End if
+
+  End Subroutine pt_get_scalar_r8
+  
   !! ===========================================================================
   !> Subroutine to rerieve a 2D real 8 value from pt
   Subroutine pt_get_2d_r8(p_name,arr,success)
@@ -109,13 +174,19 @@ Contains
 
     Logical, optional, intent(out)                  :: success
     Logical                                         :: loc_success
+
+    loc_success=.FALSE.
     
     call get_2d_r8(p_name,pt,arr,loc_success)
 
     if (.not.present(success)) then
-       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
     else
        success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
     End if
 
   End Subroutine pt_get_2d_r8
@@ -129,13 +200,19 @@ Contains
 
     Logical, optional, intent(out)                  :: success
     Logical                                         :: loc_success
+
+    loc_success=.FALSE.
     
     call get_scalar_char(p_name,pt,arr,loc_success)
 
     if (.not.present(success)) then
-       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
     else
        success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
     End if
     
   End Subroutine pt_get_scalar_char
@@ -150,12 +227,18 @@ Contains
     Logical, optional, intent(out)                  :: success
     Logical                                         :: loc_success
     
+    loc_success=.FALSE.
+    
     call get_1d_char(p_name,pt,char_arr,loc_success)
 
     if (.not.present(success)) then
-       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
     else
        success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
     End if
 
   End Subroutine pt_get_1d_char
@@ -169,17 +252,22 @@ Contains
 
     Logical, optional, intent(out)                  :: success
     Logical                                         :: loc_success
+
+    loc_success=.FALSE.
     
     call get_scalar_l(p_name,pt,arr,loc_success)
 
     if (.not.present(success)) then
-       if (.not. loc_success) write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
     else
        success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
     End if
     
   End Subroutine pt_get_scalar_l
-  
   !> @}
 
   !============================================================================
@@ -192,28 +280,32 @@ Contains
   !> Subroutine to rerieve a scalar integer 8 value from a branch
   Recursive subroutine get_scalar_i8(p_name,branch,arr,success)
 
-    character(len=*)   , intent(in)  :: p_name
-    Type(pt_branch)    , intent(in)  :: branch
-    integer(kind=pt_ik), intent(out) :: arr
-    Logical            , intent(inout)              :: success
+    character(len=*)   , intent(in)    :: p_name
+    Type(pt_branch)    , intent(in)    :: branch
+    integer(kind=pt_ik), intent(out)   :: arr
+    Logical            , intent(inout) :: success
 
     integer                          :: ii, jj, c_len
-
-    do ii = 1, branch%no_branches
-       call  get_scalar_i8(p_name,branch%branches(ii),arr,success)
-    End do
 
     do ii = 1, branch%no_leaves
 
        if (p_name == trim(branch%leaves(ii)%name)) then
-
-          arr = branch%leaves(ii)%i8(1)
-          success = .TRUE.
-         
+          if (branch%leaves(ii)%dat_ty == "I") then
+             arr = branch%leaves(ii)%i8(1)
+             success = .TRUE.
+             exit
+          End if
        end if
 
     End do
 
+    if (.not. success) then
+       do ii = 1, branch%no_branches
+          call  get_scalar_i8(p_name,branch%branches(ii),arr,success)
+          if (success) exit
+       End do
+    End if
+    
   End subroutine get_scalar_i8
 
   !! ===========================================================================
@@ -226,26 +318,96 @@ Contains
     Logical            , intent(inout)              :: success
 
     integer                                    :: ii, jj, c_len
+    
+    do ii = 1, branch%no_leaves
+       if (p_name == trim(branch%leaves(ii)%name)) then
+          if (branch%leaves(ii)%dat_ty == "I") then
+             arr = branch%leaves(ii)%i8
+             success = .TRUE.
+             exit
+          End if
+       end if
 
-    do ii = 1, branch%no_branches
-       call  get_1d_i8(p_name,branch%branches(ii),arr,success)
     End do
+
+    if (.not.success) then
+       do ii = 1, branch%no_branches
+          call  get_1d_i8(p_name,branch%branches(ii),arr,success)
+          if(success) exit
+       End do
+    End if
+    
+  End subroutine get_1d_i8
+
+  !! ===========================================================================
+  !> Subroutine to rerieve a 2D integer 8 value from a branch
+  Recursive subroutine get_2d_i8(p_name,branch,arr,success)
+
+    character(len=*)   , intent(in)                              :: p_name
+    Type(pt_branch)    , intent(in)                              :: branch
+    integer(kind=pt_ik), Allocatable, Dimension(:,:),intent(out) :: arr
+    Logical            , intent(inout)                           :: success
+
+    integer                                    :: ii, jj, c_len
+    
+    do ii = 1, branch%no_leaves
+       if (p_name == trim(branch%leaves(ii)%name)) then
+          if (branch%leaves(ii)%dat_ty == "I") then
+             arr = reshape(&
+                  branch%leaves(ii)%i8, &
+                  [branch%leaves(ii)%dat_no(1),branch%leaves(ii)%dat_no(2)]&
+                  )
+             
+             success = .TRUE.
+             exit
+          End if
+       end if
+    End do
+
+    if(.not. success) then
+       do ii = 1, branch%no_branches
+          call  get_2d_i8(p_name,branch%branches(ii),arr,success)
+          if(success) exit
+       End do
+    End if
+    
+  End subroutine get_2d_i8
+  
+  !! ===========================================================================
+  !> Subroutine to rerieve a scalar real 8 value from a branch
+  Recursive subroutine get_scalar_r8(p_name,branch,arr,success)
+
+    character(len=*)   , intent(in)                            :: p_name
+    Type(pt_branch)    , intent(in)                            :: branch
+    Real(kind=pt_rk)                             ,intent(out)  :: arr
+    Logical            , intent(inout)                         :: success
+
+    integer                                    :: ii, jj, c_len
 
     do ii = 1, branch%no_leaves
 
        if (p_name == trim(branch%leaves(ii)%name)) then
 
-          arr = branch%leaves(ii)%i8
-          success = .TRUE.
+          if (branch%leaves(ii)%dat_ty == "R") then
+             arr = branch%leaves(ii)%r8(1)
+             success = .TRUE.
+             exit
+          End if
           
        end if
 
     End do
 
-  End subroutine get_1d_i8
-  
+    if(.not. success) then
+       do ii = 1, branch%no_branches
+          call  get_scalar_r8(p_name,branch%branches(ii),arr,success)
+          if(success) exit
+       End do
+    End if
+    
+  End subroutine get_scalar_r8
   !! ===========================================================================
-  !> Subroutine to rerieve a 1D integer 8 value from a branch
+  !> Subroutine to rerieve a 2D real 8 value from a branch
   Recursive subroutine get_2d_r8(p_name,branch,arr,success)
 
     character(len=*)   , intent(in)                            :: p_name
@@ -255,24 +417,29 @@ Contains
 
     integer                                    :: ii, jj, c_len
 
-    do ii = 1, branch%no_branches
-       call  get_2d_r8(p_name,branch%branches(ii),arr,success)
-    End do
-
     do ii = 1, branch%no_leaves
 
        if (p_name == trim(branch%leaves(ii)%name)) then
 
-          arr = reshape(&
-               branch%leaves(ii)%r8,&
-               [branch%leaves(ii)%dat_no(1),branch%leaves(ii)%dat_no(2)]&
-               )
-          success = .TRUE.
-          
+          if (branch%leaves(ii)%dat_ty == "R") then
+             arr = reshape(&
+                  branch%leaves(ii)%r8,&
+                  [branch%leaves(ii)%dat_no(1),branch%leaves(ii)%dat_no(2)]&
+                  )
+             success = .TRUE.
+             exit
+          End if
        end if
 
     End do
 
+    if (.not. success) then
+       do ii = 1, branch%no_branches
+          call  get_2d_r8(p_name,branch%branches(ii),arr,success)
+          if(success) exit
+       End do
+    End if
+    
   End subroutine get_2d_r8
   
   !! ===========================================================================
@@ -286,22 +453,23 @@ Contains
     
     integer                          :: ii, jj, c_len
 
-    success = .FALSE.
-    
-    do ii = 1, branch%no_branches
-       call  get_scalar_char(p_name,branch%branches(ii),arr,success)
-    End do
-
     do ii = 1, branch%no_leaves
-
+       
        if (p_name == trim(branch%leaves(ii)%name)) then
-
-          arr = trim(branch%leaves(ii)%ch(1))
-          success = .TRUE.
-          
+          if (branch%leaves(ii)%dat_ty == "C") then
+             arr = trim(branch%leaves(ii)%ch(1))
+             success = .TRUE.
+             exit
+          End if
        end if
-
     End do
+
+    if (.not. success) then
+       do ii = 1, branch%no_branches
+          call  get_scalar_char(p_name,branch%branches(ii),arr,success)
+          if (success) exit
+       End do
+    End if
 
   End subroutine get_scalar_char
 
@@ -316,28 +484,35 @@ Contains
 
     integer                                    :: ii, jj, c_len
 
-    do ii = 1, branch%no_branches
-       call  get_1d_char(p_name,branch%branches(ii),char_arr,success)
-    End do
-
     do ii = 1, branch%no_leaves
 
        if (p_name == trim(branch%leaves(ii)%name)) then
-
-          c_len = len_trim(branch%leaves(ii)%ch(1))
-
-          Allocate(char_arr(branch%leaves(ii)%dat_no(1)),&
-               mold=branch%leaves(ii)%ch(1)(1:c_len))
-
-          Do jj = 1, branch%leaves(ii)%dat_no(1)
-             char_arr(jj) = branch%leaves(ii)%ch(jj)(1:c_len)
-          End Do
-
-          success = .TRUE.
-          
+          if (branch%leaves(ii)%dat_ty == "C") then
+             c_len = -1
+             Do jj = 1, size(branch%leaves(ii)%ch)
+                c_len = max(c_len,len_trim(branch%leaves(ii)%ch(jj)))
+             End Do
+             
+             Allocate(char_arr(branch%leaves(ii)%dat_no(1)),&
+                  mold=branch%leaves(ii)%ch(1)(1:c_len))
+             
+             Do jj = 1, branch%leaves(ii)%dat_no(1)
+                char_arr(jj) = branch%leaves(ii)%ch(jj)(1:c_len)
+             End Do
+             
+             success = .TRUE.
+             exit
+          End if
        end if
 
     End do
+
+    if (.not.success) then
+       do ii = 1, branch%no_branches
+          call  get_1d_char(p_name,branch%branches(ii),char_arr,success)
+          if(success) exit
+       End do
+    End if
 
   End subroutine get_1d_char
 
@@ -352,23 +527,25 @@ Contains
     
     integer                            :: ii, jj, c_len
 
-    success = .FALSE.
-    
-    do ii = 1, branch%no_branches
-       call  get_scalar_l(p_name,branch%branches(ii),arr,success)
-    End do
-
     do ii = 1, branch%no_leaves
 
        if (p_name == trim(branch%leaves(ii)%name)) then
-
-          arr = branch%leaves(ii)%l(1)
-          success = .TRUE.
-          
+          if (branch%leaves(ii)%dat_ty == "L") then
+             arr = branch%leaves(ii)%l(1)
+             success = .TRUE.
+             exit
+          End if
        end if
 
     End do
 
+    if (.not.success) then
+       do ii = 1, branch%no_branches
+          call  get_scalar_l(p_name,branch%branches(ii),arr,success)
+          if(success) exit
+       End do
+    End if
+    
   End subroutine get_scalar_l
   !> @}
   
@@ -722,7 +899,7 @@ Contains
              write(pt_umon,PTF_W_A)"Assuming a scalar string parameter."
 
              keyword = str_arr(1)
-             dat_ty  = "c"
+             dat_ty  = "C"
              dat_dim = 1
 
              Allocate(pt%branches(n_files)%leaves(nn)%dat_no(1))

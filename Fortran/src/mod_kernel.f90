@@ -45,8 +45,10 @@
 Module kernel
 
   use timer
+
   use param_tree
 
+  use precision
   Use global_constants
   use global_types
   use global_vars
@@ -97,11 +99,10 @@ Contains
     Logical             :: immune_stop
 
 !!!!!-----5. define reductions in social contacts -----
-    Integer             :: R0change(2,20)
-    Character*5         :: R0county(20)
+    Integer(kind=ik), Allocatable, Dimension(:,:) :: R0change
     Logical             :: R0delay
     Integer             :: R0delay_days
-    Character*6         :: R0delay_type
+    Character(len=:),Allocatable :: R0delay_type
 
 !!!!!-----7.  Define whether transition probabilities should differ by age and sex
     Character*10        :: control_age_sex
@@ -112,8 +113,9 @@ Contains
 
     Integer             :: n_direct,n_directv,n_directl,n_dist
     Integer             :: size_lhc
-    Real,Allocatable    :: lhc(:,:)
-    Character*10,Allocatable :: lhc_name(:)
+    Real(kind=rk),Allocatable    :: lhc(:,:)
+    Integer(kind=ik)             :: tmp_i8
+
 !!!!!-----8. variables for do loop -------
     Real,Allocatable    :: icu_risk(:),surv_ill(:),surv_icu(:)
     Integer,Allocatable :: temp1(:),temp(:),targert_icu_risk_index(:)
@@ -133,6 +135,7 @@ Contains
 
     Type sims
        Integer,Allocatable             :: dist_id(:)
+       Integer,Allocatable             :: dist_id_rn(:)
        Character,Allocatable           :: sex(:)
        Character*2,Allocatable         :: age(:)
        Integer,Allocatable             :: t1(:)
@@ -168,7 +171,7 @@ Contains
 
     Integer                         :: timestep
 
-    Integer,Allocatable             :: tmp_index(:),tmp_d_new(:),tmp_count(:)
+    Integer,Allocatable             :: tmp_d_new(:),tmp_count(:)
     Integer,Allocatable             :: susceptible(:),contagious_dist_id(:),contagious_index(:),denominator(:),&
          revers_proj(:),final_count(:),dist_id_temp(:),ill_index(:),&
          ill_dist_id(:)
@@ -206,11 +209,15 @@ Contains
     integer                         :: tar
 
     Real(kind=pt_rk),Dimension(:,:),Allocatable :: R0_effects
+    Integer(kind=ik),Dimension(:)  ,Allocatable :: dist_id_cref 
+    
+    Integer(kind=ik), Dimension(0:16)         :: istate_count
+    Integer(kind=ik)                         :: pop_size
+    Integer(kind=ik)                         :: num_counties
+    Integer(kind=ik)                         :: ii
     
     ! should import some reliable romdon seed generation code here
     !seed_base = ??
-
-    call start_timer("Init Sim Loop")
 
     !===========================================================================
     ! Implementation
@@ -262,16 +269,13 @@ Contains
     immune_stop = .True.
 
 !!!!!-----5. define reductions in social contacts -----
-    ! R0change = reshape((/1,7,8,13,14,19,20,25,26,32,33,39,40,46,47,53,54,60,61,67,68,74,75,81,82,88,&
-    !                     89,95,96,102,103,109,110,116,117,123,124,130,131,137,138,144,145,151,152,158,&
-    !                     159,164/),shape(R0change))
-    R0change = Reshape((/1,7,8,13,14,19,20,25,26,32,33,39,40,46,47,53,54,60,61,67,68,74,75,81,82,88,&
-         89,95,96,102,103,109,110,116,117,123,124,130,131,137/),Shape(R0change))
-    R0county            = "ALL"
-    R0delay             = .True.
-    R0delay_days        = 5
-    R0delay_type        = "linear"
+    call pt_get("#R0change"     ,R0change    )
+    call pt_get("#R0delay"      ,R0delay     )
+    call pt_get("#R0delay_days" ,R0delay_days)
+    call pt_get("#R0delay_type" ,R0delay_type)
 
+    time_n = Maxval(R0change) + 1
+    
 !!!!!-----7.  Define whether transition probabilities should differ by age and sex
     control_age_sex     = "age"
     days             = 1
@@ -282,22 +286,30 @@ Contains
     days             = -1-seed_before
     seed_before_char = add_date(seed_date,days)
     seed_seq         = generate_seq(seed_before_char,seed_date)
-
+    
+    write(un_lf,PTF_sep)
+    write(un_lf,PTF_M_A)"Seed sequence for ill cases:",seed_seq
+    
     !Derive dates of infections for those that are inf_cont,
     !but are not yet aware about it (will be registered the
     !next two days)
     seed_temp        = add_date(seed_date,cont_dur)
     seed_inf_cont_seq  =  generate_seq(add_date(seed_date,1),seed_temp)
+
+    write(un_lf,PTF_sep)
+    write(un_lf,PTF_M_A)"Seed sequence for infected contagious cases:",seed_inf_cont_seq
+
     !Derive dates of infections for those that are inf_cont,
     !but are not yet aware about it (will be registered the
     !next 3-5 days)
     seed_inf_ncont_seq = generate_seq(add_date(seed_date,cont_dur+1),add_date(seed_date,inf_dur+cont_dur))
 
-    If (Maxval(R0change)> time_n) Then
-       time_n = Maxval(R0change) + 1
-    End If
+    write(un_lf,PTF_sep)
+    write(un_lf,PTF_M_A)"Seed sequence for infected non-contagious cases:",seed_inf_ncont_seq
 
-    ! this part should done by the code, but here is set manually for simplicity
+    !! Setup of latin hypercube. ===============================================
+    !! This part should done by the code, but here is set manually for 
+    !! simplicity. This part should be seperated away into the preprocessing step
     n_direct  = 8
     n_directv = 0
     n_directl = 1
@@ -315,7 +327,7 @@ Contains
     End If
 
     If (n_directl > 0) Then
-       size_lhc = size_lhc + Size(iol%R0_effect%data)
+       size_lhc = size_lhc + size(iol%R0_effect%data)
     End If
 
     Allocate(lhc(size_lhc,iter))
@@ -325,26 +337,14 @@ Contains
        lhc(i,:) = pspace%Ps_scalar_list(i)%param
     End Do
 
+    call pt_get("#sam_size",tmp_i8)
+    lhc(1,:) = tmp_i8
 
     Do i = 1,iter
-       lhc(n_direct+1:Size(lhc,dim=1),i) = Reshape(iol%R0_effect%data,&
+       lhc(n_direct+1:Size(lhc,dim=1),i) = Reshape(transpose(iol%R0_effect%data),&
             Shape(lhc(n_direct+1:Size(lhc,dim=1),1)))
     End Do
     ! print *, "after reshape is",reshape(pspace%ROeffect_ps%param,shape(lhc(n_direct+1:size(lhc,dim=1),1)))
-    Allocate(lhc_name(size_lhc))
-
-    ! do i = 1, 9
-    !     lhc(i,:) = pspace%Ps_scalar_list(i)%param
-    ! end do
-
-    ! temp_int = 10
-    !skip the following line,since lhc_name is no longer used.
-    ! do i =1,size(iol%states_shortcut)
-    !     do j = 1,size(pspace%ROeffect_ps%param,dim= 2)
-    !         lhc_name(temp_int) = iol%states_shortcut // pspace%ROeffect_ps%param(1,j)
-    !         temp_int = temp_int + 1
-    !     end do
-    ! end do
 
     If (control_age_sex == "NONE") Then
        ch_age = (/"total"/)
@@ -418,6 +418,14 @@ Contains
        icu_risk_list%dur((i-1)*Size(icu_risk)+1: i*Size(icu_risk)) = i
     End Do
 
+    write(un_lf,PTF_SEP)
+    write(un_lf,PTF_M_A)"ICU risk per age group, sex, and duration in ICU."
+    Do ii=1, Size(icu_risk)*ill_dur
+       write(un_lf,'(A4,A2,F6.3,I3)') &
+            icu_risk_list%age(ii)    , icu_risk_list%sex(ii), &
+            icu_risk_list%risk(ii), icu_risk_list%dur(ii)
+    End Do
+
     ! init surv_ill
     If (control_age_sex == "age") Then
        If (.Not.Allocated(surv_ill))Then
@@ -446,6 +454,14 @@ Contains
     surv_ill_list%sex = 'f'
     surv_ill_list%sex(1:19) = 'm'
     surv_ill_list%risk  = surv_ill
+
+    write(un_lf,PTF_SEP)
+    write(un_lf,PTF_M_A)"Chance of survival per age group and sex."
+    Do ii=1, 2*19
+       write(un_lf,'(A4,A2,F6.3)') &
+            surv_ill_list%age(ii)    , surv_ill_list%sex(ii), &
+            surv_ill_list%risk(ii)
+    End Do
 
     ! init surv_icu
     If (control_age_sex == "age") Then
@@ -476,57 +492,78 @@ Contains
     surv_icu_list%sex(1:19) = 'm'
     surv_icu_list%risk  = surv_icu
 
+    write(un_lf,PTF_SEP)
+    write(un_lf,PTF_M_A)"Chance of survival in ICU per age group and sex."
+    Do ii=1, 2*19
+       write(un_lf,'(A4,A2,F6.3)') &
+            surv_icu_list%age(ii)    , surv_icu_list%sex(ii), &
+            surv_icu_list%risk(ii)
+    End Do
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 !!! the following part was in the loop at R code
 !!! put it outside to avoid memoery problem
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    Allocate(healthy_cases_final(Size(counties_index),time_n,iter))
-    Allocate(inf_noncon_cases_final(Size(counties_index),time_n,iter))
-    Allocate(inf_contag_cases_final(Size(counties_index),time_n,iter))
-    Allocate(ill_contag_cases_final(Size(counties_index),time_n,iter))
-    Allocate(ill_ICU_cases_final(Size(counties_index),time_n,iter))
-    Allocate(immune_cases_final(Size(counties_index),time_n,iter))
-    Allocate(dead_cases_final(Size(counties_index),time_n,iter))
+    num_counties = Size(counties_index)
+    
+    Allocate(healthy_cases_final(num_counties,time_n,iter))
+    Allocate(inf_noncon_cases_final(num_counties,time_n,iter))
+    Allocate(inf_contag_cases_final(num_counties,time_n,iter))
+    Allocate(ill_contag_cases_final(num_counties,time_n,iter))
+    Allocate(ill_ICU_cases_final(num_counties,time_n,iter))
+    Allocate(immune_cases_final(num_counties,time_n,iter))
+    Allocate(dead_cases_final(num_counties,time_n,iter))
 
-    Allocate(inf_cases(Size(counties_index),time_n))
-    Allocate(icu_cases(Size(counties_index),time_n))
+    Allocate(inf_cases(num_counties,time_n))
+    Allocate(icu_cases(num_counties,time_n))
 
-    Allocate(healthy_cases(Size(counties_index),time_n))
-    Allocate(inf_noncon_cases(Size(counties_index),time_n))
-    Allocate(inf_contag_cases(Size(counties_index),time_n))
-    Allocate(ill_contag_cases(Size(counties_index),time_n))
-    Allocate(ill_ICU_cases(Size(counties_index),time_n))
-    Allocate(immune_cases(Size(counties_index),time_n))
-    Allocate(dead_cases(Size(counties_index),time_n))
-    Allocate(dead_cases_bICU(Size(counties_index),time_n))
-    Allocate(mod_inf_cases(Size(counties_index),time_n))
-    Allocate(org_noncon_cases(Size(counties_index),time_n))
+    Allocate(healthy_cases(num_counties,time_n))
+    Allocate(inf_noncon_cases(num_counties,time_n))
+    Allocate(inf_contag_cases(num_counties,time_n))
+    Allocate(ill_contag_cases(num_counties,time_n))
+    Allocate(ill_ICU_cases(num_counties,time_n))
+    Allocate(immune_cases(num_counties,time_n))
+    Allocate(dead_cases(num_counties,time_n))
+    Allocate(dead_cases_bICU(num_counties,time_n))
+    Allocate(mod_inf_cases(num_counties,time_n))
+    Allocate(org_noncon_cases(num_counties,time_n))
 
-    block_size = Size(counties_index) * time_n
+    block_size = num_counties * time_n
 
     max_date = find_max_date(iol%seed_date)
 
+    !** Allocate and setup dist_id cross reference -----------------------------
+    allocate(dist_id_cref(minval(counties_index):maxval(counties_index)))
+    dist_id_cref = -1
+    
+    Do ii = 1, num_counties
+       dist_id_cref(counties_index(ii)) = ii
+    End Do
+    
 !!!=============================================================================
 !!! Iteration over parameter space
 !!!=============================================================================
     Do it_ss = 1,  Size(lhc,dim=2)
 
+       call start_timer("Init Sim Loop",reset=.FALSE.)
+       
        Call random_Seed()
 
        !!=======================================================================
        !! Init population                 
        iol%pop_total = Nint(Real(iol%pop_total)/Real(Sum(iol%pop_total))* Real(lhc(1,it_ss)))
-
-       If (.Not.Allocated(temp_s)) allocate(temp_s(Sum(iol%pop_total)))
+       pop_size      = Sum(iol%pop_total)
+       
+       If (.Not.Allocated(temp_s)) allocate(temp_s(pop_size))
        
        If (.Not.Allocated(sim%dist_id))Then
-          Allocate(sim%dist_id(Sum(iol%pop_total)))
-          Allocate(sim%sex(Sum(iol%pop_total)))
-          Allocate(sim%age(Sum(iol%pop_total)))
-          Allocate(sim%t1(Sum(iol%pop_total)))
-          Allocate(sim%t2(Sum(iol%pop_total)))
-          Allocate(sim%d(Sum(iol%pop_total)))
+          Allocate(sim%dist_id(pop_size))
+          Allocate(sim%sex(pop_size))
+          Allocate(sim%age(pop_size))
+          Allocate(sim%t1(pop_size))
+          Allocate(sim%t2(pop_size))
+          Allocate(sim%d(pop_size))
        Endif
 
        index = 0 ! position index
@@ -544,7 +581,8 @@ Contains
        sim%t2 = missing
        sim%d(:)  = 1
 
-       Write(*,*)"Size of population is", sum(iol%pop_total)
+       write(un_lf,PTF_SEP)
+       Write(un_lf,PTF_M_AI0)"Size of population is", sum(iol%pop_total)
 
        !!=======================================================================
        !! seed infections
@@ -556,11 +594,10 @@ Contains
        !skip line 1113, 1115
 
        temp = get_index(iol%seed_date,seed_seq)
-
        seed_ill%dist_id  = iol%seed_distid(temp)
        seed_ill%date     = iol%seed_date(temp)
        seed_ill%cases    = iol%seed_cases(temp)
-
+      
        temp = get_index(iol%seed_date,seed_inf_cont_seq)
        seed_inf_cont%dist_id  = iol%seed_distid(temp)
        seed_inf_cont%date     = iol%seed_date(temp)
@@ -573,8 +610,8 @@ Contains
 
        temp_date  =  get_start_date(iol%death_date)
        seed_d_seq = generate_seq(temp_date,add_date(seed_date,-1))
-
        temp       = get_index(iol%death_date,seed_d_seq)
+
        iol%death_distid = iol%death_distid(temp)
        iol%death_date   = iol%death_date(temp)
        iol%death_cases  = iol%death_cases(temp)
@@ -582,6 +619,11 @@ Contains
        If (.Not.Allocated(seed_ill_dur))Then
           Allocate(seed_ill_dur(Size(seed_ill%date)))
        End If
+
+       days             = -1
+
+       seed_date        = add_date(seed_date,days)
+
        temp_int = Date2Unixtime(seed_date)
 
        Do i = 1,Size(seed_ill_dur)
@@ -597,13 +639,27 @@ Contains
        seed_ill%date     = seed_ill%date(temp)
        seed_ill%cases    = seed_ill%cases(temp)
 
+       write(un_lf,PTF_SEP)
+       write(un_lf,PTF_M_A)"First 20 and last 20 seeds for ill cases."
+       Do ii=1, 20
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_ill%dist_id(ii)    , seed_ill%date(ii), &
+               seed_ill%cases(ii),temp(ii)
+       End Do
+       write(un_lf,"('...')")
+       Do ii = Size(temp)-19, Size(temp)
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_ill%dist_id(ii)    , seed_ill%date(ii), &
+               seed_ill%cases(ii),temp(ii)
+       End Do
+       
        If (.Not.Allocated(seed_inf_cont_dur))Then
           Allocate(seed_inf_cont_dur(Size(seed_inf_cont%date)))
        End If
        temp_int = Date2Unixtime(seed_date)
        Do i = 1,Size(seed_inf_cont_dur)
           seed_inf_cont_dur(i)  = (temp_int - Date2Unixtime(seed_inf_cont%date(i)))/86400&
-               + cont_dur + 1
+               + cont_dur + 2
        End Do
 
        if (allocated(temp)) Deallocate(temp)
@@ -622,6 +678,20 @@ Contains
        seed_inf_cont%dist_id  = seed_inf_cont%dist_id(temp(1:temp_int))
        seed_inf_cont%date     = seed_inf_cont%date(temp(1:temp_int))
        seed_inf_cont%cases    = seed_inf_cont%cases(temp(1:temp_int))
+
+       write(un_lf,PTF_SEP)
+       write(un_lf,PTF_M_A)"First 20 and last 20 seeds for contagious cases."
+       Do ii=1, 20
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_inf_cont%dist_id(ii)    , seed_inf_cont%date(ii), &
+               seed_inf_cont%cases(ii),seed_inf_cont_dur(ii)
+       End Do
+       write(un_lf,"('...')")
+       Do ii = Size(temp)-19, Size(temp)
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_inf_cont%dist_id(ii)    , seed_inf_cont%date(ii), &
+               seed_inf_cont%cases(ii),seed_inf_cont_dur(ii)
+       End Do
        Deallocate(temp)
 
        If (.Not.Allocated(seed_inf_ncont_dur))Then
@@ -633,7 +703,7 @@ Contains
        temp_int = Date2Unixtime(seed_date)
        Do i = 1,Size(seed_inf_ncont_dur)
           seed_inf_ncont_dur(i)  = (temp_int - Date2Unixtime(seed_inf_ncont%date(i)))/86400&
-               + inf_dur + cont_dur + 1
+               + inf_dur + cont_dur + 2
        End Do
        Allocate(temp(Size(seed_inf_ncont%cases)))
        temp = 0
@@ -648,6 +718,21 @@ Contains
        seed_inf_ncont%dist_id  = seed_inf_ncont%dist_id(temp(1:temp_int))
        seed_inf_ncont%date     = seed_inf_ncont%date(temp(1:temp_int))
        seed_inf_ncont%cases    = seed_inf_ncont%cases(temp(1:temp_int))
+
+       write(un_lf,PTF_SEP)
+       write(un_lf,PTF_M_A)"First 20 and last 20 seeds for non contagious cases."
+       Do ii=1, 20
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_inf_ncont%dist_id(ii)    , seed_inf_ncont%date(ii), &
+               seed_inf_ncont%cases(ii),seed_inf_ncont_dur(ii)
+       End Do
+       write(un_lf,"('...')")
+       Do ii = Size(temp)-19, Size(temp)
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_inf_ncont%dist_id(ii)    , seed_inf_ncont%date(ii), &
+               seed_inf_ncont%cases(ii),seed_inf_ncont_dur(ii)
+       End Do
+
        !       skip line 1163,1166,1169,1172 since the mechanism of 
        !       aggregate is not clear, and it seems not changing anything at all
        !       do scaling
@@ -658,12 +743,15 @@ Contains
        !
        !         seed_inf_ncont%cases = seed_inf_ncont%cases * sam_prop_ps(seed_ill%dist_id/1000)
 
-       Do icounty = 1,Size(counties_index)
+       write(un_lf,PTF_SEP)
+       write(un_lf,PTF_M_A)"Seeds per county."
+       write(un_lf,'(5(A10,1X))')"county","inf_ncont","inf_cont","inf_ill","inf_dth"
+       
+       Do icounty = 1,num_counties
 
           county = counties_index(icounty)
 
           rownumbers = get_index(sim%dist_id,county)
-
 
           temp   = get_index(seed_ill%dist_id,county)
           il_d   = rep(seed_ill_dur(temp),seed_ill%cases(temp))
@@ -681,6 +769,10 @@ Contains
           temp   = get_index(iol%death_distid,county)
           inf_dth = Sum(iol%death_cases(temp))
 
+          write(un_lf,'(11(I11))')county,inf_ncont,inf_cont,inf_ill,inf_dth,&
+               minval(inf_nc_d),maxval(inf_nc_d),minval(inf_c_d),maxval(inf_c_d),&
+               minval(il_d),maxval(il_d)
+          
           If(Size(rownumbers)<(inf_ill+inf_cont+inf_ncont+inf_dth)) Then
              Print *,"Number of infected and dead is larger than population size"
              Print *,"only ",Size(rownumbers),"number left"
@@ -723,30 +815,31 @@ Contains
           End If
        End Do ! do icounty = 1,size(sim_counties)
 
+       !! ----------------------------------------------------------------------
+       !! Convert from Weekly to daily R0_effects ------------------------------
        R0_daily = R0_force *lhc(2,it_ss)/Real(Real(cont_dur)+Real(ill_dur)*less_contagious) + &
             (1-R0_force)*lhc(2,it_ss)/Real(cont_dur+ill_dur)
+
        ! this block simplifies the if judgment
        If (.Not.Allocated(R0matrix))Then
-          Allocate(R0matrix(Size(counties_index),time_n-1))
+          Allocate(R0matrix(num_counties,time_n-1))
        End If
        R0matrix = R0_daily
        n_change  = Size(R0change,dim=2)
 
        Do i = 1,n_change
 
-          If(R0county(i) == "ALL") Then
-             !use counties
-             ! give up using character to find the number, but use the index directly
-             ! if is "all" use full counties_index
-             temp  = (i-1) * Size(pspace%ROeffect_ps%param,dim= 1) + 9 + ((counties_index/1000)-1)
+          !use counties
+          ! give up using character to find the number, but use the index directly
+          temp  = 8 + (i-1) * Size(iol%R0_effect%data,dim= 2) + (counties_index/1000)
 
-             getchange = lhc(temp,it_ss)
+          getchange = lhc(temp,it_ss)
 
-             gettime = generate_seq(R0change(1,i),R0change(2,i),1)
-             Do j = 1,Size(gettime)
-                R0matrix(:,gettime(j)) = R0matrix(:,gettime(j)) * getchange
-             End Do
-          End If
+          gettime = generate_seq(R0change(1,i),R0change(2,i),1)
+
+          Do j = 1,Size(gettime)
+             R0matrix(:,gettime(j)) = R0matrix(:,gettime(j)) * getchange
+          End Do
        End Do
 
        If (R0delay) Then
@@ -755,6 +848,8 @@ Contains
           End Do
        End If
 
+       !! ----------------------------------------------------------------------
+       !! Init result fields
        start_value_tot        = sum_bygroup(sim%t1,sim%dist_id,counties_index,"ill")
        inf_cases(:,1)         = start_value_tot
        icu_cases(:,1)         = 0
@@ -773,7 +868,10 @@ Contains
        dead_cases_bICU(:,1)   = 0
        mod_inf_cases(:,1)     = 0
        org_noncon_cases(:,1)  = 0
-       sim%t2                 = sim%t1
+       sim%t2                 = missing !sim%t1
+
+       !** Set up dist_id renumbered cross_reference ---------------------------
+       sim%dist_id_rn = dist_id_cref(sim%dist_id)
 
        If (.Not.Allocated(tmp_d_new))Then
           Allocate(tmp_d_new(Size(sim%d)))
@@ -784,20 +882,37 @@ Contains
 !!!=============================================================================
 !!! Simulation Loop ============================================================
 !!!=============================================================================
-       call start_timer("Sim Loop") 
+       call start_timer("Sim Loop",reset=.FALSE.)
+
        Do timestep = 2,time_n
 
           call start_timer("+- From healthy to infected",reset=.FALSE.)
           !** Loop local Copy of population ***
           tmp = sim
 
+          !** Init new durations ***
           tmp_d_new = missing
 
-          !** Get indicees of all who are in an ill or suceptible state and ***
-          !** check if anyone is left                                       ***
-          tmp_index = get_index(tmp%t1,(/inf_contag,inf_noncon,ill_ICU,ill_contag,healthy/))
+          !** Get number of all who are in an ill or suceptible state and ***
+          !** check if anyone is left                                     ***
+          istate_count = 0
+          Do ii = 1, pop_size
+             istate_count(tmp%t1(ii)) = istate_count(tmp%t1(ii)) + 1
+             !istate_count(tmp%d(ii)) = istate_count(tmp%d(ii)) + 1
+          End Do
 
-          If (Size(tmp_index) == 0)Then
+          !** DEBUG --- Population Summary -------------------------------------
+          write(un_lf,PTF_SEP)
+          write(un_lf,PTF_M_AI0)"Population Summary @ start of step:",timestep-1
+          write(un_lf,'(11(I10))')0,1,2,3,4,5,6,7,8,9,10
+          write(un_lf,'(11(I10))')istate_count(0:10)
+          !** DEBUG --- Population Summary -------------------------------------
+          
+          If (sum(istate_count((/&
+               inf_contag,inf_noncon, &
+               ill_ICU,   ill_contag, &
+               healthy                &
+               /))) == 0)Then
              write(*,*)"All are dead or immune."
              goto 1000
           End If
@@ -817,21 +932,19 @@ Contains
           ill_dist_id        = get_unique(tmp%dist_id(ill_index))
 
           If (.Not.Allocated(contagious))Then
-             Allocate(contagious(Size(counties_index)))
+             Allocate(contagious(num_counties))
           End If
 
-          
           contagious = Real(sum_byindex(tmp%dist_id(contagious_index),counties_index))
           contagious = contagious + Real(sum_byindex(tmp%dist_id(ill_index),counties_index)) * less_contagious
 
           n_contagious = Sum(contagious)
-          write(*,*)n_contagious
-
-          temp = get_index(tmp%t1,inf_noncon)
+          write(un_lf,PTF_M_AI0)"n_contagious:",nint(n_contagious),"at_risk to be infected:",at_risk
 
           If (at_risk > 0 .And. n_contagious > 0) Then
-             exp_infect = contagious * R0matrix(:,timestep-1)
 
+             exp_infect = contagious * R0matrix(:,timestep-1)
+            
              temp = get_index(iol%connect_work_distid,counties_index)
 
              connect = iol%connect_work(temp,temp)
@@ -845,9 +958,10 @@ Contains
              exp_infect = within_weight * exp_infect + between_weight * Matmul (exp_infect, connect)
 
              If (.Not.Allocated(denominator))Then
-                Allocate(denominator(Size(counties_index)))
+                Allocate(denominator(num_counties))
              End If
 
+             
              If (.Not.immune_stop) Then
                 denominator = sum_byindex(tmp%dist_id(tmp_count),counties_index)
              Else
@@ -865,10 +979,9 @@ Contains
              End Where
 
              risk = lhc(6,it_ss)*risk + (1-lhc(6,it_ss))* Matmul(risk,connect)
-
-             call start_timer(" +- get_index(counties_...",reset=.FALSE.)
-             temp = get_index(counties_index,tmp%dist_id(tmp_count))
-             call end_timer(" +- get_index(counties_...")
+             
+             temp = sim%dist_id_rn(tmp_count)
+                                     
              prob = risk(temp)
 
              If (.Not.Allocated(runif))Then
@@ -890,6 +1003,8 @@ Contains
                    sick(i)  = 1
                 End If
              End Do
+             
+             write(un_lf,PTF_M_AI0)"# of newly infected:",sum(sick)
 
              If (Allocated(revers_proj))Then
                 Deallocate(revers_proj)
@@ -909,11 +1024,11 @@ Contains
              initial_sick = Size(sick)
 
              If (.Not.Allocated(final_count))Then
-                Allocate(final_count(Size(counties_index)))
+                Allocate(final_count(num_counties))
 
              Else
                 Deallocate(final_count)
-                Allocate(final_count(Size(counties_index)))
+                Allocate(final_count(num_counties))
              End If
              final_count = 0
 
@@ -923,94 +1038,95 @@ Contains
 
              target_date = add_date(seed_date,timestep-1+7)
 
-             If (lhc(7,it_ss) > 0 .And. Date2Unixtime(target_date) < max_date .And. initial_sick > 0)Then
-
-                temp = get_index(iol%seed_date,target_date)
-                target_inf%cases   = iol%seed_cases(temp)
-                target_inf%dist_id = iol%seed_distid(temp)
-                target_inf%date    = iol%seed_date(temp)
-                If (.Not.Allocated(final_count))Then
-                   Allocate(final_count(Size(counties_index)))
-                Else
-                   Deallocate(final_count)
-                   Allocate(final_count(Size(counties_index)))
-                End If
-                final_count = 0
-                final_count = sum_byindex(target_inf%dist_id,counties_index)
-                If (Sum(final_count) > 0) Then
-                   If(lhc(8,it_ss) == 1) Then
-                      state_id = get_unique(counties_index/1000)
-                      If (.Not.Allocated(mod_inf))Then
-                         Allocate(mod_inf(Size(counties_index)))
-                      End If
-                      mod_inf = 0
-                      Do i = 1, Size(state_id)
-                         temp = get_index(counties_index/1000,state_id(i))
-                         prop_inf_cases = inf_cases(temp,timestep)
-                         temp_int       = Sum(prop_inf_cases)
-                         If (temp_int > 0) Then
-                            prop_inf_cases = prop_inf_cases / temp_int
-                         Else
-                            prop_inf_cases = 0
-                         End If
-
-                         prop_target_inf = final_count(temp)
-                         temp_int = Sum(prop_target_inf)
-                         If (temp_int > 0) Then
-                            prop_target_inf = prop_target_inf / temp_int
-                         Else
-                            prop_target_inf = 0
-                         End If
-                         prop_target = lhc(7,it_ss) * Real(prop_target_inf) + (1 - lhc(7,it_ss))*Real(prop_inf_cases)
-
-                         mod_inf(temp) = Nint(prop_target* Real(temp_int)) - inf_cases(temp,timestep)
-                      End Do
-
-                   Else
-                      prop_inf_cases = inf_cases(:,timestep) / initial_sick
-                      prop_target = lhc(7,it_ss) * Real(final_count)/Real(Sum(final_count)) + &
-                           (1 - lhc(7,it_ss))*Real(prop_inf_cases)
-                      ! line 1675
-                      mod_inf = Nint(prop_target * Real(initial_sick))-inf_cases(:,timestep)
-
-                   End If
-
-                   Call shift_cases(sick,mod_inf,tmp%dist_id(tmp_count),counties_index)
-!!!!!!!!!!!!!!!!!!!!!!!!
-!!!can we write the following code in a more elgant
-!!!way?
-!!!!!!!!!!!!!!!!!!!!!!!!
-
-                   temp = get_index(sick,1)
-                   ! do a revers projection
-                   temp = tmp_count(temp)
-                   If (.Not.Allocated(final_count))Then
-                      Allocate(final_count(Size(counties_index)))
-                   End If
-                   If (Allocated(dist_id_temp))Then
-                      Deallocate(dist_id_temp)
-                   End If
-                   If (Allocated(case_count))Then
-                      Deallocate(case_count)
-                   End If
-
-                   !                     call sum_bygroup_distID(tmp%dist_id(temp),case_count,dist_id_temp)
-                   final_count = 0
-                   !                     do i =1,size(counties_index)
-                   !                         temp1 = get_index(tmp%dist_id(temp),counties_index(i))
-                   !                         final_count(i) = size(temp1)
-                   !                     enddo
-                   final_count = sum_byindex(tmp%dist_id(temp),counties_index)
-                   inf_cases(:,timestep) = final_count
-
-                   mod_inf_cases(:,timestep) = mod_inf
-                Else
-                   Print *,"no cases shifted"
-                End If
-
-             Else
+             
+!!$             If (lhc(7,it_ss) > 0 .And. Date2Unixtime(target_date) < max_date .And. initial_sick > 0)Then
+!!$
+!!$                temp = get_index(iol%seed_date,target_date)
+!!$                target_inf%cases   = iol%seed_cases(temp)
+!!$                target_inf%dist_id = iol%seed_distid(temp)
+!!$                target_inf%date    = iol%seed_date(temp)
+!!$                If (.Not.Allocated(final_count))Then
+!!$                   Allocate(final_count(num_counties))
+!!$                Else
+!!$                   Deallocate(final_count)
+!!$                   Allocate(final_count(num_counties))
+!!$                End If
+!!$                final_count = 0
+!!$                final_count = sum_byindex(target_inf%dist_id,counties_index)
+!!$                If (Sum(final_count) > 0) Then
+!!$                   If(lhc(8,it_ss) == 1) Then
+!!$                      state_id = get_unique(counties_index/1000)
+!!$                      If (.Not.Allocated(mod_inf))Then
+!!$                         Allocate(mod_inf(num_counties))
+!!$                      End If
+!!$                      mod_inf = 0
+!!$                      Do i = 1, Size(state_id)
+!!$                         temp = get_index(counties_index/1000,state_id(i))
+!!$                         prop_inf_cases = inf_cases(temp,timestep)
+!!$                         temp_int       = Sum(prop_inf_cases)
+!!$                         If (temp_int > 0) Then
+!!$                            prop_inf_cases = prop_inf_cases / temp_int
+!!$                         Else
+!!$                            prop_inf_cases = 0
+!!$                         End If
+!!$
+!!$                         prop_target_inf = final_count(temp)
+!!$                         temp_int = Sum(prop_target_inf)
+!!$                         If (temp_int > 0) Then
+!!$                            prop_target_inf = prop_target_inf / temp_int
+!!$                         Else
+!!$                            prop_target_inf = 0
+!!$                         End If
+!!$                         prop_target = lhc(7,it_ss) * Real(prop_target_inf) + (1 - lhc(7,it_ss))*Real(prop_inf_cases)
+!!$
+!!$                         mod_inf(temp) = Nint(prop_target* Real(temp_int)) - inf_cases(temp,timestep)
+!!$                      End Do
+!!$
+!!$                   Else
+!!$                      prop_inf_cases = inf_cases(:,timestep) / initial_sick
+!!$                      prop_target = lhc(7,it_ss) * Real(final_count)/Real(Sum(final_count)) + &
+!!$                           (1 - lhc(7,it_ss))*Real(prop_inf_cases)
+!!$                      ! line 1675
+!!$                      mod_inf = Nint(prop_target * Real(initial_sick))-inf_cases(:,timestep)
+!!$
+!!$                   End If
+!!$
+!!$                   Call shift_cases(sick,mod_inf,tmp%dist_id(tmp_count),counties_index)
+!!$!!!!!!!!!!!!!!!!!!!!!!!!
+!!$!!!can we write the following code in a more elgant
+!!$!!!way?
+!!$!!!!!!!!!!!!!!!!!!!!!!!!
+!!$
+!!$                   temp = get_index(sick,1)
+!!$                   ! do a revers projection
+!!$                   temp = tmp_count(temp)
+!!$                   If (.Not.Allocated(final_count))Then
+!!$                      Allocate(final_count(num_counties))
+!!$                   End If
+!!$                   If (Allocated(dist_id_temp))Then
+!!$                      Deallocate(dist_id_temp)
+!!$                   End If
+!!$                   If (Allocated(case_count))Then
+!!$                      Deallocate(case_count)
+!!$                   End If
+!!$
+!!$                   !                     call sum_bygroup_distID(tmp%dist_id(temp),case_count,dist_id_temp)
+!!$                   final_count = 0
+!!$                   !                     do i =1,size(counties_index)
+!!$                   !                         temp1 = get_index(tmp%dist_id(temp),counties_index(i))
+!!$                   !                         final_count(i) = size(temp1)
+!!$                   !                     enddo
+!!$                   final_count = sum_byindex(tmp%dist_id(temp),counties_index)
+!!$                   inf_cases(:,timestep) = final_count
+!!$
+!!$                   mod_inf_cases(:,timestep) = mod_inf
+!!$                Else
+!!$                   Print *,"no cases shifted"
+!!$                End If
+!!$
+!!$             Else
                 mod_inf_cases(:,timestep) = 0
-             Endif
+!!$             Endif
 
              !skip 1742 and 1743 since they are not actually do
              !anything?
@@ -1049,54 +1165,98 @@ Contains
           If (at_risk == 0) Then
              inf_cases(:,timestep) = 0
           End If
-
-
+          
+          !! #############################################################
+          !! State: Infected, non-contagious #############################
+          
           !If day limit not reach: Stays the same
           temp = condition_and(tmp%t1,inf_noncon,"e",tmp%d,inf_dur,"l")
           tmp%t2(temp) = inf_noncon
-          !         print *,"number of infnoncon",size(temp)
+
+          write(un_lf,PTF_M_AI0)"# staying in inf_noncon:",size(temp)
+          
           !Update day(current count plus 1)
           temp = condition_and(tmp%t1,inf_noncon,"e",tmp%t2,inf_noncon,"e")
           !         tmp%d(temp)= tmp%d(temp) + 1
           tmp_d_new(temp) = tmp%d(temp) + 1
+
+          !** DEBUG --- Population Summary -------------------------------------
+          istate_count = 0
+          Do ii = 1, pop_size
+             istate_count(tmp%t2(ii)) = istate_count(tmp%t2(ii)) + 1
+             !istate_count(tmp%d(ii)) = istate_count(tmp%d(ii)) + 1
+          End Do
+
+          write(un_lf,PTF_SEP)
+          write(un_lf,PTF_M_AI0)"Population Summary after new inf_noncon",timestep-1
+          write(un_lf,'(11(I10))')0,1,2,3,4,5,6,7,8,9,10
+          write(un_lf,'(11(I10))')istate_count(0:10)
+          !** DEBUG --- Population Summary -------------------------------------
+
           !         print *,"number of infnoncon update",size(temp)
           ! if day limit reached: move to contagious
-          temp = condition_and(tmp%t1,inf_noncon,"e",tmp%d,inf_dur-1,"g")
+          temp = condition_and(tmp%t1,inf_noncon,"e",tmp%d,inf_dur,"g")
           tmp%t2(temp) = inf_contag
-          !         print *,"number of infcontag",size(temp)
+
+          write(un_lf,PTF_M_AI0)"# moving to inf_contag:",size(temp)
+          
           !Update days (Reset counter to 1 if moved)
           temp = condition_and(tmp%t1,inf_noncon,"e",tmp%t2,inf_contag,"e")
           !         tmp%d(temp) = 1
           tmp_d_new(temp) = 1
           !         print *,"number of infcontag update",size(temp)
           call end_timer("+- From healthy to infected")
+
+!!!=============================================================================
+!!!== state infected,contagious ================================================
           call start_timer("+- From infected to inf_contag",reset=.FALSE.)
-!!!state infected,contagious
-          !if day limit noe reach: stay the same
+
+          !if day limit not reached: stay the same
           temp = condition_and(tmp%t1,inf_contag,"e",tmp%d,cont_dur,"l")
           tmp%t2(temp) = inf_contag
           !         print *,"number of infcontag stay",size(temp)
+          write(un_lf,PTF_M_AI0)"# staying in inf_contag:",size(temp)
+          
           !update days
           temp = condition_and(tmp%t1,inf_contag,"e",tmp%t2,inf_contag,"e")
           !         tmp%d(temp) = tmp%d(temp) + 1
           tmp_d_new(temp) = tmp%d(temp) + 1
+                   
+          !** DEBUG --- Population Summary -------------------------------------
+          istate_count = 0
+          Do ii = 1, pop_size
+             istate_count(tmp%t2(ii)) = istate_count(tmp%t2(ii)) + 1
+             !istate_count(tmp%d(ii)) = istate_count(tmp%d(ii)) + 1
+          End Do
+
+          write(un_lf,PTF_SEP)
+          write(un_lf,PTF_M_AI0)"Population Summary after new inf_contag",timestep-1
+          write(un_lf,'(11(I10))')0,1,2,3,4,5,6,7,8,9,10
+          write(un_lf,'(11(I10))')istate_count(0:10)
+          !** DEBUG --- Population Summary -------------------------------------
+
           !         print *,"number of infcontag stay update",size(temp)
           ! if day limit reached: move to contagious
-          temp = condition_and(tmp%t1,inf_contag,"e",tmp%d,cont_dur-1,"g")
+          temp = condition_and(tmp%t1,inf_contag,"e",tmp%d,cont_dur,"g")
           !         print *,sim%d
           tmp%t2(temp) = ill_contag
-          !         print *,"number of illcontag",size(temp)
+
+          write(un_lf,PTF_M_AI0)"# Getting ill:",size(temp)
+
           !update days(reset to 1 if becoming ill/contagious)
           temp = condition_and(tmp%t1,inf_contag,"e",tmp%t2,ill_contag,"e")
           !         tmp%d(temp) = 1
           tmp_d_new(temp) = 1
           !         print *,"number of illcontag update",size(temp)
           call end_timer("+- From infected to inf_contag")
+         
 !!!state:ill,contagious
           !dying population at risk
           temp = get_index(tmp%t1,ill_contag)
           at_risk = Size(temp)
 
+          write(un_lf,PTF_M_AI0)"at_risk to die:",at_risk
+          
           If (at_risk > 0) Then
              age_sex = tmp%age(temp) // tmp%sex(temp)
              surv_ill_label = surv_ill_list%age //surv_ill_list%sex
@@ -1124,6 +1284,20 @@ Contains
 
           Endif
 
+          !! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+          !** Get number of all who are in an ill or suceptible state and ***
+          !** check if anyone is left                                     ***
+!!$          istate_count = 0
+!!$          Do ii = 1, pop_size
+!!$             istate_count(tmp%t2(ii)) = istate_count(tmp%t2(ii)) + 1
+!!$          End Do
+!!$          write(un_lf,PTF_SEP)
+!!$          write(un_lf,PTF_M_A)"Population Summary after infection evaluation"
+!!$          Do ii = 0, 6
+!!$             write(un_lf,'(i2,I10)')ii,istate_count(ii)
+!!$          End Do
+          !! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+          
           ! Save dead before moving to ICU
           temp1 = get_index(tmp%t2,dead)
 
@@ -1135,9 +1309,9 @@ Contains
           temp = condition_and(tmp%t1,ill_contag,"e",tmp%t2,dead,"n")
 
           at_risk = Size(temp)
-
-
-
+          
+          write(un_lf,PTF_M_AI0)"at_risk to move to ICU:",at_risk
+          
           If(at_risk > 0) Then
              If (.Not.Allocated(temp_character))Then
                 Allocate(temp_character(Size(temp)))
@@ -1210,26 +1384,46 @@ Contains
 
           tmp%t2(temp) = ill_contag
 
+          write(un_lf,PTF_M_AI0)"# staying in ill_contag:",size(temp)
+          
           ! update days
           temp = condition_and(tmp%t1,ill_contag,"e",tmp%t2,ill_contag,"e")
           !         tmp%d(temp) = tmp%d(temp) + 1
           tmp_d_new(temp) = tmp%d(temp) + 1
 
           !getting healthy/immune if day limit reached
-          temp = condition_and(tmp%t1,ill_contag,"e",tmp%d,ill_dur-1,"g")! -1 because in R is >=
+          temp = condition_and(tmp%t1,ill_contag,"e",tmp%d,ill_dur,"g")
           temp1= get_index(tmp%t2,(/healthy,immune,inf_noncon,inf_contag,ill_contag/))
           temp = find_and(temp,temp1)
           tmp%t2(temp) = immune
 
+          write(un_lf,PTF_M_AI0)"# becoming immune:",size(temp)
+          
           !update days
           temp = condition_and(tmp%t1,ill_contag,"e",tmp%t2,immune,"e")
           !         tmp%d(temp) = 1
           tmp_d_new(temp) = 1
 
+          !** DEBUG --- Population Summary -------------------------------------
+          istate_count = 0
+          Do ii = 1, pop_size
+             istate_count(tmp%t2(ii)) = istate_count(tmp%t2(ii)) + 1
+             !istate_count(tmp%d(ii)) = istate_count(tmp%d(ii)) + 1
+          End Do
+
+          write(un_lf,PTF_SEP)
+          write(un_lf,PTF_M_AI0)"Population Summary after new ill_contag",timestep-1
+          write(un_lf,'(11(I10))')0,1,2,3,4,5,6,7,8,9,10
+          write(un_lf,'(11(I10))')istate_count(0:10)
+
+          !** DEBUG --- Population Summary -------------------------------------
+          
 !!!state ICU
           temp = get_index(tmp%t1,ill_ICU)
           at_risk = Size(temp)
 
+          write(un_lf,PTF_M_AI0)"at_risk to die in ICU:",at_risk
+                    
           If(at_risk > 0) Then
              age_sex = tmp%age(temp) // tmp%sex(temp)
              surv_icu_label = surv_icu_list%age // surv_icu_list%sex
@@ -1267,7 +1461,7 @@ Contains
           tmp_d_new(temp) = tmp%d(temp) + 1
 
           !getting healthy /ICU if day limited reached
-          temp = condition_and(tmp%t1,ill_ICU,"e",tmp%d,Int(lhc(3,it_ss))-1,"g")
+          temp = condition_and(tmp%t1,ill_ICU,"e",tmp%d,Int(lhc(3,it_ss)),"g")
           temp1= get_index_not(tmp%t2,dead)
           temp = find_and(temp,temp1)
           tmp%t2(temp) = immune
@@ -1277,21 +1471,40 @@ Contains
           !         tmp%d(temp) = 1
           tmp_d_new(temp) = 1
 
+          
+          !** DEBUG --- Population Summary -------------------------------------
+          istate_count = 0
+          Do ii = 1, pop_size
+             istate_count(tmp%t2(ii)) = istate_count(tmp%t2(ii)) + 1
+             !istate_count(tmp%d(ii)) = istate_count(tmp%d(ii)) + 1
+          End Do
+
+          write(un_lf,PTF_SEP)
+          write(un_lf,PTF_M_AI0)"Population Summary after step",timestep-1
+          write(un_lf,'(11(I10))')0,1,2,3,4,5,6,7,8,9,10
+          write(un_lf,'(11(I10))')istate_count(0:10)
+          write(*,'(7(I10))')istate_count(0:6)
+          !** DEBUG --- Population Summary -------------------------------------
+          
           !check NA set to missing
           !skip this line 1995
 
           !move to main data frame
-          temp = get_index(sim%t1,(/healthy,ill_ICU,inf_noncon,inf_contag,ill_contag/))
-          sim%t2(temp) = tmp%t2(temp)
+          !temp = get_index(sim%t1,(/healthy,ill_ICU,inf_noncon,inf_contag,ill_contag/))
+          !sim%t2(temp) = tmp%t2(temp)
           !         sim%d(temp)  = tmp%d(temp)
           !         sim%d(temp)  = tmp_d_new(temp)
           !         sim%t2 = tmp%t2
+
+
+
+          
           sim%d  = tmp_d_new
           !immune and dead remain the same
-          temp = get_index(sim%t1,immune)
-          sim%t2(temp) = immune
-          temp = get_index(sim%t1,dead)
-          sim%t2(temp) = dead
+          !temp = get_index(sim%t1,immune)
+          !sim%t2(temp) = immune
+          !temp = get_index(sim%t1,dead)
+          sim%t2 = tmp%t2
 
 
 
@@ -1399,10 +1612,10 @@ Contains
        immune_cases_final(:,:,it_ss) =     immune_cases
        dead_cases_final(:,:,it_ss) =       dead_cases
 
-
-
     End Do     ! end do it_ss
 
+    call start_timer("+- Writeout",reset=.FALSE.)
+    
     iter_pass_handle = (/lhc(1,iter),lhc(2,iter),lhc(3,iter),&
          lhc(6,iter),lhc(7,iter),lhc(8,iter)/)
 
@@ -1414,7 +1627,7 @@ Contains
     Call write_data_v2(immune_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,6)
     Call write_data_v2(dead_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,7)
 !!$    End If
-
+    call end_timer("+- Writeout")
 1000 continue
 !!$    Call MPI_Finalize(ierror)
 
@@ -1470,10 +1683,11 @@ Contains
     Allocate(Label(Size(healthy_cases_final,dim=2)))
 
     Call date_and_Time(b(1),b(2),b(3),date_time)
-
+    write(*,*)shape(R0change)
+    
     count = 1
     Do i = 1,Size(counties)
-       Do j = 1,Size(R0Change,2)
+       Do j = 1,Size(R0Change,1)
           Write(temp_char,"(I2)")j
           If (j>9)Then
              R0change_name(count) = counties(i)//temp_char
@@ -1551,4 +1765,22 @@ Contains
     Close(101)
   End Subroutine write_data_v2
 
+
+
+  !!============================================================================
+  !> Model
+  Subroutine Sim(time_n)
+
+    Integer(Kind=ik), Intent(In) :: time_n
+    
+    Integer(Kind=ik)             :: timestep
+    
+    Do timestep = 2, time_n
+
+       
+       
+    End Do
+    
+  End Subroutine Sim
+  
 End Module kernel

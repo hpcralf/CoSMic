@@ -46,6 +46,8 @@ Module precision
 
   Implicit None
 
-  Integer, Parameter :: mcl=128
+  Integer, Parameter :: mcl = 128
+  Integer, Parameter :: rk  = 8
+  Integer, Parameter :: ik  = 4
   
 End Module precision

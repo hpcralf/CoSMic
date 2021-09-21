@@ -19,6 +19,9 @@ Module pt_constants
   !> Keyword line field seperator ----------------------------------------------
   character, parameter :: fsep = ","
 
+  !> Whether to stop in case pt_get should retrieve a keyword not in tree ------
+  Logical,   parameter :: STOP_IF_MISSING = .TRUE.
+
   ! Character constants for nice output ----------------------------------------
   Character(Len=*), Parameter :: PTF_E_A    = "('EE ',A)"
   Character(Len=*), Parameter :: PTF_E_AI0  = "('EE ',*(A,1X,I0))"
@@ -29,7 +32,8 @@ Module pt_constants
   Character(Len=*), Parameter :: PTF_W_AI0  = "('WW ',*(A,1X,I0))"
 
   Character(Len=*), Parameter :: PTF_M_A    = "('MM ',A)"
-  Character(Len=*), Parameter :: PTF_M_AI0  = "('MM ',A,1X,I0)"
+  Character(Len=*), Parameter :: PTF_M_AI0  = "('MM ',*(A,1X,I0,1X))"
+  Character(Len=*), Parameter :: PTF_M_AF0  = "('MM ',*(A,1X,F0.16,1X))"
 
   Character(Len=*), Parameter :: PTF_TIME   = "('MM ',A,1X,F0.6,' sec')"
 

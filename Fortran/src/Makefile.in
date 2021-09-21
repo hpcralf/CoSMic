@@ -233,7 +233,6 @@ top_srcdir = @top_srcdir@
 
 ################################################################################
 AM_LD = $MPIFC
-AM_FCFLAGS = -fbacktrace -fbounds-check -gdwarf-4
 CoSMic_SOURCES = mod_precision.f90 mod_globals.f90  \
                  mod_times.f90 \
                  mod_strings.f90 \
