@@ -43,23 +43,28 @@ library(pracma)
 library(RColorBrewer)
 
 ### Import functions ###########################################################
-src.dir <- "/zhome/academic/HLRS/hlrs/hpcralf/CoSMic-states/cosmic/CoSMic/R"
+src.dir <- "/quobyte/qb1/s33094/s33094/cosmic/CoSMic/R"
 for ( i in dir(src.dir,pattern="*.R$") ) { source(paste(src.dir,i,sep="/")) }
 
-setwd("/zhome/academic/HLRS/hlrs/hpcralf/CoSMic-states/CoSMic_build/output/")                
+setwd("/lustre/nec/ws3/ws/hpcralf-BIB/cosmic-projection/Results-v12.0-2021-09-14_21:11:18/")                
 
-iol<-readRDS("Results-v12.0-2021-06-29_09:18:35/input-v12.0-2021-06-29_09:18:35.RDS")
-pspace<-readRDS("Results-v12.0-2021-06-29_09:18:35/pspace-v12.0-2021-06-29_09:18:35.RDS")
-sp<-readRDS("Results-v12.0-2021-06-29_09:18:35/static.params-v12.0-2021-06-29_09:18:35.RDS")
+iol<-readRDS("input-v12.0-2021-09-14_21:11:18.RDS")
+pspace<-readRDS("pspace-v12.0-2021-09-14_21:11:18.RDS")
+sp<-readRDS("static.params-v12.0-2021-09-14_21:11:18.RDS")
 
-icu<-read.table("20210629ill_ICU_cases.csv",head=TRUE,sep=",")
+setwd("/lustre/nec/ws3/ws/hpcralf-BIB/CoSMic-install/output/")
+icu<-read.table("20210920ill_ICU_cases.csv",head=TRUE,sep=",")
 
-    plots.by.country (outfile         = "test.pdf",
-                      sp              = sp,
-                      seed_icu        = iol$icu.cases.by.country,
-                      seed_dea        = iol$dead.cases.by.country,
-                      iol             = iol,
-                      pspace          = pspace,
-                      rr              = list(1,2,3,4,"ill_ICU"=icu),
-                      ind.states      = c(5),
-                      global.plot     = TRUE)
+sp$time_n <- 102
+
+
+plots.by.country (outfile         = "test.pdf",
+                  sp              = sp,
+                  seed_icu        = iol$icu.cases.by.country,
+                  seed_dea        = iol$dead.cases.by.country,
+                  iol             = iol,
+                  pspace          = pspace,
+                  rr              = list(1,2,3,4,"ill_ICU"=icu),
+                  ind.states      = c(5),
+                  global.plot     = TRUE,
+                  split.in = "SH4")
