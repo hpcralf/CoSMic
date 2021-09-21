@@ -322,7 +322,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
             }    
             icu_risk <- data.frame(rbindlist(icu_risk_list))
             
-            ## Survival change of sick but not in ICU (per day) ----------------
+            ## Survival chance of sick but not in ICU (per day) ----------------
             target_surv_ill <- iol[["trans_pr"]]$surv_ill[iol[["trans_pr"]]$age%in%ch_age&
                                                           iol[["trans_pr"]]$sex%in%ch_sex]
             surv_ill <- target_surv_ill^(1/sp$ill_dur) 
@@ -512,7 +512,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                                                  as.Date(paste(seed_inf_ncont$date)))
                 ## Exclude all cases below 1
                 seed_inf_ncont <- seed_inf_ncont[which(seed_inf_ncont$cases>0),]
-                
+
                 ## Aggregate ill
                 seed_ill <- aggregate(cases~distid+dur,data=seed_ill,sum)
                 
@@ -548,7 +548,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                 seed_dth$deaths <- apply(seed_dth,1,
                                          function(x){
                                              ceiling(x[2] *  sp$sam_prop.ps[as.integer(x[1]/1000)])})
-        
+
                 ## Loop over counties ------------------------------------------
                 for(county in sim_counties) {
                     
@@ -577,7 +577,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                     ## Derive total nuber of dead
                     inf_dth <- max(sum(seed_dth[seed_dth$distid==county,
                                                 "deaths"]),0)
-                    
+
                     if(length(rownumbers)<c(inf_ill+inf_cont+inf_ncont+inf_dth)) 
                         stop("Number of infected and dead is larger than population size")
                     
@@ -683,7 +683,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                                                               iol[["counties"]]$dist_id%in%getcounties,
                                                               "Nuts2"],change)]))
                         } 
-                        
+                       
                     } else if ( pspace$R0effect$type == "directv" ) {
                         ## Per change ------------------------------------------
                         getchange <- lhc[it.ss,paste0("R0effect",change)]
@@ -712,7 +712,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
             }
             
 ### Objects for additional results ############################################
-
+### <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
             ## Object for results on infections
             inf_cases <- matrix(data=NA,ncol=sp$time_n,nrow=length(sim.struc$counties))
             rownames(inf_cases) <- paste(sim.struc$counties)
