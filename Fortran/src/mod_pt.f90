@@ -733,7 +733,7 @@ Contains
              Case ("I")          
                 Write(un_lf, "(I16,' ')", ADVANCE='NO')leaf%i8(ii)
              Case ("R")
-                Write(un_lf, "(I16,' ')", ADVANCE='NO')leaf%r8(ii)
+                Write(un_lf, "(f16.6,' ')", ADVANCE='NO')leaf%r8(ii)
              Case ("L")
                 Write(un_lf, "(L16,' ')", ADVANCE='NO')leaf%l(ii)
              End Select

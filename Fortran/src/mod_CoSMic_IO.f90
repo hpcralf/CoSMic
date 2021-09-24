@@ -366,6 +366,7 @@ contains
     Allocate(iol%pop_date(index-1))
     Allocate(iol%pop_sex(index-1))
     Allocate(iol%pop_age(index-1))
+    Allocate(iol%pop_agei(index-1))
     Allocate(iol%pop_total(index-1))
 
     ! read the first line(character) -----------------------
@@ -373,7 +374,10 @@ contains
 
     Do i = 1,index-1
        Read(un_in,*,iostat=k) iol%pop_distid(i),iol%pop_date(i),iol%pop_sex(i),&
-            iol%pop_age(i),iol%pop_total(i)
+            iol%pop_agei(i),iol%pop_total(i)
+    Enddo
+    Do i = 1,index-1
+       write(iol%pop_age(i),'(I2)')iol%pop_agei(i)
     Enddo
     Close(un_in)
 

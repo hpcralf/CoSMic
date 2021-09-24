@@ -102,6 +102,7 @@ module global_types
      character(10),allocatable,dimension(:):: pop_date
      character(1),allocatable,dimension(:) :: pop_sex
      character(2),allocatable,dimension(:) :: pop_age
+     integer,allocatable,dimension(:)      :: pop_agei
      integer,allocatable,dimension(:)      :: pop_total
      ! variable for seed
      integer,allocatable,dimension(:)      :: seed_distid
