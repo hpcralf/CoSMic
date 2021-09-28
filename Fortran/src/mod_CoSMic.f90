@@ -55,6 +55,7 @@ Module kernel
   
   Use list_variable
   Use support_fun
+  use qsort_c_module
   
   Implicit None
 
@@ -228,7 +229,7 @@ Contains
     Integer(kind=ik), Dimension(0:16)         :: istate_count
     Integer(kind=ik)                         :: pop_size
     Integer(kind=ik)                         :: num_counties
-    Integer(kind=ik)                         :: ii
+    Integer(kind=ik)                         :: ii,jj,kk
 
     Integer(Kind=ik), Allocatable, Dimension(:)     :: c_ref
     Real(Kind=rk)   , Allocatable, Dimension(:,:)   ::  surv_ill_pas
@@ -594,7 +595,7 @@ Contains
 !!!=============================================================================
 !!! Iteration over parameter space
 !!!=============================================================================
-    Do it_ss = 1,  1!Size(lhc,dim=2)
+    Do it_ss = 1,  Size(lhc,dim=2)
 
        call start_timer("Init Sim Loop",reset=.FALSE.)
        
@@ -650,18 +651,18 @@ Contains
        seed_ill%dist_id  = iol%seed_distid(temp)
        seed_ill%date     = iol%seed_date(temp)
        seed_ill%cases    = iol%seed_cases(temp)
-
+write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
        temp = get_index(iol%seed_date,seed_inf_cont_seq)
 
        seed_inf_cont%dist_id  = iol%seed_distid(temp)
        seed_inf_cont%date     = iol%seed_date(temp)
        seed_inf_cont%cases    = iol%seed_cases(temp)
-
+write(*,*)"sum(seed_inf_cont%cases):",sum(seed_inf_cont%cases)
        temp = get_index(iol%seed_date,seed_inf_ncont_seq)
        seed_inf_ncont%dist_id  = iol%seed_distid(temp)
        seed_inf_ncont%date     = iol%seed_date(temp)
        seed_inf_ncont%cases    = iol%seed_cases(temp)
-
+write(*,*)"sum(seed_inf_ncont%cases):",sum(seed_inf_ncont%cases)
        temp_date  =  get_start_date(iol%death_date)
        seed_d_seq = generate_seq(temp_date,add_date(seed_date,-1))
        temp       = get_index(iol%death_date,seed_d_seq)
@@ -694,7 +695,7 @@ Contains
        seed_ill%date     = seed_ill%date(temp)
        seed_ill%cases    = seed_ill%cases(temp)
        seed_ill_dur      = seed_ill_dur(temp)
-
+write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
        write(un_lf,PTF_SEP)
        write(un_lf,PTF_M_A)"First 20 and last 20 seeds for ill cases."
        Do ii=1, 20
@@ -814,7 +815,7 @@ Contains
           county = counties_index(icounty)
 
           rownumbers = get_index(sim%dist_id,county)
-
+!write(*,*)"rownumbers",rownumbers
           temp   = get_index(seed_ill%dist_id,county)
           il_d   = rep(seed_ill_dur(temp),seed_ill%cases(temp))
           inf_ill= Sum(seed_ill%cases(temp))
@@ -852,29 +853,85 @@ Contains
           If (inf_ill > 0) Then
 
              rownumbers_ill = sample(rownumbers_left,inf_ill)
-             rownumbers_left = rownumbers_left(inf_ill+1:Size(rownumbers))
+             Call QSortC(rownumbers_ill)
+!write(*,*)"rownumbers_ill",rownumbers_ill
+             jj = 1
+             kk = 1
+             Do ii = 1, Size(rownumbers_left)
+!write(*,*)kk,rownumbers_left(kk),ii,rownumbers_left(ii),jj,rownumbers_ill(jj)
+                if (rownumbers_left(ii) == rownumbers_ill(jj)) then
+                   if (jj < inf_ill) then
+                      jj = jj + 1
+                   End if
+                Else
+                   rownumbers_left(kk) = rownumbers_left(ii)
+                   kk = kk + 1
+                End if
+
+             End Do
+             !rownumbers_left = rownumbers_left(1:(Size(rownumbers)-inf_ill))
+!write(*,*)"rownumbers_left",rownumbers_left
              sim%t1(rownumbers_ill) = ill_contag
              sim%d(rownumbers_ill)  = il_d
           End If
 
           If ( inf_cont > 0) Then
-             rownumbers_cont = sample(rownumbers_left,inf_cont)
-             rownumbers_left = rownumbers_left(inf_cont+1:Size(rownumbers_left))
+             rownumbers_cont = sample(rownumbers_left(1:(Size(rownumbers)-inf_ill)),inf_cont)
+!write(*,*)"rownumbers_cont",rownumbers_cont
+             Call QSortC(rownumbers_cont)             
+!write(*,*)"rownumbers_cont",rownumbers_cont
+             jj = 1
+             kk = 1
+             Do ii = 1, Size(rownumbers_left)
+!write(*,*)kk,rownumbers_left(kk),ii,rownumbers_left(ii),jj,rownumbers_cont(jj) 
+                if (rownumbers_left(ii) == rownumbers_cont(jj)) then
+                   if (jj < inf_cont) then
+                      jj = jj + 1
+                   End if
+                Else
+                   rownumbers_left(kk) = rownumbers_left(ii)
+                   kk = kk + 1
+                End if
+
+             End Do
+!write(*,*)"rownumbers_left",rownumbers_left
+             !rownumbers_left = rownumbers_left(inf_cont+1:Size(rownumbers_left))
              sim%t1(rownumbers_cont)= inf_contag
              sim%d(rownumbers_cont) = inf_c_d
           End If
 
           If (inf_ncont > 0) Then
-             rownumbers_ncont = sample(rownumbers_left,inf_ncont)
-             rownumbers_left = rownumbers_left(inf_ncont+1:Size(rownumbers_left))
+             rownumbers_ncont = sample(rownumbers_left(1:(Size(rownumbers)-inf_ill-inf_cont)),inf_ncont)
+!write(*,*)"rownumbers_ncont",rownumbers_ncont
+             Call QSortC(rownumbers_ncont)
+!write(*,*)"rownumbers_ncont",rownumbers_ncont
+
+             jj = 1
+             kk = 1
+             Do ii = 1, Size(rownumbers_left)
+!write(*,*)kk,rownumbers_left(kk),ii,rownumbers_left(ii),jj,rownumbers_ncont(jj) 
+                if (rownumbers_left(ii) == rownumbers_ncont(jj)) then
+                   if (jj < inf_ncont) then
+                      jj = jj + 1
+                   End if
+                Else
+                   rownumbers_left(kk) = rownumbers_left(ii)
+                   kk = kk + 1
+                End if
+
+             End Do
+!write(*,*)"rownumbers_left",rownumbers_left
+             !rownumbers_left = rownumbers_left(inf_ncont+1:Size(rownumbers_left))
              sim%t1(rownumbers_ncont) = inf_noncon
              sim%d(rownumbers_ncont)  = inf_nc_d
           End If
 
           If (inf_dth > 0) Then
-             rownumbers_dea = sample(rownumbers_left,inf_dth)
+             rownumbers_dea = sample(rownumbers_left(1:(Size(rownumbers)-inf_ill-inf_cont-inf_ncont)),inf_dth)
+!write(*,*)"rownumbers_dea",rownumbers_dea             
              sim%t1(rownumbers_dea) = dead
           End If
+
        End Do ! do icounty = 1,size(sim_counties)
 
        !! ----------------------------------------------------------------------
@@ -954,7 +1011,9 @@ Contains
        End Do
 
        Call CoSMic_TimeLoop(time_n, pop_size, size(counties_index), counties_index, &
-            Real(R0matrix,rk), Real(connect,rk), surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim)
+            Real(R0matrix,rk), Real(connect,rk), surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim, &
+            healthy_cases,inf_noncon_cases,inf_contag_cases,ill_contag_cases,ill_ICU_cases,&
+            immune_cases,dead_cases)
 
        call end_timer("Sim Loop")
 
@@ -962,14 +1021,18 @@ Contains
        write(*,'(A)',ADVANCE="NO")"Time per day:"
        call write_realtime(frac_realtime(diff_realtimes(timer%rt_end,timer%rt_start),time_n))
 
-       healthy_cases_final(:,:,it_ss) = healthy_cases
+       healthy_cases_final(:,:,it_ss)    = healthy_cases
        inf_noncon_cases_final(:,:,it_ss) = inf_noncon_cases
        inf_contag_cases_final(:,:,it_ss) = inf_contag_cases
        ill_contag_cases_final(:,:,it_ss) = ill_contag_cases
-       ill_ICU_cases_final(:,:,it_ss) =    ill_ICU_cases
-       immune_cases_final(:,:,it_ss) =     immune_cases
-       dead_cases_final(:,:,it_ss) =       dead_cases
+       ill_ICU_cases_final(:,:,it_ss)    = ill_ICU_cases
+       immune_cases_final(:,:,it_ss)     = immune_cases
+       dead_cases_final(:,:,it_ss)       = dead_cases
 
+       days             = +1
+       
+       seed_date        = add_date(seed_date,days)
+              
     End Do     ! end do it_ss
 
     call start_timer("+- Writeout",reset=.FALSE.)
@@ -1129,8 +1192,10 @@ Contains
   Subroutine CoSMic_TimeLoop(&
        time_n, pop_size, n_counties, counties, &
        R0matrix, connect, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, &
-       sim)
-
+       sim, &
+       healthy_cases, inf_noncon_cases,inf_contag_cases, ill_contag_cases,&
+       ill_ICU_cases, immune_cases,    dead_cases)
+    
     Integer(Kind=ik)                       , Intent(In) :: time_n
     Integer(Kind=ik)                       , Intent(In) :: pop_size
     Integer(Kind=ik)                       , Intent(In) :: n_counties
@@ -1143,11 +1208,20 @@ Contains
     Real(Kind=rk)   , Allocatable, Dimension(:,:)     , Intent(In) ::  surv_icu_pas
     
     Type(sims)                             , Intent(InOut) :: sim
-    
+
+    Integer         , Allocatable, Dimension(:,:), intent(inout)     :: healthy_cases
+    Integer         , Allocatable, Dimension(:,:), intent(inout)     :: inf_noncon_cases
+    Integer         , Allocatable, Dimension(:,:), intent(inout)     :: inf_contag_cases
+    Integer         , Allocatable, Dimension(:,:), intent(inout)     :: ill_contag_cases
+    Integer         , Allocatable, Dimension(:,:), intent(inout)     :: ill_ICU_cases
+    Integer         , Allocatable, Dimension(:,:), intent(inout)     :: immune_cases
+    Integer         , Allocatable, Dimension(:,:), intent(inout)     :: dead_cases
+
+
     !> Counters --------------------------------
     Integer(Kind=ik)             :: timestep, ii, nn
     
-    Integer(Kind=ik)             :: at_risk
+    Integer(Kind=ik)             :: at_risk, new_in_state
     
     Integer(Kind=ik)             , Dimension(min_state:max_state) :: state_count_t1
     Integer(Kind=ik)             , Dimension(min_state:max_state) :: state_count_t2
@@ -1161,11 +1235,9 @@ Contains
     Real(kind=rk)                                              :: w_int
     Integer(kind=ik)                                           :: inf_dur, cont_dur, ill_dur, icu_dur
 
-            Integer,Allocatable             :: inf_cases(:,:),ill_ICU_cases(:,:),healthy_cases(:,:),inf_noncon_cases(:,:),& 
-         inf_contag_cases(:,:),ill_contag_cases(:,:),immune_cases(:,:),dead_cases(:,:)
     !===========================================================================
 
-    call start_timer("+- Prepare data",reset=.FALSE.)
+        call start_timer("+- Prepare data",reset=.FALSE.)
        
     !** Allocate and init new counter ----------------------
     Allocate(state_count_pl(min_state:max_state,n_counties))
@@ -1202,7 +1274,7 @@ Contains
        write(un_lf,PTF_SEP)
        write(un_lf,PTF_M_AI0)"Population Summary @ start of step:",timestep
        write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6
-       write(un_lf,'(8(I10))')state_count_t1
+       write(un_lf,'(8(I10))')state_count_t1              
        !** DEBUG ------------------------------------------------------------
 
        !** Is there something to calculate ? -------------------------
@@ -1308,6 +1380,8 @@ Contains
        at_risk = state_count_t1(ill_contag)
        write(un_lf,PTF_M_AI0)"At risk to die after infection:",at_risk
 
+       new_in_state = 0
+       
        !** Draw risks for all individuals at risk --------------------
        Call random_Number(risk_pi(1:at_risk))
        nn = 1
@@ -1322,12 +1396,14 @@ Contains
                    !** Individual dies -------------------------------
                    sim%t2(ii) = dead
                    d_new(ii)  = 1
+                   new_in_state = new_in_state + 1
                 End if
              else
                 if (risk_pi(nn) >= surv_ill_pas(sim%agei(ii),2)) then
                    !** Individual dies -------------------------------
                    sim%t2(ii) = dead
                    d_new(ii)  = 1
+                   new_in_state = new_in_state + 1
                 End if
              End if
           End if
@@ -1343,16 +1419,18 @@ Contains
        write(un_lf,'(8(I10))')state_count_t2
        !** DEBUG ------------------------------------------------------------
 
-       at_risk = state_count_t1(ill_contag) - state_count_t2(dead)
+       at_risk = state_count_t1(ill_contag)-new_in_state
        write(un_lf,PTF_M_AI0)"At risk to move to icu:",at_risk
 
+       new_in_state = 0
+       
        !** Draw risks for all individuals at risk --------------------
        Call random_Number(risk_pi(1:at_risk))
        nn = 1
        Do ii = 1, pop_size
 
           if ((sim%t1(ii) == ill_contag) .AND. (sim%t2(ii) == ill_contag)) then
-             !** Individual was already ill_contag -------------------
+             !** Individual is ill_contag ----------------------------
              nn = nn + 1
 
              if (sim%sex(ii) == "m") then
@@ -1415,7 +1493,7 @@ Contains
              nn = nn + 1
 
              if (sim%sex(ii) == "m") then
-                if (risk_pi(nn) <= surv_icu_pas(sim%agei(ii),1)) then
+                if (risk_pi(nn) >= surv_icu_pas(sim%agei(ii),1)) then
                    !** Individual moves to icu -----------------------
                    sim%t2(ii) = dead
                    d_new(ii)  = 1
@@ -1430,9 +1508,9 @@ Contains
                    End if
                 End if
              else
-                if (risk_pi(nn) <= surv_icu_pas(sim%agei(ii),2)) then
+                if (risk_pi(nn) >= surv_icu_pas(sim%agei(ii),2)) then
                    !** Individual dies -------------------------------
-                   sim%t2(ii) = ill_ICU
+                   sim%t2(ii) = dead
                    d_new(ii)  = 1
                 Else
                    if (sim%d(ii) >= icu_dur) then
@@ -1465,14 +1543,14 @@ Contains
        Call summary_2_int(&
             sim%t2, sim%dist_id_rn, pop_size, &
             state_count_pl, min_state, max_state, 1, n_counties)
-!!$
-!!$       healthy_cases(:,timestep)    = state_count_pl(healthy   ,:)
-!!$       inf_noncon_cases(:,timestep) = state_count_pl(inf_noncon,:)
-!!$       inf_contag_cases(:,timestep) = state_count_pl(inf_contag,:)
-!!$       ill_contag_cases(:,timestep) = state_count_pl(ill_contag,:)
-!!$       ill_ICU_cases(:,timestep)    = state_count_pl(ill_ICU   ,:)
-!!$       immune_cases(:,timestep)     = state_count_pl(immune    ,:)
-!!$       dead_cases(:,timestep)       = state_count_pl(dead      ,:)
+
+       healthy_cases(:,timestep)    = state_count_pl(healthy   ,:)
+       inf_noncon_cases(:,timestep) = state_count_pl(inf_noncon,:)
+       inf_contag_cases(:,timestep) = state_count_pl(inf_contag,:)
+       ill_contag_cases(:,timestep) = state_count_pl(ill_contag,:)
+       ill_ICU_cases(:,timestep)    = state_count_pl(ill_ICU   ,:)
+       immune_cases(:,timestep)     = state_count_pl(immune    ,:)
+       dead_cases(:,timestep)       = state_count_pl(dead      ,:)
        
        sim%t1 = sim%t2
        sim%d  = d_new

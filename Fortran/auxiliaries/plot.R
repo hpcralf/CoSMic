@@ -46,17 +46,27 @@ library(RColorBrewer)
 src.dir <- "/quobyte/qb1/s33094/s33094/cosmic/CoSMic/R"
 for ( i in dir(src.dir,pattern="*.R$") ) { source(paste(src.dir,i,sep="/")) }
 
+cur.dir <- getwd()
+
 setwd("/lustre/nec/ws3/ws/hpcralf-BIB/cosmic-projection/Results-v12.0-2021-09-14_21:11:18/")                
 
 iol<-readRDS("input-v12.0-2021-09-14_21:11:18.RDS")
 pspace<-readRDS("pspace-v12.0-2021-09-14_21:11:18.RDS")
 sp<-readRDS("static.params-v12.0-2021-09-14_21:11:18.RDS")
 
-setwd("/lustre/nec/ws3/ws/hpcralf-BIB/CoSMic-install/output/")
-icu<-read.table("20210920ill_ICU_cases.csv",head=TRUE,sep=",")
+setwd(cur.dir)
 
-sp$time_n <- 102
+args = commandArgs(trailingOnly=TRUE)
 
+date.str  <- args[1]
+
+icu        <- read.table(paste0(date.str,"ill_ICU_cases.csv"),head=TRUE,sep=",")
+ill_contag <- read.table(paste0(date.str,"ill_contag_cases.csv"),head=TRUE,sep=",")
+inf_contag <- read.table(paste0(date.str,"inf_contag_cases.csv"),head=TRUE,sep=",")
+inf_noncon <- read.table(paste0(date.str,"inf_noncon_cases.csv"),head=TRUE,sep=",")
+healthy    <- read.table(paste0(date.str,"healthy_cases.csv"),head=TRUE,sep=",")
+
+sp$time_n <- 199
 
 plots.by.country (outfile         = "test.pdf",
                   sp              = sp,
@@ -64,7 +74,10 @@ plots.by.country (outfile         = "test.pdf",
                   seed_dea        = iol$dead.cases.by.country,
                   iol             = iol,
                   pspace          = pspace,
-                  rr              = list(1,2,3,4,"ill_ICU"=icu),
-                  ind.states      = c(5),
+                  rr              = list("healthy"=healthy,"inf_noncon"=inf_noncon,
+                                         "inf_contag"=inf_contag,"ill_contag"=ill_contag,
+                                         "ill_ICU"=icu),
+                  ind.states      = c(1,2,3,4,5),
                   global.plot     = TRUE,
                   split.in = "SH4")
+
