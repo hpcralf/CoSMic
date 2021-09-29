@@ -575,8 +575,8 @@ set.static.params <- function(pspace,
     if ( ! restrict & ! is.null( sim.regions )) {
         warning(paste("sim.regions = ",paste(sim.regions,collapse=","),"\n",
                       "this will have no effect since restrict = FALSE.","\n",
-                      "This warning will disappear if sim.regions",
-                      "is set to NULL"))
+                      "This warning will disappear if sim.region is set to NULL","\n",
+                      "or restrict is set to TRUE."))
     }
     
     sp <- list.append(sp,
@@ -588,6 +588,13 @@ set.static.params <- function(pspace,
                    "This is not possible!","\n",
                    "sam_prop.ps = [",paste(sam_prop.ps,collapse=","),"]"))
     }
+    if ( length(sam_prop.ps) != length(sim.regions) ) {
+        stop(paste("length(sam_prop.ps) != length(sim.regions)","\n",
+                   " This is not possible!","\n",
+                   " sim.regions = [",paste(sim.regions,collapse=","),"]\n",
+                   " sam_prop.ps = [",paste(sam_prop.ps,collapse=","),"]"))
+    }
+    
     sp <- list.append(sp,
                       sam_prop.ps=sam_prop.ps)
 
@@ -1286,10 +1293,11 @@ checkpoint.check.reload <- function(ep, sp) {
 #' Map R0effects from NUTS-1 to NUTS-2
 #'
 #' The function maps R0effects on NUTS-1 i.e. German state level to R0effects
-#' on NUTS-2 level
+#' on NUTS-2 level.
 #'
-#' @param ep An execution parameter list as decribed in [set.exec.params()].
-#' @param sp A list with static model parameters as described in [set.static.params()].
+#' @param R0effect.nuts2
+#' @param R0effect.states
+#' @param rows
 #' 
 #' @export
 map.R0effects <- function(R0effect.nuts2,R0effect.states,rows=NULL) {
@@ -1310,5 +1318,85 @@ map.R0effects <- function(R0effect.nuts2,R0effect.states,rows=NULL) {
                          Nuts2=iol$counties$Nuts2))[,"state_id"],"Shortcut"]
     
     R0effect.nuts2[rows,] <- R0effect.states[rows,map.names]
+    
+}
+
+################################################################################
+#' Convert R-model parameters to a Fortran parameter input file
+#'
+#' The function prints the R-model parameter lists to a textfile which can be 
+#' used as input for the Fortran model version.
+#'
+#' @param filename Path to the output file.
+#' @param sp A list with static model parameters as described in [set.static.params()].
+#' @param sp A list with static model parameters as described in [set.static.params()].
+#' 
+#' @export
+convert.Rp.to.Fp <- function(filename, sp) {
+
+    sink(file=filename)
+
+    for ( i in names(pspace) ) {
+        if ( !is.null(pspace[[i]]$param) ) {
+            if (pspace[[i]]$type == "direct") {
+
+                tmp <- pspace[[i]]$param
+            
+                if (class(tmp) == "character") {
+                    cat(paste(paste0("#",i),", c ,",length(tmp),"\n"))
+                } else if  (class(tmp) == "logical") {
+                    cat(paste(paste0("#",i),", l ,",length(tmp),"\n"))
+                } else {
+                    if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
+                        cat(paste(paste0("#",i),",r ,",length(tmp),"\n"))
+                    } else if (!grepl("\\.",paste(tmp,collapse=" "))) {
+                        cat(paste(paste0("#",i),",i ,",length(tmp),"\n"))
+                    }
+                }
+                
+                if (class(tmp) == "character") {
+                    cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
+                } else {
+                    cat(paste0(paste(tmp,collapse=","),'\n'))
+                }
+            } else {
+                warning(paste("Parameter",i,"was skipped because only type=direct is supported."))
+            }
+        } else {
+            warning(paste("Parameter",i,"was skipped because it is NULL."))
+        }
+        
+    }
+    
+    for ( i in names(sp) ){
+        if ( !is.null(static.params[[i]]) ) {
+
+            if (class(static.params[[i]]) == "list") {
+                tmp <- unlist(static.params[[i]])
+            } else {
+                tmp <- static.params[[i]]
+            }
+
+            if (class(tmp) == "character") {
+                cat(paste(paste0("#",i),", c ,",length(tmp),"\n"))
+            } else if  (class(tmp) == "logical") {
+                cat(paste(paste0("#",i),", l ,",length(tmp),"\n"))
+            } else {
+                if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
+                    cat(paste(paste0("#",i),",r ,",length(tmp),"\n"))
+                } else if (!grepl("\\.",paste(tmp,collapse=" "))) {
+                    cat(paste(paste0("#",i),",i ,",length(tmp),"\n"))
+                }
+            }
+            
+            
+            if (class(tmp) == "character") {
+                cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
+            } else {
+                cat(paste0(paste(tmp,collapse=","),'\n'))
+            }
+            
+        }
+    }
     
 }
