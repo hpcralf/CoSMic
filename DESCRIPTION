@@ -29,10 +29,10 @@ Description: A calibration-microsimulation approach to reduce uncertainty for
     Based on these estimates the model can provide national and sub-national
     forecasts for trends in the number of ICU patients and other indicators
     under different scenarios regarding NPIs.
-License:  GPL-3
+License: GPL-3
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2
 Imports: magrittr, dplyr, rlist, data.table, ggplot2, lhs, 
          GA, doRNG, tictoc, grid, gridExtra, pracma, RColorBrewer
 Roxygen: list(markdown = TRUE)
@@ -40,6 +40,3 @@ Suggests:
     knitr,
     rmarkdown
 VignetteBuilder: knitr
-
-
-

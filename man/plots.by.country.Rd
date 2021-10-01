@@ -17,7 +17,9 @@ plots.by.country(
   x.min = NULL,
   x.max = NULL,
   relative = FALSE,
-  silent = FALSE
+  silent = FALSE,
+  split.in = NULL,
+  y.max = NULL
 )
 }
 \description{

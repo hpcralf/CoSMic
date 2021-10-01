@@ -876,7 +876,7 @@ set.static.params <- function(pspace,
     }
 
     ## Treat speaking names of health states -----------------------------------
-    if (is.null(sp.states) | (length(sp.states) == 7)) {
+    if (is.null(sp.states) | (length(sp.states) != 7)) {
 
         if ((length(sp.states) != 7) & (!is.null(sp.states))) {
             warning("The CoSMic SIER model operates with 7 health conditions.",
@@ -884,10 +884,10 @@ set.static.params <- function(pspace,
         }
         
         sp.states  <- c("Healthy / Never infected",
-                        "Infected, not contagious",
-                        "Infected, contagious",
-                        "Ill, contagious",
-                        "Ill, ICU",
+                        "Infected not contagious",
+                        "Infected contagious",
+                        "Ill contagious",
+                        "Ill ICU",
                         "Immune",
                         "Dead")
         
@@ -918,6 +918,7 @@ save.static.params <- function(ep, sp) {
 ################################################################################
 #'  Loading input data
 #'
+#' @import rlist
 #' @export
 load.input <- function(data.dir              = "./",
                        trans.pr              = NULL,
@@ -1322,22 +1323,29 @@ map.R0effects <- function(R0effect.nuts2,R0effect.states,rows=NULL) {
 }
 
 ################################################################################
-#' Convert R-model parameters to a Fortran parameter input file
+#' Convert R-model parameters to Fortran-model input files 
 #'
-#' The function prints the R-model parameter lists to a textfile which can be 
-#' used as input for the Fortran model version.
+#' The function prints the R-model parameter lists and input data to textfiles
+#'  which can be used as input for the Fortran model version.
 #'
 #' @param filename Path to the output file.
 #' @param sp A list with static model parameters as described in [set.static.params()].
 #' @param sp A list with static model parameters as described in [set.static.params()].
 #' 
 #' @export
-convert.Rp.to.Fp <- function(filename, sp) {
+convert.Rp.to.Fp <- function(filename, sp, iol, R0_effects, outpath="./") {
 
     sink(file=filename)
 
+    ## Convert pspace parameters -----------------------------------------------
+
+    ## Loop over all names in pspace ---------------------------------
     for ( i in names(pspace) ) {
+        
+        ## If the pspace element has parameter values ----------------
         if ( !is.null(pspace[[i]]$param) ) {
+
+            ## We currently only treat direct parameters -------------
             if (pspace[[i]]$type == "direct") {
 
                 tmp <- pspace[[i]]$param
@@ -1354,49 +1362,101 @@ convert.Rp.to.Fp <- function(filename, sp) {
                     }
                 }
                 
-                if (class(tmp) == "character") {
+                if ( class(tmp) == "character" ) {
                     cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
+                } else if (class(tmp) == "logical") {
+                    cat(paste0('.',paste(tmp,collapse='","'),'.','\n'))
                 } else {
-                    cat(paste0(paste(tmp,collapse=","),'\n'))
+                    if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
+                        cat(paste0(paste(tmp,collapse=","),'\n'))
+                    } else {
+                        cat(paste0(paste(as.integer(tmp),collapse=","),'\n'))
+                    }
                 }
+
+                ## If no direct parameter ----------------------------
             } else {
                 warning(paste("Parameter",i,"was skipped because only type=direct is supported."))
             }
+            ## If no value in parameter element of psace -------------
         } else {
             warning(paste("Parameter",i,"was skipped because it is NULL."))
         }
         
     }
     
-    for ( i in names(sp) ){
+    ## Convert static parameters -----------------------------------------------
+
+     ## Loop over all names in static parameters list ----------------
+    for ( i in names(sp) ) {
+
+        ## If the element contains a value ---------------------------
         if ( !is.null(static.params[[i]]) ) {
 
+            ## If the parameter is a list we unlist to a vector ------
+            ## but create a shape string
             if (class(static.params[[i]]) == "list") {
                 tmp <- unlist(static.params[[i]])
+                shape <- paste(length(static.params[[i]][[1]]),
+                               length(static.params[[i]]),sep=",")
             } else {
                 tmp <- static.params[[i]]
+                shape <- length(static.params[[i]])
             }
 
             if (class(tmp) == "character") {
-                cat(paste(paste0("#",i),", c ,",length(tmp),"\n"))
+                ## if we have a parameter of type character ----------
+                cat(paste(paste0("#",i),", c ,",shape,"\n"))
             } else if  (class(tmp) == "logical") {
-                cat(paste(paste0("#",i),", l ,",length(tmp),"\n"))
+                ## if we have a parameter of type logical ------------
+                cat(paste(paste0("#",i),", l ,",shape,"\n"))
+            } else if  (class(tmp) == "Date") {
+                ## if we have a parameter of type logical ------------
+                cat(paste(paste0("#",i),", c ,",shape,"\n"))
             } else {
                 if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
-                    cat(paste(paste0("#",i),",r ,",length(tmp),"\n"))
-                } else if (!grepl("\\.",paste(tmp,collapse=" "))) {
-                    cat(paste(paste0("#",i),",i ,",length(tmp),"\n"))
+                    ## if we have a parameter of type float ----------
+                    cat(paste(paste0("#",i),",r ,",shape,"\n"))
+                } else {
+                    ## if we have a parameter of type integer --------
+                    cat(paste(paste0("#",i),",i ,",shape,"\n"))
                 }
             }
             
-            
-            if (class(tmp) == "character") {
+            if ( class(tmp) == "character" ) {
+                cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
+            } else if (class(tmp) == "logical") {
+                cat(paste0('.',paste(tmp,collapse='","'),'.','\n'))
+            } else if (class(tmp) == "Date") {
                 cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
             } else {
-                cat(paste0(paste(tmp,collapse=","),'\n'))
+                if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
+                    cat(paste0(paste(tmp,collapse=","),'\n'))
+                } else {
+                    cat(paste0(paste(as.integer(tmp),collapse=","),'\n'))
+                }
+             }
+         }
+    }
+
+    ## Convert input data ----------------------------------
+    for ( i in names(iol) ) {
+        if ( !is.null(iol[[i]])) {
+            cat(paste(paste0("#",i),", c , 1\n"))
+            cat(paste0('"',outpath,'iol_',i,'.csv"','\n'))
+
+            if ( grepl("connect",i) ) {
+                write.table(iol[[i]],paste0(outpath,"iol_",i,".csv"),row.names=TRUE,sep=",",quote=FALSE)
+            } else {
+                write.table(iol[[i]],paste0(outpath,"iol_",i,".csv"),row.names=FALSE,sep=",")
             }
-            
         }
     }
+
+    ## Write R0_effects -------------------------------------
+    cat(paste(paste0("#","R0_effects"),", c , 1\n"))
+    cat(paste0('"',outpath,'R0_effects.csv"','\n'))
+    write.table(R0_effects, paste0(outpath,"R0_effects.csv"), row.names=TRUE,sep=" ")
     
+    sink()
 }

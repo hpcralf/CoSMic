@@ -21,7 +21,9 @@ plots.by.state(
   sec.text = FALSE,
   ind.states = NULL,
   silent = FALSE,
-  relative = FALSE
+  relative = FALSE,
+  split.in = NULL,
+  y.max = NULL
 )
 }
 \description{

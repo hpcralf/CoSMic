@@ -7,11 +7,9 @@
 map.R0effects(R0effect.nuts2, R0effect.states, rows = NULL)
 }
 \arguments{
-\item{ep}{An execution parameter list as decribed in \code{\link[=set.exec.params]{set.exec.params()}}.}
-
-\item{sp}{A list with static model parameters as described in \code{\link[=set.static.params]{set.static.params()}}.}
+\item{rows}{}
 }
 \description{
 The function maps R0effects on NUTS-1 i.e. German state level to R0effects
-on NUTS-2 level
+on NUTS-2 level.
 }

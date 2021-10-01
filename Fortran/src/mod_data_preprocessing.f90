@@ -74,7 +74,7 @@ contains
 
     call pt_get("#restrict",restrict)
 
-    call pt_get("#sim_regions",sim_regions)
+    call pt_get("#sim.regions",sim_regions)
 
     !list of all counties codes
     all_counties = get_unique(iol%pop_distid)
@@ -98,6 +98,7 @@ contains
        iol%pop_date   = iol%pop_date(temp_index)
        iol%pop_sex    = iol%pop_sex(temp_index)
        iol%pop_age    = iol%pop_age(temp_index)
+       iol%pop_agei   = iol%pop_agei(temp_index)
        iol%pop_total  = iol%pop_total(temp_index)
 
     else

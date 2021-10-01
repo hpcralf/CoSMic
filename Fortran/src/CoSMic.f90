@@ -47,7 +47,7 @@ Program CoSMic
 
   Use global_constants
   Use global_types
-  Use global_vars
+  Use global_vars  
   
   !! Legacy Modules --------------------------------------------------
   Use cosmic_io

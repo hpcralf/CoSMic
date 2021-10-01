@@ -177,7 +177,7 @@ module global_types
 
      ! File names of input files -----------------------------
      character(len=mcl)                            :: trans_pr=""     
-     character(len=mcl)                            :: pop_data=""     
+     character(len=mcl)                            :: pop=""     
      character(len=mcl)                            :: inf_cases=""    
      character(len=mcl)                            :: dead_cases=""   
      character(len=mcl)                            :: connect_total=""

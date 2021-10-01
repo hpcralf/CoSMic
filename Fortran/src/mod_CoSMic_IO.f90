@@ -221,9 +221,9 @@ contains
           ii = ii + 1
           Read(lines(ii),*)sp%lhc_samples
 
-       else if (trim(lines(ii)) == "#pop_data") then !--------------------------
+       else if (trim(lines(ii)) == "#pop") then !--------------------------
           ii = ii + 1
-          sp%pop_data = lines(ii)
+          sp%pop = lines(ii)
 
        else if (trim(lines(ii)) == "#inf_cases") then !-------------------------
           ii = ii + 1
@@ -297,7 +297,7 @@ contains
     write(*,lcl)"restrict"     , sp%restrict     
     write(*,lci)"lhc_samples"  , sp%lhc_samples
     write(*,lca)"trans_pr"     , trim(sp%trans_pr     )
-    write(*,lca)"pop_data"     , trim(sp%pop_data     )
+    write(*,lca)"pop"          , trim(sp%pop)
     write(*,lca)"inf_cases"    , trim(sp%inf_cases    )
     write(*,lca)"dead_cases"   , trim(sp%dead_cases   )
     write(*,lca)"connect_total", trim(sp%connect_total)
@@ -357,7 +357,7 @@ contains
     Close(un_in)
 
     !read data from file to pop --------------------------------------
-    call pt_get("#pop_data",filename)
+    call pt_get("#pop",filename)
 
     call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
 
@@ -370,10 +370,10 @@ contains
     Allocate(iol%pop_total(index-1))
 
     ! read the first line(character) -----------------------
-    Read(un_in,*,iostat= k) iol%titel
+    Read(un_in,*) iol%titel
 
     Do i = 1,index-1
-       Read(un_in,*,iostat=k) iol%pop_distid(i),iol%pop_date(i),iol%pop_sex(i),&
+       Read(un_in,*) iol%pop_distid(i),iol%pop_date(i),iol%pop_sex(i),&
             iol%pop_agei(i),iol%pop_total(i)
     Enddo
     Do i = 1,index-1
@@ -382,7 +382,7 @@ contains
     Close(un_in)
 
     !read data from file to seed ---------------------------
-    call pt_get("#inf_cases",filename)
+    call pt_get("#seed",filename)
 
     call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
 
@@ -399,7 +399,7 @@ contains
     Close(un_in)
 
     !read data from file to seeddeath --------------------------------
-    call pt_get("#dead_cases",filename)
+    call pt_get("#seed_dea",filename)
 
     call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
 
@@ -421,7 +421,8 @@ contains
 
     call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
 
-    Read(un_in,*,iostat= k) iol%connect_titel,iol%connect_total_name(:)
+    Read(un_in,*,iostat= k) iol%connect_total_name(:)
+    iol%connect_titel = "dist_id"
     Do i = 1,Size(iol%connect_total_distid)
        Read(un_in,*,iostat=k) iol%connect_total_distid(i),iol%connect_total(:,i)
     Enddo
@@ -432,7 +433,7 @@ contains
 
     call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
 
-    Read(un_in,*,iostat= k) iol%connect_titel,iol%connect_work_name(:)
+    Read(un_in,*,iostat= k) iol%connect_work_name(:)
     Do i = 1,Size(iol%connect_work_distid)
        Read(un_in,*,iostat=k) iol%connect_work_distid(i),iol%connect_work(:,i)
     Enddo

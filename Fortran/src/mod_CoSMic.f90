@@ -432,22 +432,23 @@ Contains
     write(un_lf,PTF_SEP)
     write(un_lf,PTF_M_A)"ICU risk per age group, sex, and duration in ICU."
     Do ii=1, Size(icu_risk)*ill_dur
-       write(un_lf,'(A4,I4,A2,F6.3,I3)') &
+       write(un_lf,'(A4,I4,A2,I3, F6.3 )') &
             icu_risk_list%age(ii)    , icu_risk_list%agei(ii), icu_risk_list%sex(ii), &
-            icu_risk_list%risk(ii), icu_risk_list%dur(ii)
+            icu_risk_list%dur(ii), icu_risk_list%risk(ii)
     End Do
-
 
     Allocate(ICU_risk_pasd( &
          minval(icu_risk_list%agei):maxval(icu_risk_list%agei),&
          1:2, &
          minval(icu_risk_list%dur):maxval(icu_risk_list%dur)))
 
-    Do ii=1, Size(icu_risk)*ill_dur
+    ICU_risk_pasd = 0._rk
+    
+    Do ii=1, size(icu_risk_list%sex)
        if (icu_risk_list%sex(ii) == "m") then
-          ICU_risk_pasd(icu_risk_list%agei(ii),1,icu_risk_list%dur(ii)) = icu_risk_list%risk(ii)
+          ICU_risk_pasd(icu_risk_list%agei(ii),1,icu_risk_list%dur(ii)) = Real(icu_risk_list%risk(ii),rk)
        Else
-          ICU_risk_pasd(icu_risk_list%agei(ii),2,icu_risk_list%dur(ii)) = icu_risk_list%risk(ii)
+          ICU_risk_pasd(icu_risk_list%agei(ii),2,icu_risk_list%dur(ii)) = Real(icu_risk_list%risk(ii),rk)
        End if
     End Do
     
@@ -595,17 +596,18 @@ Contains
 !!!=============================================================================
 !!! Iteration over parameter space
 !!!=============================================================================
+
+    !!=======================================================================
+    !! Init population                 
+    iol%pop_total = Nint(Real(iol%pop_total)/Real(Sum(iol%pop_total))* Real(lhc(1,1)))
+    pop_size      = Sum(iol%pop_total)
+
     Do it_ss = 1,  Size(lhc,dim=2)
 
        call start_timer("Init Sim Loop",reset=.FALSE.)
        
        Call random_Seed()
 
-       !!=======================================================================
-       !! Init population                 
-       iol%pop_total = Nint(Real(iol%pop_total)/Real(Sum(iol%pop_total))* Real(lhc(1,it_ss)))
-       pop_size      = Sum(iol%pop_total)
-       
        If (.Not.Allocated(temp_s)) allocate(temp_s(pop_size))
        
        If (.Not.Allocated(sim%dist_id))Then
@@ -624,10 +626,10 @@ Contains
        Do i = 1, Size(iol%pop_total)
           temp_int = iol%pop_total(i)
           sim%dist_id(index+1: index+temp_int) = iol%pop_distid(i)
-          sim%sex(index+1: index+temp_int)  = iol%pop_sex(i)
-          sim%age(index+1: index+temp_int)  = iol%pop_age(i)
-          sim%agei(index+1: index+temp_int) = iol%pop_agei(i)
-          index                            = index + temp_int
+          sim%sex(index+1: index+temp_int)   = iol%pop_sex(i)
+          sim%age( index+1: index+temp_int)  = iol%pop_age(i)
+          sim%agei(index+1: index+temp_int)  = iol%pop_agei(i)
+          index                              = index + temp_int
        End Do
 
        sim%t1 = healthy
@@ -635,7 +637,7 @@ Contains
        sim%d(:)  = 1
 
        write(un_lf,PTF_SEP)
-       Write(un_lf,PTF_M_AI0)"Size of population is", sum(iol%pop_total)
+       Write(un_lf,PTF_M_AI0)"Size of population is", pop_size
 
        !!=======================================================================
        !! seed infections
@@ -647,11 +649,10 @@ Contains
        !skip line 1113, 1115
 
        temp = get_index(iol%seed_date,seed_seq)
-
        seed_ill%dist_id  = iol%seed_distid(temp)
        seed_ill%date     = iol%seed_date(temp)
        seed_ill%cases    = iol%seed_cases(temp)
-write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
+write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases),size(seed_ill%cases)
        temp = get_index(iol%seed_date,seed_inf_cont_seq)
 
        seed_inf_cont%dist_id  = iol%seed_distid(temp)
@@ -671,10 +672,10 @@ write(*,*)"sum(seed_inf_ncont%cases):",sum(seed_inf_ncont%cases)
        iol%death_date   = iol%death_date(temp)
        iol%death_cases  = iol%death_cases(temp)
 
-       If (.Not.Allocated(seed_ill_dur))Then
-          Allocate(seed_ill_dur(Size(seed_ill%date)))
-       End If
-
+       If (Allocated(seed_ill_dur)) Deallocate(seed_ill_dur)
+       
+       Allocate(seed_ill_dur(Size(seed_ill%date)))
+       
        days             = 0
 
        seed_date        = add_date(seed_date,days)
@@ -689,6 +690,7 @@ write(*,*)"sum(seed_inf_ncont%cases):",sum(seed_inf_ncont%cases)
        !         print *,seed_ill%cases
        !         mod1 = "l"
        !         mod2 = "g"
+
        temp = condition_and(seed_ill_dur,ill_dur+1,"l",seed_ill%cases,temp_int,"g")
        !          print *,"size of temp",size(temp)
        seed_ill%dist_id  = seed_ill%dist_id(temp)
@@ -809,13 +811,27 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
        write(un_lf,PTF_SEP)
        write(un_lf,PTF_M_A)"Seeds per county."
        write(un_lf,'(5(A10,1X))')"county","inf_ncont","inf_cont","inf_ill","inf_dth"
+
+       !** Reshuffle population since ordering according to dist id leads to ***
+       !** lower infections in older age groups                              ***
+       do ii = 1, pop_size
+          sim%t1(ii) = ii
+       End do
+       sim%t2 = sample(sim%t1,pop_size)
+
+       sim%dist_id=sim%dist_id(sim%t2)
+       sim%age    =sim%age    (sim%t2)
+       sim%agei   =sim%agei   (sim%t2)
+       
+       sim%t1 = healthy
+       sim%t2 = missing
        
        Do icounty = 1,num_counties
 
           county = counties_index(icounty)
 
           rownumbers = get_index(sim%dist_id,county)
-!write(*,*)"rownumbers",rownumbers
+
           temp   = get_index(seed_ill%dist_id,county)
           il_d   = rep(seed_ill_dur(temp),seed_ill%cases(temp))
           inf_ill= Sum(seed_ill%cases(temp))
@@ -854,7 +870,7 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
 
              rownumbers_ill = sample(rownumbers_left,inf_ill)
              Call QSortC(rownumbers_ill)
-!write(*,*)"rownumbers_ill",rownumbers_ill
+!write(1234,*)"rownumbers",county,minval(rownumbers),maxval(rownumbers),inf_ill,"rownumbers_ill",rownumbers_ill
              jj = 1
              kk = 1
              Do ii = 1, Size(rownumbers_left)
@@ -934,6 +950,14 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
 
        End Do ! do icounty = 1,size(sim_counties)
 
+       !jj= 0
+       !Do ii = 1, pop_size
+       !   If (sim%agei(ii) >= 50 .AND. sim%t1(ii) ==3) then
+       !      jj=jj+1
+       !      write(*,*)jj,sim%agei(ii),sim%t1(ii)
+       !   End If
+       !End Do
+       !stop
        !! ----------------------------------------------------------------------
        !! Convert from Weekly to daily R0_effects ------------------------------
        R0_daily = R0_force *lhc(2,it_ss)/Real(Real(cont_dur)+Real(ill_dur)*less_contagious) + &
@@ -1006,9 +1030,12 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
        temp = get_index(iol%connect_work_distid,counties_index)
 
        connect = iol%connect_work(temp,temp)
+
        Do i = 1,Size(connect,dim=2)
           connect(:,i) = connect(:,i)/Sum(connect(:,i))
        End Do
+
+       connect = transpose(connect)
 
        Call CoSMic_TimeLoop(time_n, pop_size, size(counties_index), counties_index, &
             Real(R0matrix,rk), Real(connect,rk), surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim, &
@@ -1237,8 +1264,8 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
 
     !===========================================================================
 
-        call start_timer("+- Prepare data",reset=.FALSE.)
-       
+    call start_timer("+- Prepare data",reset=.FALSE.)
+
     !** Allocate and init new counter ----------------------
     Allocate(state_count_pl(min_state:max_state,n_counties))
     state_count_pl = 0
@@ -1262,7 +1289,7 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
     call end_timer("+- Prepare data")
 
     sim%t2 = sim%t1
-    
+
     Do timestep = 2, time_n
 
        call start_timer("+- From healthy to infected",reset=.FALSE.)
@@ -1305,8 +1332,8 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
        risk_pl = state_count_pl(inf_contag,:) +  state_count_pl(ill_contag,:) * less_contagious
 
        risk_pl = risk_pl * R0matrix(:,timestep)
-       
-       risk_pl = w_int * risk_pl + (1._rk - w_int) * Matmul (risk_pl, connect)
+
+       risk_pl = w_int * risk_pl + (1._rk - w_int) * Matmul(risk_pl, connect)
 
        Do ii = 1, n_counties
           risk_pl(ii) = risk_pl(ii) / sum(state_count_pl([healthy,immune, &
@@ -1314,7 +1341,7 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
                                                           ill_contag              ],ii))
        End Do
 
-       risk_pl = w_int * risk_pl + (1._rk - w_int) * Matmul (risk_pl, connect)
+       risk_pl = w_int * risk_pl + (1._rk - w_int) * Matmul(risk_pl, connect)
        
        !** DEBUG --- Risk per location --------------------------------------
        write(un_lf,PTF_SEP)
@@ -1426,13 +1453,21 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
        
        !** Draw risks for all individuals at risk --------------------
        Call random_Number(risk_pi(1:at_risk))
-       nn = 1
+       nn = 0
        Do ii = 1, pop_size
 
-          if ((sim%t1(ii) == ill_contag) .AND. (sim%t2(ii) == ill_contag)) then
+          if ((sim%t1(ii) == ill_contag) .AND. (sim%t2(ii) /= dead)) then
              !** Individual is ill_contag ----------------------------
              nn = nn + 1
 
+             if ((ICU_risk_pasd(sim%agei(ii),1,sim%d(ii))  >0.) .or. &
+                 (ICU_risk_pasd(sim%agei(ii),2,sim%d(ii))  >0.)       ) &
+                 new_in_state = new_in_state + 1
+
+!!!             write(*,*)sim%agei(ii),sim%sex(ii),sim%d(ii),&
+!!!                  ICU_risk_pasd(sim%agei(ii),1,sim%d(ii)),&
+!!!                  ICU_risk_pasd(sim%agei(ii),2,sim%d(ii))
+             
              if (sim%sex(ii) == "m") then
                 if (risk_pi(nn) <= ICU_risk_pasd(sim%agei(ii),1,sim%d(ii))) then
                    !** Individual moves to icu -----------------------
@@ -1467,6 +1502,8 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
           End if
          
        ENd Do
+       write(un_lf,PTF_M_AI0)"Really at risk        :",new_in_state
+       write(un_lf,PTF_M_AI0)"risks evaluated       :",nn
 
        !** Population summary --------------------------------------------------
        Call summary_1_int(sim%t2, pop_size, state_count_t2, min_state, max_state)
@@ -1479,13 +1516,13 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
        !** DEBUG ------------------------------------------------------------
 
        call end_timer("+- From infected to ill and icu")
-
+       
        at_risk = state_count_t1(ill_ICU)
        write(un_lf,PTF_M_AI0)"At risk to die in icu:",at_risk
 
        !** Draw risks for all individuals at risk --------------------
        Call random_Number(risk_pi(1:at_risk))
-       nn = 1
+       nn = 0
        Do ii = 1, pop_size
 
           if (sim%t1(ii) == ill_ICU) then
@@ -1527,6 +1564,8 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
 
        End Do
 
+       write(un_lf,PTF_M_AI0)"risks evaluated      :",nn
+
        !** Population summary --------------------------------------------------
        Call summary_1_int(sim%t2, pop_size, state_count_t2, min_state, max_state)
        
@@ -1535,7 +1574,7 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
        write(un_lf,PTF_M_AI0)"Population Summary after timestep ",timestep
        write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6
        write(un_lf,'(8(I10))')state_count_t2
-       write(*,'(8(I10))')state_count_t2
+       write(*,'(9(I10))')timestep,state_count_t2
        
        !** DEBUG ------------------------------------------------------------
 
@@ -1585,7 +1624,7 @@ write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
     Integer(kind=ik), Dimension(lb1:ub1,lb2:ub2) , Intent(Out) :: cnt
 
     Integer(kind=ik)                             :: ii
-    
+
     cnt = 0
 
     Do ii = 1, nn      
