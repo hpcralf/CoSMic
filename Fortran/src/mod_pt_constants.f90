@@ -22,6 +22,9 @@ Module pt_constants
   !> Whether to stop in case pt_get should retrieve a keyword not in tree ------
   Logical,   parameter :: STOP_IF_MISSING = .TRUE.
 
+  !> Whether to write debug output ---------------------------------------------
+  Logical,   parameter :: PT_DEBUG = .FALSE.
+
   ! Character constants for nice output ----------------------------------------
   Character(Len=*), Parameter :: PTF_E_A    = "('EE ',A)"
   Character(Len=*), Parameter :: PTF_E_AI0  = "('EE ',*(A,1X,I0))"

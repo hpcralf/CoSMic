@@ -39,6 +39,7 @@ Module param_tree
      module procedure pt_get_2d_i8
      
      module procedure pt_get_scalar_r8
+     module procedure pt_get_1d_r8
      module procedure pt_get_2d_r8
      
      module procedure pt_get_1d_char
@@ -53,7 +54,7 @@ Module param_tree
 
   !! -----------------------------------
   !> Monitor- / Logfile unit
-  Integer                       :: pt_umon  = OUTPUT_UNIT
+  Integer                 , Save :: pt_umon  = OUTPUT_UNIT
   
 Contains
 
@@ -164,7 +165,33 @@ Contains
     End if
 
   End Subroutine pt_get_scalar_r8
-  
+
+  !! ===========================================================================
+  !> Subroutine to rerieve a 1D real 8 value from pt
+  Subroutine pt_get_1d_r8(p_name,arr,success)
+
+    character(len=*)               , intent(in)   :: p_name
+    Real(kind=pt_rk),allocatable, Dimension(:)    :: arr
+
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+
+    loc_success=.FALSE.
+    
+    call get_1d_r8(p_name,pt,arr,loc_success)
+
+    if (.not.present(success)) then
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
+    else
+       success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
+    End if
+
+  End Subroutine pt_get_1d_r8
+
   !! ===========================================================================
   !> Subroutine to rerieve a 2D real 8 value from pt
   Subroutine pt_get_2d_r8(p_name,arr,success)
@@ -406,6 +433,40 @@ Contains
     End if
     
   End subroutine get_scalar_r8
+
+  !! ===========================================================================
+  !> Subroutine to rerieve a 1D real 8 value from a branch
+  Recursive subroutine get_1d_r8(p_name,branch,arr,success)
+
+    character(len=*)   , intent(in)                            :: p_name
+    Type(pt_branch)    , intent(in)                            :: branch
+    Real(kind=pt_rk), Allocatable, Dimension(:)  ,intent(out)  :: arr
+    Logical            , intent(inout)                         :: success
+
+    integer                                    :: ii, jj, c_len
+
+    do ii = 1, branch%no_leaves
+
+       if (p_name == trim(branch%leaves(ii)%name)) then
+
+          if (branch%leaves(ii)%dat_ty == "R") then
+             arr = branch%leaves(ii)%r8
+             success = .TRUE.
+             exit
+          End if
+       end if
+
+    End do
+
+    if (.not. success) then
+       do ii = 1, branch%no_branches
+          call  get_1d_r8(p_name,branch%branches(ii),arr,success)
+          if(success) exit
+       End do
+    End if
+    
+  End subroutine get_1d_r8
+
   !! ===========================================================================
   !> Subroutine to rerieve a 2D real 8 value from a branch
   Recursive subroutine get_2d_r8(p_name,branch,arr,success)

@@ -79,6 +79,11 @@ interface generate_seq
 !   module procedure seq_real
 end interface
 
+interface sample
+  module procedure sample_i1
+  module procedure sample_i4
+end interface sample
+
 interface condition_and
   module procedure condition_and_integer
   module procedure condition_and_real
@@ -712,7 +717,7 @@ end do
 
 end function
 
-function sample(input_array,sample_N)result(sample_seq)
+function sample_i4(input_array,sample_N)result(sample_seq)
 implicit none
 integer,dimension(:)        :: input_array
 integer,dimension(size(input_array)) :: temp_input
@@ -738,8 +743,35 @@ do i = 1,size(temp_input)
 end do
 sample_seq = temp_input(1:sample_N)
 ! output_array = input_array(sample_N+1:size(input_array))
-end function
+end function sample_i4
 
+function sample_i1(input_array,sample_N)result(sample_seq)
+implicit none
+integer(kind=1),dimension(:)        :: input_array
+integer,dimension(size(input_array)) :: temp_input
+integer                     :: sample_N
+integer,allocatable         :: sample_seq(:)
+! integer,allocatable         :: output_array(:)
+
+integer                     :: n,temp,pos,i
+real                        :: ran
+
+temp_input = input_array
+
+do i = 1,size(temp_input)
+     temp = temp_input(i)
+     call random_number(ran)
+     pos = int(ran*size(temp_input))
+     do while (pos == 0)
+        call random_number(ran)
+        pos = int(ran*size(temp_input))
+     end do
+     temp_input(i) = temp_input(pos)
+     temp_input(pos) = temp
+end do
+sample_seq = temp_input(1:sample_N)
+! output_array = input_array(sample_N+1:size(input_array))
+end function sample_i1
 
 function sum_bygroup_mod(t1,dist_id,counties,mod_type)result(output)
 implicit none

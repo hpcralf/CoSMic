@@ -15,8 +15,8 @@ module timer
 
   end type tTimer
 
-  Type(tTimer), target , private :: base
-  Type(tTimer), pointer, private :: timelist=>null(), end=>null()
+  Type(tTimer), target , private, save :: base
+  Type(tTimer), pointer, private, save :: timelist=>null(), end=>null()
 
 contains
 
