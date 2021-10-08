@@ -81,7 +81,7 @@ module global_types
  
      character(len=:), Dimension(:)  , allocatable :: head
      character(len=:), Dimension(:)  , allocatable :: rownames
-     Real            , Dimension(:,:), Allocatable :: data
+     Real(Kind=rk)   , Dimension(:,:), Allocatable :: data
           
   End type TableData
   

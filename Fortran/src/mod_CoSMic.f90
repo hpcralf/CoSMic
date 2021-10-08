@@ -97,66 +97,58 @@ Module kernel
 Contains
   
   Subroutine COVID19_Spatial_Microsimulation_for_Germany( &
-       iol, counties_index &
-       )
+       iol, counties_index, &
+       iter , &
+       inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
+       less_contagious, R0_force, immune_stop, &
+       R0change, R0delay ,R0delay_days, R0delay_type, &
+       control_age_sex, seed_date, seed_before, sam_size, R0, &
+       R0_effects)
 
     !===========================================================================
     ! Declaration
     !===========================================================================
+ 
+    Type(iols)                                                :: iol
+    Integer(kind=ik)             , Dimension(:)  , intent(in) :: counties_index
+    Integer(kind=ik)                             , intent(in) :: iter
+    Integer(kind=ik)                             , intent(in) :: inf_dur
+    Integer(kind=ik)                             , intent(in) :: cont_dur
+    Integer(kind=ik)                             , intent(in) :: ill_dur
+    Integer(kind=ik)                             , intent(in) :: icu_dur
+    Integer(kind=ik), Allocatable, Dimension(:)  , intent(in) :: icu_per_day
+    Real(kind=rk)                                , intent(in) :: less_contagious
+    Real(kind=rk)                                , intent(in) :: R0_force
+    Logical                                      , intent(in) :: immune_stop
+    Integer(kind=ik), Allocatable, Dimension(:,:), intent(in) :: R0change
+    Logical                                      , intent(in) :: R0delay
+    Integer(kind=ik)                             , intent(in) :: R0delay_days
+    Character(len=*)                             , intent(in) :: R0delay_type
+    character(len=*)                             , intent(in) :: control_age_sex
+    character(len=*)                             , intent(in) :: seed_date
+    Integer(kind=ik)                             , intent(in) :: seed_before    
+    Integer(kind=ik)                             , intent(in) :: sam_size
+    Real(kind=rk)                                , intent(in) :: R0
+    Real(kind=rk),    Allocatable, Dimension(:,:), intent(in) :: R0_effects
 
-    !Include 'mpif.h'
-
-    Type(static_parameters) :: sp
-
-    Type(pspaces)       :: pspace
-    Type(iols)          :: iol
+    !---------------------------------------------------------------------------
     
-    Integer             :: i, j, k, index, temp_int,icounty,county,it_ss,iter,status
-    Character*1         :: mod1,mod2
-    Integer,Dimension(:), intent(in):: counties_index
+    Integer(kind=ik)   :: i, j, index, temp_int,icounty,county,it_ss,status
+    character(len=:), Allocatable   :: seed_date_mod
 
-!!!!!-----1.states of the model ------
+    Character(Len=10)             :: seed_before_char,seed_temp
+    Character(Len=10),Allocatable :: seed_seq(:),seed_inf_cont_seq(:),seed_inf_ncont_seq(:)
+    Character(Len=10),Allocatable :: seed_d_seq(:)
 
-!!!!!-----3.Set seed infections in population ------
-    Integer             :: seed_before
+    Integer(kind=ik)              :: days
 
-!!!!!-----4. define disease characteristics -----
-    Integer             :: inf_dur,cont_dur,ill_dur
-    Logical             :: immune_stop
+    Integer,Allocatable :: temp(:)
 
-!!!!!-----5. define reductions in social contacts -----
-    Integer(kind=ik), Allocatable, Dimension(:,:) :: R0change
-    Logical             :: R0delay
-    Integer             :: R0delay_days
-    Character(len=:),Allocatable :: R0delay_type
+    Type(sims)                      :: sim
 
-!!!!!-----7.  Define whether transition probabilities should differ by age and sex
-    character(len=:),allocatable :: control_age_sex
+    Integer,Allocatable             :: rownumbers(:)
 
-    Character*10        :: seed_before_char,seed_temp
-    Character*10,Allocatable :: seed_seq(:),seed_inf_cont_seq(:),seed_inf_ncont_seq(:)
-    Character*10,Allocatable :: seed_d_seq(:)
-    Integer             :: days
-
-    Integer             :: n_direct,n_directv,n_directl,n_dist
-
-    Integer(kind=ik),Allocatable , Dimension(:)   :: icu_per_day
-    Integer(kind=ik)             :: tmp_i8
-
-!!!!!-----8. variables for do loop -------
-    Real,Allocatable    :: icu_risk(:),surv_ill(:),surv_icu(:)
-    Integer,Allocatable :: temp1(:),temp(:),targert_icu_risk_index(:)
-   
-    Character*3,Allocatable :: temp_char_mul(:)
-    Character               :: temp_char_sig
-
-    Type(icu_risk_lists)            :: icu_risk_list,surv_ill_list,surv_icu_list
-
-    Type(sims)                      :: sim,tmp
-    Integer,Allocatable             :: tmp_dnew(:)
-    Integer,Allocatable             :: sim_counties(:),rownumbers(:)
-
-    Type(seeds)                     :: seed_ill,seed_inf_cont,seed_inf_ncont,target_inf,seed_death
+    Type(seeds)                     :: seed_ill,seed_inf_cont,seed_inf_ncont,seed_death
     Integer,Allocatable             :: seed_ill_dur(:),seed_inf_cont_dur(:),seed_inf_ncont_dur(:)
     Integer,Allocatable             :: il_d(:),inf_c_d(:),inf_nc_d(:)
     Integer,Allocatable             :: rownumbers_ill(:),rownumbers_cont(:),rownumbers_ncont(:)
@@ -178,54 +170,21 @@ Contains
     Integer                         :: timestep
 
     Integer,Allocatable             :: tmp_d_new(:),tmp_count(:)
-    Integer,Allocatable             :: susceptible(:),contagious_dist_id(:),contagious_index(:),denominator(:)
-    Integer,Allocatable             :: revers_proj(:),final_count(:),dist_id_temp(:),ill_index(:)
-    Integer,Allocatable             :: ill_dist_id(:)
-    Real,Allocatable                :: contagious(:)
-    Integer                         :: at_risk
-    Integer                         :: initial_sick
-    Real                            :: n_contagious,between_weight,within_weight
-    Real,Allocatable                :: exp_infect(:)
-    Integer,Allocatable             :: check_days(:)
 
-    Real,Allocatable                :: risk(:),prob(:),runif(:),prop_target(:)
-    Character*10                    :: target_date,temp_date
+    Character*10                    :: temp_date
 
-    Integer,Allocatable             :: sick(:),case_count(:),state_id(:),prop_inf_cases(:)
-    Character*6,Allocatable         :: age_sex(:),surv_ill_label(:),surv_icu_label(:)
-    Character*6,Allocatable         :: age_sex_dur(:),icu_risk_label(:)
-    Character*2,Allocatable         :: temp_character(:)
-    Real,Allocatable                :: surv_ill_i(:),die(:),icu_risk_i(:),icu(:),surv_icu_i(:)
-    Integer,Allocatable             :: die_count(:),icu_count(:),die_icu_count(:)
-    Character*2,Allocatable         :: ch_age(:)
-    Character*5,Allocatable         :: ch_sex(:)
     Integer                         :: max_date,n_change
-    Character*10                    :: temp_mod
-    character(len=:),allocatable    :: seed_date
     character(len=10)               :: l_seed_date
     Real                            :: iter_pass_handle(6)
 
     Type(tTimer)                    :: timer
-    Integer, Dimension(8)           :: rt
 
-    integer                         :: tar
-
-    Real(kind=rk)                   :: less_contagious
-    Real(kind=rk)                   :: R0_force
-
-    Integer(kind=ik)                :: sam_size
-    Real(kind=rk)                   :: R0
-    Integer(kind=ik)                :: icu_dur
+    Integer(kind=ik), Allocatable, Dimension(:)     :: dist_id_cref 
     
-    Real(kind=pt_rk),Dimension(:,:),Allocatable :: R0_effects
-    Integer(kind=ik),Dimension(:)  ,Allocatable :: dist_id_cref 
-    
-    Integer(kind=ik), Dimension(0:16)         :: istate_count
-    Integer(kind=ik)                         :: pop_size
-    Integer(kind=ik)                         :: num_counties
-    Integer(kind=ik)                         :: ii,jj,kk
+    Integer(kind=ik)                                :: pop_size
+    Integer(kind=ik)                                :: num_counties
+    Integer(kind=ik)                                :: ii,jj,kk
 
-    Integer(Kind=ik), Allocatable, Dimension(:)     :: c_ref, ur_seed
     Real(Kind=rk)   , Allocatable, Dimension(:,:)   :: surv_ill_pas
     Real(Kind=rk)   , Allocatable, Dimension(:,:,:) :: ICU_risk_pasd
     Real(Kind=rk)   , Allocatable, Dimension(:,:)   :: surv_icu_pas
@@ -234,276 +193,56 @@ Contains
     ! Implementation
     !===========================================================================
 
-    call pt_get("#iter",iter)
-
-    call pt_get("#inf_dur" ,inf_dur ) ! 3
-    call pt_get("#cont_dur",cont_dur) ! 2
-    call pt_get("#ill_dur" ,ill_dur ) ! 8
-    call pt_get("#icu_dur" ,icu_dur ) ! 14
-      
-    call pt_get("#icu_per_day" ,icu_per_day )
-    If (Size(icu_per_day) /= ill_dur) Then
-       Print *,'Length icu_per_day not equal to ill_dur'
-    Endif
-    If ((Sum(icu_per_day)/Size(icu_per_day)) /= 1) Then
-       Print *,'Mean icu per day not equal to 1'
-    End If
-
-    call pt_get("#less_contagious" ,less_contagious )
-    
-    call pt_get("#R0_force",R0_force) ! 0
-    
-    call pt_get("#immune_stop",immune_stop)! = .True.
-    
-    call pt_get("#R0change"     ,R0change    )
-    call pt_get("#R0delay"      ,R0delay     )
-    call pt_get("#R0delay_days" ,R0delay_days)
-    call pt_get("#R0delay_type" ,R0delay_type)
-
+    !** Get time_n from R0change -----------------
     time_n = Maxval(R0change) + 1
-    
-    call pt_get("#control_age_sex",control_age_sex) ! "age"
-    
-    call pt_get("#seed_date",seed_date)
+
+    !** Shift seed_date --------------------------
     days             = 1
-    seed_date        = add_date(seed_date,days)
+    seed_date_mod        = add_date(seed_date,days)
 
-    call pt_get("#seed_before",seed_before)
+    !** Generate seed_sequence -------------------
     days             = -1-seed_before
-    seed_before_char = add_date(seed_date,days)
+    seed_before_char = add_date(seed_date_mod,days)
 
-    seed_seq         = generate_seq(seed_before_char,seed_date)
+    seed_seq         = generate_seq(seed_before_char,seed_date_mod)
 
     if (PT_DEBUG) then
        write(un_lf,PTF_sep)
        write(un_lf,PTF_M_A)"Seed sequence for ill cases:",seed_seq
     End if
     
-    !Derive dates of infections for those that are inf_cont,
-    !but are not yet aware about it (will be registered the
-    !next two days)
-    seed_temp          = add_date(seed_date,cont_dur)
-    seed_inf_cont_seq  = generate_seq(add_date(seed_date,1),seed_temp)
+    !** Derive dates of infections for those that are inf_cont, but --
+    !** are not yet aware about it (will be registered the next     --
+    !** two days)                                                   --
+    seed_temp          = add_date(seed_date_mod,cont_dur)
+    seed_inf_cont_seq  = generate_seq(add_date(seed_date_mod,1),seed_temp)
 
     if (PT_DEBUG) then
        write(un_lf,PTF_sep)
        write(un_lf,PTF_M_A)"Seed sequence for infected contagious cases:",seed_inf_cont_seq
     End if
     
-    !Derive dates of infections for those that are inf_cont,
-    !but are not yet aware about it (will be registered the
-    !next 3-5 days)
-    seed_inf_ncont_seq = generate_seq(add_date(seed_date,cont_dur+1),add_date(seed_date,inf_dur+cont_dur))
+    !** Derive dates of infections for those that are inf_cont, but --
+    !** are not yet aware about it (will be registered the next     --
+    !** 3-5 days)                                                   --
+    seed_inf_ncont_seq = generate_seq(add_date(seed_date_mod,cont_dur+1),add_date(seed_date_mod,inf_dur+cont_dur))
 
     if (PT_DEBUG) then
        write(un_lf,PTF_sep)
        write(un_lf,PTF_M_A)"Seed sequence for infected non-contagious cases:",seed_inf_ncont_seq
     End if
-    
-    call pt_get("#sam_size",sam_size)
-    call pt_get("#R0"      ,R0      )
 
-    If (control_age_sex == "NONE") Then
-       ch_age = (/"total"/)
-       ch_sex = (/"total"/)
-    End If
+    !** ------------------------------------------------------------------------
+    !** Init ICU risk per age, sex and duration of illness ---------------------
+    call init_ICU_risk(control_age_sex, iol, ill_dur, icu_per_day, ICU_risk_pasd)
 
-    If (control_age_sex == "age") Then
-       !     ch_age = generate_seq(0,90,5)
-       ch_age = (/"0 ","5 ","10","15","20","25","30","35",&
-            "40","45","50","55","60",&
-            "65","70","75","80","85","90"/)
-       ch_sex = (/"total"/)
-    End If
+    !** ------------------------------------------------------------------------
+    !** Init survival chance of ill state by age and sex  ----------------------
+    call init_surv_ill(control_age_sex, iol, ill_dur, surv_ill_pas)
 
-    If (control_age_sex == "sex") Then
-       ch_age = (/"total"/)
-       ch_sex = (/"m","f"/)
-    End If
-
-    If (control_age_sex == "age_sex") Then
-       !     ch_age = generate_seq(0,90,5)
-       ch_age = (/"0 ","5 ","10","15","20","25","30","35",&
-            "40","45","50","55","60",&
-            "65","70","75","80","85","90"/)
-       ch_sex = (/"m","f"/)
-    End If
-
-    temp = get_index(iol%transpr_age_gr,ch_age)
-
-    temp1= get_index(iol%transpr_sex,ch_sex)
-
-    targert_icu_risk_index = find_and(temp,temp1)
-
-    If (control_age_sex == "age") Then
-       If (.Not.Allocated(icu_risk))Then
-          Allocate(icu_risk(2*Size(targert_icu_risk_index)))
-       Endif
-       icu_risk(1:Size(targert_icu_risk_index)) = iol%transpr_icu_risk(targert_icu_risk_index)
-       icu_risk(1:Size(targert_icu_risk_index)) = &
-            1.0 - (1.0 - icu_risk(1:Size(targert_icu_risk_index))) ** (1.0/ Real(ill_dur))
-       icu_risk(Size(targert_icu_risk_index)+1 : 2* Size(targert_icu_risk_index)) = &
-            icu_risk(1:Size(targert_icu_risk_index))
-    End If
-
-    If (control_age_sex == "sex") Then
-       If (.Not.Allocated(icu_risk))Then
-          Allocate(icu_risk(2*19))
-       End If
-       icu_risk(1:2) = iol%transpr_icu_risk(targert_icu_risk_index)
-       icu_risk(1:2) = 1.0 - (1.0 - icu_risk(1:2)) ** (1.0/ ill_dur)
-       icu_risk(Size(targert_icu_risk_index)+1 : 2* Size(targert_icu_risk_index)) = icu_risk(2)
-       icu_risk(1:Size(targert_icu_risk_index)) = icu_risk(1)
-    End If
-
-    If (.Not.Allocated(icu_risk_list%age))Then
-       Allocate(icu_risk_list%age(Size(icu_risk)*ill_dur))
-       Allocate(icu_risk_list%agei(Size(icu_risk)*ill_dur))
-       Allocate(icu_risk_list%sex(Size(icu_risk)*ill_dur))
-       Allocate(icu_risk_list%risk(Size(icu_risk)*ill_dur))
-       Allocate(icu_risk_list%dur(Size(icu_risk)*ill_dur))
-    End If
-
-    Do i = 1, ill_dur
-       icu_risk_list%age((i-1)*Size(icu_risk)+1: i*Size(icu_risk)) = (/iol%transpr_age_gr(targert_icu_risk_index),&
-            iol%transpr_age_gr(targert_icu_risk_index)/)
-       icu_risk_list%sex((i-1)*Size(icu_risk)+1:(i-1)*Size(icu_risk)+19) = 'm'
-       icu_risk_list%sex((i-1)*Size(icu_risk)+20:i*Size(icu_risk)) = 'f'
-       icu_risk_list%risk((i-1)*Size(icu_risk)+1: i*Size(icu_risk)) = icu_risk * icu_per_day(i)
-       icu_risk_list%dur((i-1)*Size(icu_risk)+1: i*Size(icu_risk)) = i
-    End Do
-    Do i = 1,size(icu_risk_list%agei)
-       Read(icu_risk_list%age(i),*)icu_risk_list%agei(i)
-    End Do
-
-    if (PT_DEBUG) then
-       write(un_lf,PTF_SEP)
-       write(un_lf,PTF_M_A)"ICU risk per age group, sex, and duration in ICU."
-       Do ii=1, Size(icu_risk)*ill_dur
-          write(un_lf,'(A4,I4,A2,I3, F6.3 )') &
-               icu_risk_list%age(ii)    , icu_risk_list%agei(ii), icu_risk_list%sex(ii), &
-               icu_risk_list%dur(ii), icu_risk_list%risk(ii)
-       End Do
-    End if
-    
-    Allocate(ICU_risk_pasd( &
-         minval(icu_risk_list%agei):maxval(icu_risk_list%agei),&
-         1:2, &
-         minval(icu_risk_list%dur):maxval(icu_risk_list%dur)))
-
-    ICU_risk_pasd = 0._rk
-    
-    Do ii=1, size(icu_risk_list%sex)
-       if (icu_risk_list%sex(ii) == "m") then
-          ICU_risk_pasd(icu_risk_list%agei(ii),1,icu_risk_list%dur(ii)) = Real(icu_risk_list%risk(ii),rk)
-       Else
-          ICU_risk_pasd(icu_risk_list%agei(ii),2,icu_risk_list%dur(ii)) = Real(icu_risk_list%risk(ii),rk)
-       End if
-    End Do
-    
-    ! init surv_ill
-    If (control_age_sex == "age") Then
-       If (.Not.Allocated(surv_ill))Then
-          Allocate(surv_ill(2*Size(targert_icu_risk_index)))
-       End If
-       surv_ill = (/iol%transpr_surv_ill(targert_icu_risk_index),&
-            iol%transpr_surv_ill(targert_icu_risk_index)/)
-       surv_ill = surv_ill ** (1.0/Real(ill_dur))
-    End If
-
-    If (control_age_sex == "sex") Then
-       If (.Not.Allocated(surv_ill))Then
-          Allocate(surv_ill(2*19))
-       Endif
-       surv_ill(1:2) = iol%transpr_surv_ill(targert_icu_risk_index)
-       surv_ill(1:2) = 1.0 - (1.0 - surv_ill(1:2)) ** (1.0/ Real(ill_dur))
-       surv_ill(Size(targert_icu_risk_index)+1 : 2* Size(targert_icu_risk_index)) = surv_ill(2)
-       surv_ill(1:Size(targert_icu_risk_index)) = surv_ill(1)
-    End If
-    If (.Not.Allocated(surv_ill_list%age))Then
-       Allocate(surv_ill_list%age(Size(surv_ill)))
-       Allocate(surv_ill_list%agei(Size(surv_ill)))
-       Allocate(surv_ill_list%sex(Size(surv_ill)))
-       Allocate(surv_ill_list%risk(Size(surv_ill)))
-    End If
-    surv_ill_list%age = (/iol%transpr_age_gr(targert_icu_risk_index),iol%transpr_age_gr(targert_icu_risk_index)/)
-    surv_ill_list%sex = 'f'
-    surv_ill_list%sex(1:19) = 'm'
-    surv_ill_list%risk  = surv_ill
-    Do i = 1, Size(surv_ill)
-       Read(surv_ill_list%age(i),*)surv_ill_list%agei(i)
-    End Do
-
-    if (PT_DEBUG) then
-       write(un_lf,PTF_SEP)
-       write(un_lf,PTF_M_A)"Chance of survival per age group and sex."
-       Do ii=1, 2*19
-          write(un_lf,'(A4,I4, A2,F6.3)') &
-               surv_ill_list%age(ii)    , surv_ill_list%agei(ii), surv_ill_list%sex(ii), &
-               surv_ill_list%risk(ii)
-       End Do
-    End if
-    
-    allocate(surv_ill_pas(minval(surv_ill_list%agei):maxval(surv_ill_list%agei),1:2))
-    Do ii=1, 2*19
-       if (surv_ill_list%sex(ii) == "m") then
-          surv_ill_pas(surv_ill_list%agei(ii),1) = surv_ill_list%risk(ii)
-       Else
-          surv_ill_pas(surv_ill_list%agei(ii),2) = surv_ill_list%risk(ii)
-       End if
-    End Do
-    
-    ! init surv_icu
-    If (control_age_sex == "age") Then
-       If (.Not.Allocated(surv_icu))Then
-          Allocate(surv_icu(2*Size(targert_icu_risk_index)))
-       End If
-       surv_icu= (/iol%transpr_surv_icu(targert_icu_risk_index),&
-            iol%transpr_surv_icu(targert_icu_risk_index)/)
-       surv_icu = surv_icu ** (1/Real(ill_dur))
-    End If
-
-    If (control_age_sex == "sex") Then
-       If (.Not.Allocated(surv_icu))Then
-          Allocate(surv_icu(2*19))
-       End If
-       surv_icu(1:2) = iol%transpr_surv_icu(targert_icu_risk_index)
-       surv_icu(1:2) = 1.0 - (1.0 - surv_icu(1:2)) ** (1.0/ Real(ill_dur))
-       surv_icu(Size(targert_icu_risk_index)+1 : 2* Size(targert_icu_risk_index)) = surv_icu(2)
-       surv_icu(1:Size(targert_icu_risk_index)) = surv_icu(1)
-    End If
-    If (.Not.Allocated(surv_icu_list%age))Then
-       Allocate(surv_icu_list%age(Size(surv_icu)))
-       Allocate(surv_icu_list%agei(Size(surv_icu)))
-       Allocate(surv_icu_list%sex(Size(surv_icu)))
-       Allocate(surv_icu_list%risk(Size(surv_icu)))
-    End If
-    surv_icu_list%age = (/iol%transpr_age_gr(targert_icu_risk_index),iol%transpr_age_gr(targert_icu_risk_index)/)
-    surv_icu_list%sex = 'f'
-    surv_icu_list%sex(1:19) = 'm'
-    surv_icu_list%risk  = surv_icu
-    Do i = 1, size(surv_icu)
-       Read(surv_icu_list%age(i),*)surv_icu_list%agei(i)
-    End Do
-
-    if (PT_DEBUG) then
-       write(un_lf,PTF_SEP)
-       write(un_lf,PTF_M_A)"Chance of survival in ICU per age group and sex."
-       Do ii=1, 2*19
-          write(un_lf,'(A4,I4,A2,F6.3)') &
-               surv_icu_list%age(ii),  surv_icu_list%agei(ii)  , surv_icu_list%sex(ii), &
-               surv_icu_list%risk(ii)
-       End Do
-    End if
-    
-    allocate(surv_icu_pas(minval(surv_icu_list%agei):maxval(surv_icu_list%agei),1:2))
-    Do ii=1, 2*19
-       if (surv_icu_list%sex(ii) == "m") then
-          surv_icu_pas(surv_icu_list%agei(ii),1) = surv_icu_list%risk(ii)
-       Else
-          surv_icu_pas(surv_icu_list%agei(ii),2) = surv_icu_list%risk(ii)
-       End if
-    End Do
+    !** ------------------------------------------------------------------------
+    !** Init survival chance of icu state by age and sex  ----------------------
+    call init_surv_icu(control_age_sex, iol, ill_dur, surv_icu_pas)
 
     num_counties = Size(counties_index)
     
@@ -525,7 +264,7 @@ Contains
        dist_id_cref(counties_index(ii)) = ii
     End Do
 
-    l_seed_date = seed_date
+    l_seed_date = seed_date_mod
     
 !!!=============================================================================
 !!! Iteration over parameter space
@@ -908,7 +647,7 @@ Contains
 
        Do i = 1,n_change
 
-          getchange = iol%R0_effect%data(i,(counties_index/1000))
+          getchange = R0_effects(i,(counties_index/1000))
 
           gettime = generate_seq(R0change(1,i),R0change(2,i),1)
 
@@ -993,13 +732,13 @@ Contains
 
   Subroutine write_data_v2(healthy_cases_final,iter_pass_handle,R0Change,counties_index,type_file)
     Real,Dimension(:)        :: iter_pass_handle(:)
-    Real,Dimension(:,:)      :: R0Change
+    Real(kind=rk),Dimension(:,:)      :: R0Change
     Real,Allocatable         :: R0change_rep(:,:),R0change_exp(:,:),temp_output(:)
     Integer,Dimension(:,:,:) :: healthy_cases_final
     Integer,Dimension(:)     :: counties_index
     Integer                  :: iter
     Integer                  :: type_file
-
+ 
     Integer :: county_size, count 
     Character*15                :: iter_char(6)
     Character*5,Allocatable     :: R0change_name(:)
@@ -1008,7 +747,7 @@ Contains
 
     Character*10,Allocatable    :: Label(:)
 
-    Integer date_time(8),i,j,k
+    Integer date_time(8),i,j
     Character*10 b(3)
     Character*4 year
     Character*2 day,month
@@ -1126,8 +865,8 @@ Contains
        time_n, pop_size, n_counties, counties, &
        R0matrix, connect, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, &
        sim, &
-       healthy_cases, inf_noncon_cases,inf_contag_cases, ill_contag_cases,&
-       ill_ICU_cases, immune_cases,    dead_cases, it_ss)
+       healthy_cases, inf_noncon_cases, inf_contag_cases, ill_contag_cases,&
+       ill_ICU_cases, immune_cases    , dead_cases      , it_ss)
     
     Integer(Kind=ik)                       , Intent(In) :: time_n
     Integer(Kind=ik)                       , Intent(In) :: pop_size
@@ -1570,5 +1309,347 @@ Contains
     End Do
 
   End Subroutine summary_2_int
+
+  Subroutine init_ICU_risk(&
+       control_age_sex, iol, ill_dur, icu_per_day, &
+       ICU_risk_pasd)
+
+    character(len=*), intent(in)                 :: control_age_sex
+    Type(iols)      , intent(in)                 :: iol
+    Integer         , intent(in)                 :: ill_dur
+    Integer(Kind=ik), intent(in), Dimension(:)   :: icu_per_day
+
+    Real(Kind=rk), Allocatable, Dimension(:,:,:), Intent(Out) :: ICU_risk_pasd
+    
+    Character(len=2), Dimension(:), Allocatable :: ch_age
+    Character(Len=5), Dimension(:), Allocatable :: ch_sex
+
+    Integer, Dimension(:), Allocatable          :: temp,temp1
+    Integer, Dimension(:), Allocatable          :: target_icu_risk_index
+
+    Real   , Dimension(:), Allocatable          :: icu_risk
+
+    Type(icu_risk_lists)                        :: icu_risk_list
+
+    integer                                     :: ii
+    !** ------------------------------------------------------------------------
+    
+    If (control_age_sex == "NONE") Then
+       ch_age = (/"total"/)
+       ch_sex = (/"total"/)
+    End If
+
+    If (control_age_sex == "age") Then
+       !     ch_age = generate_seq(0,90,5)
+       ch_age = (/"0 ","5 ","10","15","20","25","30","35",&
+            "40","45","50","55","60",&
+            "65","70","75","80","85","90"/)
+       ch_sex = (/"total"/)
+    End If
+
+    If (control_age_sex == "sex") Then
+       ch_age = (/"total"/)
+       ch_sex = (/"m","f"/)
+    End If
+
+    If (control_age_sex == "age_sex") Then
+       !     ch_age = generate_seq(0,90,5)
+       ch_age = (/"0 ","5 ","10","15","20","25","30","35",&
+            "40","45","50","55","60",&
+            "65","70","75","80","85","90"/)
+       ch_sex = (/"m","f"/)
+    End If
+
+    temp = get_index(iol%transpr_age_gr,ch_age)
+
+    temp1= get_index(iol%transpr_sex,ch_sex)
+
+    target_icu_risk_index = find_and(temp,temp1)
+
+    If (control_age_sex == "age") Then
+       If (.Not.Allocated(icu_risk))Then
+          Allocate(icu_risk(2*Size(target_icu_risk_index)))
+       Endif
+       icu_risk(1:Size(target_icu_risk_index)) = iol%transpr_icu_risk(target_icu_risk_index)
+       icu_risk(1:Size(target_icu_risk_index)) = &
+            1.0 - (1.0 - icu_risk(1:Size(target_icu_risk_index))) ** (1.0/ Real(ill_dur))
+       icu_risk(Size(target_icu_risk_index)+1 : 2* Size(target_icu_risk_index)) = &
+            icu_risk(1:Size(target_icu_risk_index))
+    End If
+
+    If (control_age_sex == "sex") Then
+       If (.Not.Allocated(icu_risk))Then
+          Allocate(icu_risk(2*19))
+       End If
+       icu_risk(1:2) = iol%transpr_icu_risk(target_icu_risk_index)
+       icu_risk(1:2) = 1.0 - (1.0 - icu_risk(1:2)) ** (1.0/ ill_dur)
+       icu_risk(Size(target_icu_risk_index)+1 : 2* Size(target_icu_risk_index)) = icu_risk(2)
+       icu_risk(1:Size(target_icu_risk_index)) = icu_risk(1)
+    End If
+
+    If (.Not.Allocated(icu_risk_list%age))Then
+       Allocate(icu_risk_list%age(Size(icu_risk)*ill_dur))
+       Allocate(icu_risk_list%agei(Size(icu_risk)*ill_dur))
+       Allocate(icu_risk_list%sex(Size(icu_risk)*ill_dur))
+       Allocate(icu_risk_list%risk(Size(icu_risk)*ill_dur))
+       Allocate(icu_risk_list%dur(Size(icu_risk)*ill_dur))
+    End If
+
+    Do ii = 1, ill_dur
+       icu_risk_list%age((ii-1)*Size(icu_risk)+1: ii*Size(icu_risk)) = (/iol%transpr_age_gr(target_icu_risk_index),&
+            iol%transpr_age_gr(target_icu_risk_index)/)
+       icu_risk_list%sex((ii-1)*Size(icu_risk)+1:(ii-1)*Size(icu_risk)+19) = 'm'
+       icu_risk_list%sex((ii-1)*Size(icu_risk)+20:ii*Size(icu_risk)) = 'f'
+       icu_risk_list%risk((ii-1)*Size(icu_risk)+1: ii*Size(icu_risk)) = icu_risk * icu_per_day(ii)
+       icu_risk_list%dur((ii-1)*Size(icu_risk)+1: ii*Size(icu_risk)) = ii
+    End Do
+    Do ii = 1,size(icu_risk_list%agei)
+       Read(icu_risk_list%age(ii),*)icu_risk_list%agei(ii)
+    End Do
+
+    if (PT_DEBUG) then
+       write(un_lf,PTF_SEP)
+       write(un_lf,PTF_M_A)"ICU risk per age group, sex, and duration in ICU."
+       Do ii=1, Size(icu_risk)*ill_dur
+          write(un_lf,'(A4,I4,A2,I3, F6.3 )') &
+               icu_risk_list%age(ii)    , icu_risk_list%agei(ii), icu_risk_list%sex(ii), &
+               icu_risk_list%dur(ii), icu_risk_list%risk(ii)
+       End Do
+    End if
+    
+    Allocate(ICU_risk_pasd( &
+         minval(icu_risk_list%agei):maxval(icu_risk_list%agei),&
+         1:2, &
+         minval(icu_risk_list%dur):maxval(icu_risk_list%dur)))
+
+    ICU_risk_pasd = 0._rk
+    
+    Do ii=1, size(icu_risk_list%sex)
+       if (icu_risk_list%sex(ii) == "m") then
+          ICU_risk_pasd(icu_risk_list%agei(ii),1,icu_risk_list%dur(ii)) = Real(icu_risk_list%risk(ii),rk)
+       Else
+          ICU_risk_pasd(icu_risk_list%agei(ii),2,icu_risk_list%dur(ii)) = Real(icu_risk_list%risk(ii),rk)
+       End if
+    End Do
+    
+  End Subroutine init_ICU_risk
+
+  Subroutine init_surv_ill(&
+       control_age_sex, iol, ill_dur, &
+       surv_ill_pas)
+
+    character(len=*), intent(in)                 :: control_age_sex
+    Type(iols)      , intent(in)                 :: iol
+    Integer         , intent(in)                 :: ill_dur
+
+    Real(Kind=rk), Allocatable, Dimension(:,:), Intent(Out) :: surv_ill_pas
+    
+    Character(len=2), Dimension(:), Allocatable :: ch_age
+    Character(Len=5), Dimension(:), Allocatable :: ch_sex
+
+    Integer, Dimension(:), Allocatable          :: temp,temp1
+    Integer, Dimension(:), Allocatable          :: target_icu_risk_index
+
+    Real   , Dimension(:), Allocatable          :: surv_ill
+
+    Type(icu_risk_lists)                        :: surv_ill_list
+
+    integer                                     :: ii
+    !** ------------------------------------------------------------------------
+    
+
+    If (control_age_sex == "NONE") Then
+       ch_age = (/"total"/)
+       ch_sex = (/"total"/)
+    End If
+    
+    If (control_age_sex == "age") Then
+       !     ch_age = generate_seq(0,90,5)
+       ch_age = (/"0 ","5 ","10","15","20","25","30","35",&
+            "40","45","50","55","60",&
+            "65","70","75","80","85","90"/)
+       ch_sex = (/"total"/)
+    End If
+
+    If (control_age_sex == "sex") Then
+       ch_age = (/"total"/)
+       ch_sex = (/"m","f"/)
+    End If
+
+    If (control_age_sex == "age_sex") Then
+       !     ch_age = generate_seq(0,90,5)
+       ch_age = (/"0 ","5 ","10","15","20","25","30","35",&
+            "40","45","50","55","60",&
+            "65","70","75","80","85","90"/)
+       ch_sex = (/"m","f"/)
+    End If
+
+    temp = get_index(iol%transpr_age_gr,ch_age)
+
+    temp1= get_index(iol%transpr_sex,ch_sex)
+
+    target_icu_risk_index = find_and(temp,temp1)
+    ! init surv_ill
+    If (control_age_sex == "age") Then
+       If (.Not.Allocated(surv_ill))Then
+          Allocate(surv_ill(2*Size(target_icu_risk_index)))
+       End If
+       surv_ill = (/iol%transpr_surv_ill(target_icu_risk_index),&
+            iol%transpr_surv_ill(target_icu_risk_index)/)
+       surv_ill = surv_ill ** (1.0/Real(ill_dur))
+    End If
+
+    If (control_age_sex == "sex") Then
+       If (.Not.Allocated(surv_ill))Then
+          Allocate(surv_ill(2*19))
+       Endif
+       surv_ill(1:2) = iol%transpr_surv_ill(target_icu_risk_index)
+       surv_ill(1:2) = 1.0 - (1.0 - surv_ill(1:2)) ** (1.0/ Real(ill_dur))
+       surv_ill(Size(target_icu_risk_index)+1 : 2* Size(target_icu_risk_index)) = surv_ill(2)
+       surv_ill(1:Size(target_icu_risk_index)) = surv_ill(1)
+    End If
+    If (.Not.Allocated(surv_ill_list%age))Then
+       Allocate(surv_ill_list%age(Size(surv_ill)))
+       Allocate(surv_ill_list%agei(Size(surv_ill)))
+       Allocate(surv_ill_list%sex(Size(surv_ill)))
+       Allocate(surv_ill_list%risk(Size(surv_ill)))
+    End If
+    surv_ill_list%age = (/iol%transpr_age_gr(target_icu_risk_index),iol%transpr_age_gr(target_icu_risk_index)/)
+    surv_ill_list%sex = 'f'
+    surv_ill_list%sex(1:19) = 'm'
+    surv_ill_list%risk  = surv_ill
+    Do ii = 1, Size(surv_ill)
+       Read(surv_ill_list%age(ii),*)surv_ill_list%agei(ii)
+    End Do
+
+    if (PT_DEBUG) then
+       write(un_lf,PTF_SEP)
+       write(un_lf,PTF_M_A)"Chance of survival per age group and sex."
+       Do ii=1, 2*19
+          write(un_lf,'(A4,I4, A2,F6.3)') &
+               surv_ill_list%age(ii)    , surv_ill_list%agei(ii), surv_ill_list%sex(ii), &
+               surv_ill_list%risk(ii)
+       End Do
+    End if
+    
+    allocate(surv_ill_pas(minval(surv_ill_list%agei):maxval(surv_ill_list%agei),1:2))
+    Do ii=1, 2*19
+       if (surv_ill_list%sex(ii) == "m") then
+          surv_ill_pas(surv_ill_list%agei(ii),1) = surv_ill_list%risk(ii)
+       Else
+          surv_ill_pas(surv_ill_list%agei(ii),2) = surv_ill_list%risk(ii)
+       End if
+    End Do
+
+  End Subroutine init_surv_ill
+
+  subroutine init_surv_icu(&
+       control_age_sex, iol, ill_dur, &
+       surv_icu_pas)
+    
+    character(len=*), intent(in)                 :: control_age_sex
+    Type(iols)      , intent(in)                 :: iol
+    Integer         , intent(in)                 :: ill_dur
+
+    Real(Kind=rk), Allocatable, Dimension(:,:), Intent(Out) :: surv_icu_pas
+    
+    Character(len=2), Dimension(:), Allocatable :: ch_age
+    Character(Len=5), Dimension(:), Allocatable :: ch_sex
+
+    Integer, Dimension(:), Allocatable          :: temp,temp1
+    Integer, Dimension(:), Allocatable          :: target_icu_risk_index
+
+    Real   , Dimension(:), Allocatable          :: surv_icu
+
+    Type(icu_risk_lists)                        :: surv_icu_list
+
+    integer                                     :: ii
+    !** ------------------------------------------------------------------------
+    
+    If (control_age_sex == "NONE") Then
+       ch_age = (/"total"/)
+       ch_sex = (/"total"/)
+    End If
+    
+    If (control_age_sex == "age") Then
+       !     ch_age = generate_seq(0,90,5)
+       ch_age = (/"0 ","5 ","10","15","20","25","30","35",&
+            "40","45","50","55","60",&
+            "65","70","75","80","85","90"/)
+       ch_sex = (/"total"/)
+    End If
+
+    If (control_age_sex == "sex") Then
+       ch_age = (/"total"/)
+       ch_sex = (/"m","f"/)
+    End If
+
+    If (control_age_sex == "age_sex") Then
+       !     ch_age = generate_seq(0,90,5)
+       ch_age = (/"0 ","5 ","10","15","20","25","30","35",&
+            "40","45","50","55","60",&
+            "65","70","75","80","85","90"/)
+       ch_sex = (/"m","f"/)
+    End If
+
+    temp = get_index(iol%transpr_age_gr,ch_age)
+
+    temp1= get_index(iol%transpr_sex,ch_sex)
+
+    target_icu_risk_index = find_and(temp,temp1)
+
+    ! init surv_icu
+    If (control_age_sex == "age") Then
+       If (.Not.Allocated(surv_icu))Then
+          Allocate(surv_icu(2*Size(target_icu_risk_index)))
+       End If
+       surv_icu= (/iol%transpr_surv_icu(target_icu_risk_index),&
+            iol%transpr_surv_icu(target_icu_risk_index)/)
+       surv_icu = surv_icu ** (1/Real(ill_dur))
+    End If
+
+    If (control_age_sex == "sex") Then
+       If (.Not.Allocated(surv_icu))Then
+          Allocate(surv_icu(2*19))
+       End If
+       surv_icu(1:2) = iol%transpr_surv_icu(target_icu_risk_index)
+       surv_icu(1:2) = 1.0 - (1.0 - surv_icu(1:2)) ** (1.0/ Real(ill_dur))
+       surv_icu(Size(target_icu_risk_index)+1 : 2* Size(target_icu_risk_index)) = surv_icu(2)
+       surv_icu(1:Size(target_icu_risk_index)) = surv_icu(1)
+    End If
+    If (.Not.Allocated(surv_icu_list%age))Then
+       Allocate(surv_icu_list%age(Size(surv_icu)))
+       Allocate(surv_icu_list%agei(Size(surv_icu)))
+       Allocate(surv_icu_list%sex(Size(surv_icu)))
+       Allocate(surv_icu_list%risk(Size(surv_icu)))
+    End If
+    surv_icu_list%age = (/iol%transpr_age_gr(target_icu_risk_index),iol%transpr_age_gr(target_icu_risk_index)/)
+    surv_icu_list%sex = 'f'
+    surv_icu_list%sex(1:19) = 'm'
+    surv_icu_list%risk  = surv_icu
+    Do ii = 1, size(surv_icu)
+       Read(surv_icu_list%age(ii),*)surv_icu_list%agei(ii)
+    End Do
+
+    if (PT_DEBUG) then
+       write(un_lf,PTF_SEP)
+       write(un_lf,PTF_M_A)"Chance of survival in ICU per age group and sex."
+       Do ii=1, 2*19
+          write(un_lf,'(A4,I4,A2,F6.3)') &
+               surv_icu_list%age(ii),  surv_icu_list%agei(ii)  , surv_icu_list%sex(ii), &
+               surv_icu_list%risk(ii)
+       End Do
+    End if
+    
+    allocate(surv_icu_pas(minval(surv_icu_list%agei):maxval(surv_icu_list%agei),1:2))
+    Do ii=1, 2*19
+       if (surv_icu_list%sex(ii) == "m") then
+          surv_icu_pas(surv_icu_list%agei(ii),1) = surv_icu_list%risk(ii)
+       Else
+          surv_icu_pas(surv_icu_list%agei(ii),2) = surv_icu_list%risk(ii)
+       End if
+    End Do
+
+  end subroutine init_surv_icu
   
 End Module kernel
