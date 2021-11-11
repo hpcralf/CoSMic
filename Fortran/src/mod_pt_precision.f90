@@ -30,4 +30,6 @@ Module pt_precision
   !> Maximum character length used in param_tree library
   Integer, Parameter :: pt_mcl = 512
 
+  Integer, Parameter :: pt_ce = 512/4
+  
 End Module pt_precision

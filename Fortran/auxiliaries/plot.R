@@ -63,8 +63,9 @@ pspace        <- readRDS(paste(input.dir,dir(input.dir,pattern="pspace"),sep="/"
 ################################################################################
 ### Load Fortran results                                                       #
 ################################################################################
-setwd("../output-1P/")
 
+setwd("../output/")
+date.str<-"20211005"
 icu        <- read.table(paste0(date.str,"ill_ICU_cases.csv"),head=TRUE,sep=",")
 ill_contag <- read.table(paste0(date.str,"ill_contag_cases.csv"),head=TRUE,sep=",")
 inf_contag <- read.table(paste0(date.str,"inf_contag_cases.csv"),head=TRUE,sep=",")
@@ -72,12 +73,13 @@ inf_noncon <- read.table(paste0(date.str,"inf_noncon_cases.csv"),head=TRUE,sep="
 healthy    <- read.table(paste0(date.str,"healthy_cases.csv"),head=TRUE,sep=",")
 dead       <- read.table(paste0(date.str,"dead_cases.csv"),head=TRUE,sep=",")
 immune     <- read.table(paste0(date.str,"immune_cases.csv"),head=TRUE,sep=",")
-
+icu$X<-1
 rr<-list("healthy"=healthy,"inf_noncon"=inf_noncon,
          "inf_contag"=inf_contag,"ill_contag"=ill_contag,
          "ill_ICU"=icu,"dead"=dead,"immune"=immune)
 
-setwd("../output-10p/")
+setwd("../output-100p/")
+date.str<-"20211001"
 icu        <- read.table(paste0(date.str,"ill_ICU_cases.csv"),head=TRUE,sep=",")
 ill_contag <- read.table(paste0(date.str,"ill_contag_cases.csv"),head=TRUE,sep=",")
 inf_contag <- read.table(paste0(date.str,"inf_contag_cases.csv"),head=TRUE,sep=",")
@@ -85,7 +87,7 @@ inf_noncon <- read.table(paste0(date.str,"inf_noncon_cases.csv"),head=TRUE,sep="
 healthy    <- read.table(paste0(date.str,"healthy_cases.csv"),head=TRUE,sep=",")
 dead       <- read.table(paste0(date.str,"dead_cases.csv"),head=TRUE,sep=",")
 immune     <- read.table(paste0(date.str,"immune_cases.csv"),head=TRUE,sep=",")
-
+icu$X<-2
 rr <- list("healthy"=rbind(rr$healthy,healthy),
            "inf_noncon"=rbind(rr$inf_noncon,inf_noncon),
            "inf_contag"=rbind(rr$inf_contag,inf_contag),
@@ -94,6 +96,36 @@ rr <- list("healthy"=rbind(rr$healthy,healthy),
            "dead"=rbind(rr$dead,dead),
            "immune"=rbind(rr$immune,immune))
 
+plots.by.country (outfile         = "plot.by.country.pdf",
+                  sp              = sp,
+                  seed_icu        = iol$icu.cases.by.country,
+                  seed_dea        = iol$dead.cases.by.country,
+                  iol             = iol,
+                  pspace          = pspace,
+                  rr              = rr,
+                  ind.states      = c(5),
+                  global.plot     = FALSE,
+                  split.in = "X")
+
+## Every diagram its own scale ------------------------------
+plots.by.state(outfile      = "plot.by.state.pdf",
+               sp           = sp,
+               seed_icu     = iol$icu.cases.by.state,
+               seed_dea     = NULL,
+               iol          = iol,
+               pspace       = pspace,
+               rr           = rr,
+               region       = "state",
+               fix.lim      = FALSE,
+               filtered     = FALSE,
+               Sec.Axis=c("RMS"),
+               silent=FALSE,
+               fk.cases=rep(1/ 7,  7),
+               fk.sec  =rep(1/15, 15),
+               ind.states   = c(5),
+               split.in = "X")
+
+quit()
 
 setwd("../output-20p/")
 icu        <- read.table(paste0(date.str,"ill_ICU_cases.csv"),head=TRUE,sep=",")
@@ -175,3 +207,64 @@ plots.by.state(outfile      = "plot.by.state.pdf",
                fk.sec  =rep(1/15, 15),
                ind.states   = c(1,2,3,4,5,7,6),
                split.in = "sam_size")
+
+
+
+setwd("../output/")
+icu        <- read.table(paste0(date.str,"ill_ICU_cases.csv"),head=TRUE,sep=",")
+ill_contag <- read.table(paste0(date.str,"ill_contag_cases.csv"),head=TRUE,sep=",")
+inf_contag <- read.table(paste0(date.str,"inf_contag_cases.csv"),head=TRUE,sep=",")
+inf_noncon <- read.table(paste0(date.str,"inf_noncon_cases.csv"),head=TRUE,sep=",")
+healthy    <- read.table(paste0(date.str,"healthy_cases.csv"),head=TRUE,sep=",")
+dead       <- read.table(paste0(date.str,"dead_cases.csv"),head=TRUE,sep=",")
+immune     <- read.table(paste0(date.str,"immune_cases.csv"),head=TRUE,sep=",")
+
+rr<-list("healthy"=healthy,"inf_noncon"=inf_noncon,
+         "inf_contag"=inf_contag,"ill_contag"=ill_contag,
+         "ill_ICU"=icu,"dead"=dead,"immune"=immune)
+
+plots.by.country (outfile         = "plot.by.country.pdf",
+                  sp              = sp,
+                  seed_icu        = iol$icu.cases.by.country,
+                  seed_dea        = iol$dead.cases.by.country,
+                  iol             = iol,
+                  pspace          = pspace,
+                  rr              = rr,
+                  ind.states      = c(1,2,3,4,5,7,6),
+                  global.plot     = TRUE)
+
+## Every diagram its own scale ------------------------------
+plots.by.state(outfile      = "plot.by.state.pdf",
+               sp           = sp,
+               seed_icu     = iol$icu.cases.by.state,
+               seed_dea     = NULL,
+               iol          = iol,
+               pspace       = pspace,
+               rr           = rr,
+               region       = "state",
+               fix.lim      = FALSE,
+               filtered     = FALSE,
+               Sec.Axis=c("RMS"),
+               silent=FALSE,
+               fk.cases=rep(1/ 7,  7),
+               fk.sec  =rep(1/15, 15),
+               ind.states   = c(1,2,3,4,5,7,6),
+               split.in = "sam_size")
+quit()
+
+
+plots.by.state(outfile      = "plot.by.state.pdf",
+               sp           = sp,
+               seed_icu     = NULL,
+               seed_dea     = NULL,
+               iol          = iol,
+               pspace       = pspace,
+               rr           = rr,
+               region       = "state",
+               fix.lim      = FALSE,
+               filtered     = FALSE,
+               ind.states   = c(5),
+               split.in = "model")
+rr<-list("healthy"=healthy,"inf_noncon"=inf_noncon,
+          "inf_contag"=inf_contag,"ill_contag"=ill_contag,"ill_ICU"=rr.il_ICU,"dead"=dead,"immune"=immune ))
+

@@ -34,8 +34,8 @@ Module pt_constants
   Character(Len=*), Parameter :: PTF_W_A    = "('WW ',A)"
   Character(Len=*), Parameter :: PTF_W_AI0  = "('WW ',*(A,1X,I0))"
 
-  Character(Len=*), Parameter :: PTF_M_A    = "('MM ',A)"
-  Character(Len=*), Parameter :: PTF_M_AI0  = "('MM ',*(A,1X,I0,1X))"
+  Character(Len=*), Parameter :: PTF_M_A    = "('MM ',*(A,1X))"
+  Character(Len=*), Parameter :: PTF_M_AI0  = "('MM ',A,1X,*(I0,1X))"
   Character(Len=*), Parameter :: PTF_M_AF0  = "('MM ',*(A,1X,F0.16,1X))"
 
   Character(Len=*), Parameter :: PTF_TIME   = "('MM ',A,1X,F0.6,' sec')"

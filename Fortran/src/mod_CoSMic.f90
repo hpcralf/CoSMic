@@ -57,6 +57,7 @@ Module kernel
   Use support_fun
   use qsort_c_module
   use urandom
+  use CoSMic_IO
   
   use OMP_LIB
   
@@ -74,8 +75,7 @@ Module kernel
      Integer,Allocatable             :: dist_id(:)
      Integer,Allocatable             :: dist_id_rn(:)
      Character,Allocatable           :: sex(:)
-     Character*2,Allocatable         :: age(:)
-     Integer(kind=1),Allocatable             :: agei(:)
+     Integer(kind=1),Allocatable             :: age(:)
      Integer(kind=1),Allocatable             :: t1(:)
      Integer(kind=1),Allocatable             :: t2(:)
      Integer,Allocatable             :: d(:)
@@ -97,20 +97,18 @@ Module kernel
 Contains
   
   Subroutine COVID19_Spatial_Microsimulation_for_Germany( &
-       iol, counties_index, &
+       iol, &
        iter , &
        inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
        less_contagious, R0_force, immune_stop, &
        R0change, R0delay ,R0delay_days, R0delay_type, &
-       control_age_sex, seed_date, seed_before, sam_size, R0, &
-       R0_effects)
+       control_age_sex, seed_date, seed_before, sam_size, R0)
 
     !===========================================================================
     ! Declaration
     !===========================================================================
- 
-    Type(iols)                                                :: iol
-    Integer(kind=ik)             , Dimension(:)  , intent(in) :: counties_index
+
+    Type(iols), Target                                        :: iol
     Integer(kind=ik)                             , intent(in) :: iter
     Integer(kind=ik)                             , intent(in) :: inf_dur
     Integer(kind=ik)                             , intent(in) :: cont_dur
@@ -129,12 +127,13 @@ Contains
     Integer(kind=ik)                             , intent(in) :: seed_before    
     Integer(kind=ik)                             , intent(in) :: sam_size
     Real(kind=rk)                                , intent(in) :: R0
-    Real(kind=rk),    Allocatable, Dimension(:,:), intent(in) :: R0_effects
 
     !---------------------------------------------------------------------------
-    
+
     Integer(kind=ik)   :: i, j, index, temp_int,icounty,county,it_ss,status
     character(len=:), Allocatable   :: seed_date_mod
+    Integer(kind=ik), Allocatable , Dimension(:) :: counties_index
+    Real(kind=rk),    Allocatable, Dimension(:,:) :: R0_effects
 
     Character(Len=10)             :: seed_before_char,seed_temp
     Character(Len=10),Allocatable :: seed_seq(:),seed_inf_cont_seq(:),seed_inf_ncont_seq(:)
@@ -180,7 +179,7 @@ Contains
     Type(tTimer)                    :: timer
 
     Integer(kind=ik), Allocatable, Dimension(:)     :: dist_id_cref 
-    
+
     Integer(kind=ik)                                :: pop_size
     Integer(kind=ik)                                :: num_counties
     Integer(kind=ik)                                :: ii,jj,kk
@@ -188,6 +187,24 @@ Contains
     Real(Kind=rk)   , Allocatable, Dimension(:,:)   :: surv_ill_pas
     Real(Kind=rk)   , Allocatable, Dimension(:,:,:) :: ICU_risk_pasd
     Real(Kind=rk)   , Allocatable, Dimension(:,:)   :: surv_icu_pas
+
+    Character(Len=:), allocatable, Dimension(:)     :: inf_seed_date
+    Integer(kind=ik), pointer    , Dimension(:)     :: inf_seed_distid
+    Integer(kind=ik), pointer    , Dimension(:)     :: inf_seed_cases
+
+    Character(Len=:), allocatable, Dimension(:)     :: dea_seed_date
+    Integer(kind=ik), pointer    , Dimension(:)     :: dea_seed_distid
+    Integer(kind=ik), pointer    , Dimension(:)     :: dea_seed_cases
+
+    Integer(kind=ik), pointer    , Dimension(:)     :: pop_total    
+    Integer(kind=ik), pointer    , Dimension(:)     :: pop_distid
+    Character(Len=:), allocatable, Dimension(:)     :: pop_sex
+    Integer(kind=ik), pointer    , Dimension(:)     :: pop_age
+    
+    Character(Len=:), allocatable, Dimension(:)     :: transpr_age_gr
+    Character(Len=:), allocatable, Dimension(:)     :: transpr_sex
+
+    Integer(kind=ik), pointer    , Dimension(:)     :: connect_work_distid
     
     !===========================================================================
     ! Implementation
@@ -210,7 +227,7 @@ Contains
        write(un_lf,PTF_sep)
        write(un_lf,PTF_M_A)"Seed sequence for ill cases:",seed_seq
     End if
-    
+
     !** Derive dates of infections for those that are inf_cont, but --
     !** are not yet aware about it (will be registered the next     --
     !** two days)                                                   --
@@ -221,7 +238,7 @@ Contains
        write(un_lf,PTF_sep)
        write(un_lf,PTF_M_A)"Seed sequence for infected contagious cases:",seed_inf_cont_seq
     End if
-    
+
     !** Derive dates of infections for those that are inf_cont, but --
     !** are not yet aware about it (will be registered the next     --
     !** 3-5 days)                                                   --
@@ -244,8 +261,10 @@ Contains
     !** Init survival chance of icu state by age and sex  ----------------------
     call init_surv_icu(control_age_sex, iol, ill_dur, surv_icu_pas)
 
+    counties_index = get_int_table_column(iol%counties,'dist_id')
+
     num_counties = Size(counties_index)
-    
+
     Allocate(healthy_cases_final(num_counties,time_n,iter))
     Allocate(inf_noncon_cases_final(num_counties,time_n,iter))
     Allocate(inf_contag_cases_final(num_counties,time_n,iter))
@@ -254,32 +273,217 @@ Contains
     Allocate(immune_cases_final(num_counties,time_n,iter))
     Allocate(dead_cases_final(num_counties,time_n,iter))
 
-    max_date = find_max_date(iol%seed_date)
+    R0_effects = table_to_real_array(iol%R0_effect)
+
+    inf_seed_date = get_char_column(iol%seed,'date')
+
+    max_date = find_max_date(inf_seed_date)
 
     !** Allocate and setup dist_id cross reference -----------------------------
     allocate(dist_id_cref(minval(counties_index):maxval(counties_index)))
     dist_id_cref = -1
-    
+
     Do ii = 1, num_counties
        dist_id_cref(counties_index(ii)) = ii
     End Do
 
     l_seed_date = seed_date_mod
+
+    !!=======================================================================
+    !! seed infections
+
+    inf_seed_distid => get_int_column_pointer(iol%seed,'distid')
+    inf_seed_cases  => get_int_column_pointer(iol%seed,'cases')
     
+    temp = get_index(inf_seed_date,seed_seq)
+    seed_ill%dist_id  = inf_seed_distid(temp)
+    seed_ill%date     = inf_seed_date(temp)
+    seed_ill%cases    = inf_seed_cases(temp)
+
+    write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases),size(seed_ill%cases)
+
+    temp = get_index(inf_seed_date,seed_inf_cont_seq)
+
+    seed_inf_cont%dist_id  = inf_seed_distid(temp)
+    seed_inf_cont%date     = inf_seed_date(temp)
+    seed_inf_cont%cases    = inf_seed_cases(temp)
+
+    write(*,*)"sum(seed_inf_cont%cases):",sum(seed_inf_cont%cases)
+
+    temp = get_index(inf_seed_date,seed_inf_ncont_seq)
+    seed_inf_ncont%dist_id  = inf_seed_distid(temp)
+    seed_inf_ncont%date     = inf_seed_date(temp)
+    seed_inf_ncont%cases    = inf_seed_cases(temp)
+
+    write(*,*)"sum(seed_inf_ncont%cases):",sum(seed_inf_ncont%cases)
+
+    dea_seed_date   =  get_char_column(iol%death,'date')
+    dea_seed_distid => get_int_column_pointer(iol%death,"distid")
+    dea_seed_cases  => get_int_column_pointer(iol%death,'deaths')
+
+    temp_date  = get_start_date(dea_seed_date)
+    
+    seed_d_seq = generate_seq(temp_date,add_date(l_seed_date,-1))
+    temp       = get_index(dea_seed_date,seed_d_seq)
+
+    seed_death%dist_id = dea_seed_distid(temp)
+    seed_death%date    = dea_seed_date(temp)
+    seed_death%cases   = dea_seed_cases(temp)
+
+    If (Allocated(seed_ill_dur)) Deallocate(seed_ill_dur)
+
+    Allocate(seed_ill_dur(Size(seed_ill%date)))
+
+    days             = 0
+
+    l_seed_date      = add_date(l_seed_date,days)
+
+    temp_int = Date2Unixtime(l_seed_date)
+    ii=1
+
+    Do i = 1,Size(seed_ill_dur)
+       seed_ill_dur(i)  = (temp_int - Date2Unixtime(seed_ill%date(i)))/86400 + 1
+    End Do
+
+    temp_int = 1
+
+    temp = condition_and(seed_ill_dur,ill_dur+1,"l",seed_ill%cases,temp_int,"g")
+
+    seed_ill%dist_id  = seed_ill%dist_id(temp)
+    seed_ill%date     = seed_ill%date(temp)
+    seed_ill%cases    = seed_ill%cases(temp)
+    seed_ill_dur      = seed_ill_dur(temp)
+
+    write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
+
+    if (PT_DEBUG) then
+       write(un_lf,PTF_SEP)
+       write(un_lf,PTF_M_A)"First 20 and last 20 seeds for ill cases."
+       Do ii=1, 20
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_ill%dist_id(ii)    , seed_ill%date(ii), &
+               seed_ill%cases(ii),seed_ill_dur(ii)
+       End Do
+       write(un_lf,"('...')")
+       Do ii = Size(temp)-19, Size(temp)
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_ill%dist_id(ii)    , seed_ill%date(ii), &
+               seed_ill%cases(ii),seed_ill_dur(ii)
+       End Do
+    End if
+
+    If (.Not.Allocated(seed_inf_cont_dur))Then
+       Allocate(seed_inf_cont_dur(Size(seed_inf_cont%date)))
+    End If
+
+    days             = -1
+
+    l_seed_date      = add_date(l_seed_date,days)
+
+    temp_int = Date2Unixtime(l_seed_date)
+
+    Do i = 1,Size(seed_inf_cont_dur)
+       seed_inf_cont_dur(i)  = (temp_int - Date2Unixtime(seed_inf_cont%date(i)))/86400&
+            + cont_dur + 2
+    End Do
+
+    if (allocated(temp)) Deallocate(temp)
+    Allocate(temp(Size(seed_inf_cont%cases)))
+
+    temp = 0
+    temp_int = 0
+    Do i = 1,Size(temp)
+       If (seed_inf_cont%cases(i)>0) Then
+          temp_int = temp_int + 1
+          temp(temp_int) = i
+       End If
+    End Do
+
+    seed_inf_cont%dist_id  = seed_inf_cont%dist_id(temp(1:temp_int))
+    seed_inf_cont%date     = seed_inf_cont%date(temp(1:temp_int))
+    seed_inf_cont%cases    = seed_inf_cont%cases(temp(1:temp_int))
+
+    if (PT_DEBUG) then
+       write(un_lf,PTF_SEP)
+       write(un_lf,PTF_M_A)"First 20 and last 20 seeds for contagious cases."
+       Do ii=1, 20
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_inf_cont%dist_id(ii)    , seed_inf_cont%date(ii), &
+               seed_inf_cont%cases(ii),seed_inf_cont_dur(ii)
+       End Do
+       write(un_lf,"('...')")
+       Do ii = Size(seed_inf_cont%dist_id)-19, Size(seed_inf_cont%dist_id)
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_inf_cont%dist_id(ii)    , seed_inf_cont%date(ii), &
+               seed_inf_cont%cases(ii),seed_inf_cont_dur(ii)
+       End Do
+    End if
+
+    Deallocate(temp)
+
+    If (.Not.Allocated(seed_inf_ncont_dur))Then
+       Allocate(seed_inf_ncont_dur(Size(seed_inf_ncont%date)))
+    Else
+       Deallocate(seed_inf_ncont_dur)
+       Allocate(seed_inf_ncont_dur(Size(seed_inf_ncont%date)))
+    End If
+    temp_int = Date2Unixtime(l_seed_date)
+    Do i = 1,Size(seed_inf_ncont_dur)
+       seed_inf_ncont_dur(i)  = (temp_int - Date2Unixtime(seed_inf_ncont%date(i)))/86400&
+            + inf_dur + cont_dur + 2
+    End Do
+    Allocate(temp(Size(seed_inf_ncont%cases)))
+    temp = 0
+    temp_int = 0
+    Do i = 1,Size(temp)
+       If (seed_inf_ncont%cases(i)>0) Then
+          temp_int = temp_int + 1
+          temp(temp_int) = i
+       End If
+    End Do
+
+    seed_inf_ncont%dist_id  = seed_inf_ncont%dist_id(temp(1:temp_int))
+    seed_inf_ncont%date     = seed_inf_ncont%date(temp(1:temp_int))
+    seed_inf_ncont%cases    = seed_inf_ncont%cases(temp(1:temp_int))
+
+    if (PT_DEBUG) then
+       write(un_lf,PTF_SEP)
+       write(un_lf,PTF_M_A)"First 20 and last 20 seeds for non contagious cases."
+       Do ii=1, 20
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_inf_ncont%dist_id(ii)    , seed_inf_ncont%date(ii), &
+               seed_inf_ncont%cases(ii),seed_inf_ncont_dur(ii)
+       End Do
+       write(un_lf,"('...')")
+       Do ii = Size(seed_inf_ncont%dist_id)-19, Size(seed_inf_ncont%dist_id)
+          write(un_lf,'(I6,A12,I6,I6)') &
+               seed_inf_ncont%dist_id(ii)    , seed_inf_ncont%date(ii), &
+               seed_inf_ncont%cases(ii),seed_inf_ncont_dur(ii)
+       End Do
+
+       write(un_lf,PTF_SEP)
+       write(un_lf,PTF_M_A)"Seeds per county."
+       write(un_lf,'(5(A10,1X))')"county","inf_ncont","inf_cont","inf_ill","inf_dth"
+    End if
+
 !!!=============================================================================
 !!! Iteration over parameter space
 !!!=============================================================================
 
     !!=======================================================================
-    !! Init population                 
-    iol%pop_total = Nint(Real(iol%pop_total)/Real(Sum(iol%pop_total)) * sam_size)
-    pop_size      = Sum(iol%pop_total)
+    !! Init population
+    pop_total  => get_int_column_pointer(iol%pop,'total')
+    pop_distid => get_int_column_pointer(iol%pop,'dist_id')
+    pop_sex    =  get_char_column(iol%pop,'sex')
+    pop_age    => get_int_column_pointer(iol%pop,'age_gr')
+
+    pop_total = Nint(Real(pop_total)/Real(Sum(pop_total)) * sam_size)
+    pop_size      = Sum(pop_total)
 
     call random_seed(size=ii)               ! Get size of seed array.
     ii = max(ii,OMP_GET_MAX_THREADS())
     call random_seed(put=urandom_seed(ii))  ! Put seed array into PRNG.
 
-    
     !$OMP PARALLEL default(shared) &
     !$OMP& private(sim) &
     !$OMP& firstprivate(index,temp_int,i,temp,days,icounty,county,jj,kk,ii,tmp_count) &
@@ -289,17 +493,16 @@ Contains
     !$OMP& firstPRIVATE(rownumbers_left,rownumbers) &
     !$OMP& firstPRIVATE(rownumbers_ill,rownumbers_cont,rownumbers_ncont,rownumbers_dea) &
     !$OMP& firstprivate(seed_ill_dur,seed_inf_cont_dur,seed_inf_ncont_dur,l_seed_date) 
-    
+
     !$OMP DO
     Do it_ss = 1, iter
-      
+
        !call start_timer("Init Sim Loop",reset=.FALSE.)
-                   
+
        If (.Not.Allocated(sim%dist_id))Then
           Allocate(sim%dist_id(pop_size))
           Allocate(sim%sex(pop_size))
           Allocate(sim%age(pop_size))
-          Allocate(sim%agei(pop_size))
           Allocate(sim%t1(pop_size))
           Allocate(sim%t2(pop_size))
           Allocate(sim%d(pop_size))
@@ -307,13 +510,12 @@ Contains
 
        index = 0 ! position index
 
-       Do i = 1, Size(iol%pop_total)
-          temp_int = iol%pop_total(i)
-          sim%dist_id(index+1: index+temp_int) = iol%pop_distid(i)
-          sim%sex(index+1: index+temp_int)   = iol%pop_sex(i)
-          sim%age( index+1: index+temp_int)  = iol%pop_age(i)
-          sim%agei(index+1: index+temp_int)  = iol%pop_agei(i)
-          index                              = index + temp_int
+       Do i = 1, Size(pop_total)
+          temp_int = pop_total(i)
+          sim%dist_id(index+1: index+temp_int) = pop_distid(i)
+          sim%sex(index+1: index+temp_int)     = pop_sex(i)
+          sim%age( index+1: index+temp_int)    = pop_age(i)
+          index                                = index + temp_int
        End Do
 
        sim%t1 = healthy
@@ -322,175 +524,7 @@ Contains
 
        write(un_lf,PTF_SEP)
        Write(un_lf,PTF_M_AI0)"Size of population is", pop_size
-             
-       !!=======================================================================
-       !! seed infections
-       temp = get_index(iol%seed_date,seed_seq)
-       seed_ill%dist_id  = iol%seed_distid(temp)
-       seed_ill%date     = iol%seed_date(temp)
-       seed_ill%cases    = iol%seed_cases(temp)
-       
-       write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases),size(seed_ill%cases)
-       
-       temp = get_index(iol%seed_date,seed_inf_cont_seq)
 
-       seed_inf_cont%dist_id  = iol%seed_distid(temp)
-       seed_inf_cont%date     = iol%seed_date(temp)
-       seed_inf_cont%cases    = iol%seed_cases(temp)
-       
-       write(*,*)"sum(seed_inf_cont%cases):",sum(seed_inf_cont%cases)
-       
-       temp = get_index(iol%seed_date,seed_inf_ncont_seq)
-       seed_inf_ncont%dist_id  = iol%seed_distid(temp)
-       seed_inf_ncont%date     = iol%seed_date(temp)
-       seed_inf_ncont%cases    = iol%seed_cases(temp)
-       
-       write(*,*)"sum(seed_inf_ncont%cases):",sum(seed_inf_ncont%cases)
-       
-       temp_date  =  get_start_date(iol%death_date)
-       seed_d_seq = generate_seq(temp_date,add_date(l_seed_date,-1))
-       temp       = get_index(iol%death_date,seed_d_seq)
-
-       seed_death%dist_id = iol%death_distid(temp)
-       seed_death%date   = iol%death_date(temp)
-       seed_death%cases  = iol%death_cases(temp)
-
-       If (Allocated(seed_ill_dur)) Deallocate(seed_ill_dur)
-       
-       Allocate(seed_ill_dur(Size(seed_ill%date)))
-       
-       days             = 0
-
-       l_seed_date      = add_date(l_seed_date,days)
-
-       temp_int = Date2Unixtime(l_seed_date)
-       ii=1
-
-       Do i = 1,Size(seed_ill_dur)
-          seed_ill_dur(i)  = (temp_int - Date2Unixtime(seed_ill%date(i)))/86400 + 1
-       End Do
-
-       temp_int = 1
-
-       temp = condition_and(seed_ill_dur,ill_dur+1,"l",seed_ill%cases,temp_int,"g")
-
-       seed_ill%dist_id  = seed_ill%dist_id(temp)
-       seed_ill%date     = seed_ill%date(temp)
-       seed_ill%cases    = seed_ill%cases(temp)
-       seed_ill_dur      = seed_ill_dur(temp)
-
-       write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
-
-       if (PT_DEBUG) then
-          write(un_lf,PTF_SEP)
-          write(un_lf,PTF_M_A)"First 20 and last 20 seeds for ill cases."
-          Do ii=1, 20
-             write(un_lf,'(I6,A12,I6,I6)') &
-                  seed_ill%dist_id(ii)    , seed_ill%date(ii), &
-                  seed_ill%cases(ii),seed_ill_dur(ii)
-          End Do
-          write(un_lf,"('...')")
-          Do ii = Size(temp)-19, Size(temp)
-             write(un_lf,'(I6,A12,I6,I6)') &
-                  seed_ill%dist_id(ii)    , seed_ill%date(ii), &
-                  seed_ill%cases(ii),seed_ill_dur(ii)
-          End Do
-       End if
-       
-       If (.Not.Allocated(seed_inf_cont_dur))Then
-          Allocate(seed_inf_cont_dur(Size(seed_inf_cont%date)))
-       End If
-
-       days             = -1
-              
-       l_seed_date      = add_date(l_seed_date,days)
-
-       temp_int = Date2Unixtime(l_seed_date)
-
-       Do i = 1,Size(seed_inf_cont_dur)
-          seed_inf_cont_dur(i)  = (temp_int - Date2Unixtime(seed_inf_cont%date(i)))/86400&
-               + cont_dur + 2
-       End Do
-
-       if (allocated(temp)) Deallocate(temp)
-       Allocate(temp(Size(seed_inf_cont%cases)))
-
-       temp = 0
-       temp_int = 0
-       Do i = 1,Size(temp)
-          If (seed_inf_cont%cases(i)>0) Then
-             temp_int = temp_int + 1
-             temp(temp_int) = i
-          End If
-       End Do
-
-       seed_inf_cont%dist_id  = seed_inf_cont%dist_id(temp(1:temp_int))
-       seed_inf_cont%date     = seed_inf_cont%date(temp(1:temp_int))
-       seed_inf_cont%cases    = seed_inf_cont%cases(temp(1:temp_int))
-
-       if (PT_DEBUG) then
-          write(un_lf,PTF_SEP)
-          write(un_lf,PTF_M_A)"First 20 and last 20 seeds for contagious cases."
-          Do ii=1, 20
-             write(un_lf,'(I6,A12,I6,I6)') &
-                  seed_inf_cont%dist_id(ii)    , seed_inf_cont%date(ii), &
-                  seed_inf_cont%cases(ii),seed_inf_cont_dur(ii)
-          End Do
-          write(un_lf,"('...')")
-          Do ii = Size(seed_inf_cont%dist_id)-19, Size(seed_inf_cont%dist_id)
-             write(un_lf,'(I6,A12,I6,I6)') &
-                  seed_inf_cont%dist_id(ii)    , seed_inf_cont%date(ii), &
-                  seed_inf_cont%cases(ii),seed_inf_cont_dur(ii)
-          End Do
-       End if
-       
-       Deallocate(temp)
-
-       If (.Not.Allocated(seed_inf_ncont_dur))Then
-          Allocate(seed_inf_ncont_dur(Size(seed_inf_ncont%date)))
-       Else
-          Deallocate(seed_inf_ncont_dur)
-          Allocate(seed_inf_ncont_dur(Size(seed_inf_ncont%date)))
-       End If
-       temp_int = Date2Unixtime(l_seed_date)
-       Do i = 1,Size(seed_inf_ncont_dur)
-          seed_inf_ncont_dur(i)  = (temp_int - Date2Unixtime(seed_inf_ncont%date(i)))/86400&
-               + inf_dur + cont_dur + 2
-       End Do
-       Allocate(temp(Size(seed_inf_ncont%cases)))
-       temp = 0
-       temp_int = 0
-       Do i = 1,Size(temp)
-          If (seed_inf_ncont%cases(i)>0) Then
-             temp_int = temp_int + 1
-             temp(temp_int) = i
-          End If
-       End Do
-
-       seed_inf_ncont%dist_id  = seed_inf_ncont%dist_id(temp(1:temp_int))
-       seed_inf_ncont%date     = seed_inf_ncont%date(temp(1:temp_int))
-       seed_inf_ncont%cases    = seed_inf_ncont%cases(temp(1:temp_int))
-
-       if (PT_DEBUG) then
-          write(un_lf,PTF_SEP)
-          write(un_lf,PTF_M_A)"First 20 and last 20 seeds for non contagious cases."
-          Do ii=1, 20
-             write(un_lf,'(I6,A12,I6,I6)') &
-                  seed_inf_ncont%dist_id(ii)    , seed_inf_ncont%date(ii), &
-                  seed_inf_ncont%cases(ii),seed_inf_ncont_dur(ii)
-          End Do
-          write(un_lf,"('...')")
-          Do ii = Size(seed_inf_ncont%dist_id)-19, Size(seed_inf_ncont%dist_id)
-             write(un_lf,'(I6,A12,I6,I6)') &
-                  seed_inf_ncont%dist_id(ii)    , seed_inf_ncont%date(ii), &
-                  seed_inf_ncont%cases(ii),seed_inf_ncont_dur(ii)
-          End Do
-
-          write(un_lf,PTF_SEP)
-          write(un_lf,PTF_M_A)"Seeds per county."
-          write(un_lf,'(5(A10,1X))')"county","inf_ncont","inf_cont","inf_ill","inf_dth"
-       End if
-       
        !** Reshuffle population since ordering according to dist id leads to ***
        !** lower infections in older age groups                              ***
        !** To do so we use 
@@ -499,17 +533,16 @@ Contains
        End do
 
        Allocate(tmp_count(pop_size))
-       
+
        tmp_count = sample(sim%d,pop_size)
 
        sim%dist_id=sim%dist_id(tmp_count)
        sim%age    =sim%age    (tmp_count)
-       sim%agei   =sim%agei   (tmp_count)
-       
+
        sim%d  = 1
 
        deallocate(tmp_count)
-       
+
        Do icounty = 1,num_counties
 
           county = counties_index(icounty)
@@ -537,7 +570,7 @@ Contains
                   minval(inf_nc_d),maxval(inf_nc_d),minval(inf_c_d),maxval(inf_c_d),&
                   minval(il_d),maxval(il_d)
           End if
-          
+
           If(Size(rownumbers)<(inf_ill+inf_cont+inf_ncont+inf_dth)) Then
              Print *,"Number of infected and dead is larger than population size"
              Print *,"only ",Size(rownumbers),"number left"
@@ -670,10 +703,8 @@ Contains
        If (.Not.Allocated(tmp_d_new))Then
           Allocate(tmp_d_new(Size(sim%d)))
        End If
-      
-       temp = get_index(iol%connect_work_distid,counties_index)
 
-       connect = iol%connect_work(temp,temp)
+       connect =  transpose(table_to_real_array(iol%connect_work))
 
        Do i = 1,Size(connect,dim=2)
           connect(:,i) = connect(:,i)/Sum(connect(:,i))
@@ -699,32 +730,32 @@ Contains
 
        if (OMP_GET_THREAD_NUM() == 0) then
           call end_timer("Sim Loop")
-          
+
           timer = get_timer("Sim Loop")
 
           write(*,'(A)',ADVANCE="NO")"Time per day:"
           call write_realtime(frac_realtime(diff_realtimes(timer%rt_end,timer%rt_start),time_n))
        End if
-       
+
        days             = +1
-       
+
        l_seed_date        = add_date(l_seed_date,days)
-              
+
     End Do     ! end do it_ss
     !$OMP END DO
     !$OMP END PARALLEL
 
     call start_timer("+- Writeout",reset=.FALSE.)
-    
+
     iter_pass_handle = (/Real(sam_size,rk),R0,Real(icu_dur,rk),0._rk,0._rk,0._rk/)
 
-    Call write_data_v2(healthy_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,1)
-    Call write_data_v2(inf_noncon_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,2)
-    Call write_data_v2(inf_contag_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,3)
-    Call write_data_v2(ill_contag_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,4)
-    Call write_data_v2(ill_ICU_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,5)
-    Call write_data_v2(immune_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,6)
-    Call write_data_v2(dead_cases_final,iter_pass_handle,iol%R0_effect%data,counties_index,7)
+    Call write_data_v2(healthy_cases_final,iter_pass_handle, table_to_real_array(iol%R0_effect),counties_index,1)
+    Call write_data_v2(inf_noncon_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,2)
+    Call write_data_v2(inf_contag_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,3)
+    Call write_data_v2(ill_contag_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,4)
+    Call write_data_v2(ill_ICU_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,5)
+    Call write_data_v2(immune_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,6)
+    Call write_data_v2(dead_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,7)
 
     call end_timer("+- Writeout")
 
@@ -1084,14 +1115,14 @@ Contains
              nn = nn + 1
 
              if (sim%sex(ii) == "m") then
-                if (risk_pi(nn) >= surv_ill_pas(sim%agei(ii),1)) then
+                if (risk_pi(nn) >= surv_ill_pas(sim%age(ii),1)) then
                    !** Individual dies -------------------------------
                    sim%t2(ii) = dead
                    d_new(ii)  = 1
                    new_in_state = new_in_state + 1
                 End if
              else
-                if (risk_pi(nn) >= surv_ill_pas(sim%agei(ii),2)) then
+                if (risk_pi(nn) >= surv_ill_pas(sim%age(ii),2)) then
                    !** Individual dies -------------------------------
                    sim%t2(ii) = dead
                    d_new(ii)  = 1
@@ -1130,12 +1161,12 @@ Contains
              !** Individual is ill_contag ----------------------------
              nn = nn + 1
 
-             if ((ICU_risk_pasd(sim%agei(ii),1,sim%d(ii))  >0.) .or. &
-                 (ICU_risk_pasd(sim%agei(ii),2,sim%d(ii))  >0.)       ) &
+             if ((ICU_risk_pasd(sim%age(ii),1,sim%d(ii))  >0.) .or. &
+                 (ICU_risk_pasd(sim%age(ii),2,sim%d(ii))  >0.)       ) &
                  new_in_state = new_in_state + 1
              
              if (sim%sex(ii) == "m") then
-                if (risk_pi(nn) <= ICU_risk_pasd(sim%agei(ii),1,sim%d(ii))) then
+                if (risk_pi(nn) <= ICU_risk_pasd(sim%age(ii),1,sim%d(ii))) then
                    !** Individual moves to icu -----------------------
                    sim%t2(ii) = ill_ICU
                    d_new(ii)  = 1
@@ -1150,7 +1181,7 @@ Contains
                    End if
                 End if
              else
-                if (risk_pi(nn) <= ICU_risk_pasd(sim%agei(ii),2,sim%d(ii))) then
+                if (risk_pi(nn) <= ICU_risk_pasd(sim%age(ii),2,sim%d(ii))) then
                    !** Individual dies -------------------------------
                    sim%t2(ii) = ill_ICU
                    d_new(ii)  = 1
@@ -1204,7 +1235,7 @@ Contains
              nn = nn + 1
 
              if (sim%sex(ii) == "m") then
-                if (risk_pi(nn) >= surv_icu_pas(sim%agei(ii),1)) then
+                if (risk_pi(nn) >= surv_icu_pas(sim%age(ii),1)) then
                    !** Individual moves to icu -----------------------
                    sim%t2(ii) = dead
                    d_new(ii)  = 1
@@ -1219,7 +1250,7 @@ Contains
                    End if
                 End if
              else
-                if (risk_pi(nn) >= surv_icu_pas(sim%agei(ii),2)) then
+                if (risk_pi(nn) >= surv_icu_pas(sim%age(ii),2)) then
                    !** Individual dies -------------------------------
                    sim%t2(ii) = dead
                    d_new(ii)  = 1
@@ -1329,6 +1360,10 @@ Contains
 
     Real   , Dimension(:), Allocatable          :: icu_risk
 
+    Character(Len=:), allocatable, Dimension(:)     :: transpr_sex
+    Character(Len=:), allocatable, Dimension(:)     :: transpr_age_gr
+    real(kind=rk)   , pointer, dimension(:)     :: transpr_icu_risk
+    
     Type(icu_risk_lists)                        :: icu_risk_list
 
     integer                                     :: ii
@@ -1360,9 +1395,13 @@ Contains
        ch_sex = (/"m","f"/)
     End If
 
-    temp = get_index(iol%transpr_age_gr,ch_age)
-
-    temp1= get_index(iol%transpr_sex,ch_sex)
+    !** Get columns from table structure ---------------------------------------
+    transpr_icu_risk => get_real_column_pointer(iol%trans_pr, "icu_risk")
+    transpr_age_gr   = get_char_column(iol%trans_pr, "age_gr")
+    transpr_sex      = get_char_column(iol%trans_pr, "sex")
+   
+    temp  = get_index(transpr_age_gr,ch_age)
+    temp1 = get_index(transpr_sex   ,ch_sex)
 
     target_icu_risk_index = find_and(temp,temp1)
 
@@ -1370,7 +1409,7 @@ Contains
        If (.Not.Allocated(icu_risk))Then
           Allocate(icu_risk(2*Size(target_icu_risk_index)))
        Endif
-       icu_risk(1:Size(target_icu_risk_index)) = iol%transpr_icu_risk(target_icu_risk_index)
+       icu_risk(1:Size(target_icu_risk_index)) = transpr_icu_risk(target_icu_risk_index)
        icu_risk(1:Size(target_icu_risk_index)) = &
             1.0 - (1.0 - icu_risk(1:Size(target_icu_risk_index))) ** (1.0/ Real(ill_dur))
        icu_risk(Size(target_icu_risk_index)+1 : 2* Size(target_icu_risk_index)) = &
@@ -1381,7 +1420,7 @@ Contains
        If (.Not.Allocated(icu_risk))Then
           Allocate(icu_risk(2*19))
        End If
-       icu_risk(1:2) = iol%transpr_icu_risk(target_icu_risk_index)
+       icu_risk(1:2) = transpr_icu_risk(target_icu_risk_index)
        icu_risk(1:2) = 1.0 - (1.0 - icu_risk(1:2)) ** (1.0/ ill_dur)
        icu_risk(Size(target_icu_risk_index)+1 : 2* Size(target_icu_risk_index)) = icu_risk(2)
        icu_risk(1:Size(target_icu_risk_index)) = icu_risk(1)
@@ -1396,8 +1435,8 @@ Contains
     End If
 
     Do ii = 1, ill_dur
-       icu_risk_list%age((ii-1)*Size(icu_risk)+1: ii*Size(icu_risk)) = (/iol%transpr_age_gr(target_icu_risk_index),&
-            iol%transpr_age_gr(target_icu_risk_index)/)
+       icu_risk_list%age((ii-1)*Size(icu_risk)+1: ii*Size(icu_risk)) = (/transpr_age_gr(target_icu_risk_index),&
+            transpr_age_gr(target_icu_risk_index)/)
        icu_risk_list%sex((ii-1)*Size(icu_risk)+1:(ii-1)*Size(icu_risk)+19) = 'm'
        icu_risk_list%sex((ii-1)*Size(icu_risk)+20:ii*Size(icu_risk)) = 'f'
        icu_risk_list%risk((ii-1)*Size(icu_risk)+1: ii*Size(icu_risk)) = icu_risk * icu_per_day(ii)
@@ -1451,13 +1490,16 @@ Contains
     Integer, Dimension(:), Allocatable          :: target_icu_risk_index
 
     Real   , Dimension(:), Allocatable          :: surv_ill
-
+    Character(Len=:), allocatable, Dimension(:) :: transpr_sex
+    Character(Len=:), allocatable, Dimension(:) :: transpr_age_gr
+    real(kind=rk), pointer, dimension(:)        :: transpr_surv_ill
+    
     Type(icu_risk_lists)                        :: surv_ill_list
 
     integer                                     :: ii
     !** ------------------------------------------------------------------------
-    
 
+    
     If (control_age_sex == "NONE") Then
        ch_age = (/"total"/)
        ch_sex = (/"total"/)
@@ -1484,18 +1526,24 @@ Contains
        ch_sex = (/"m","f"/)
     End If
 
-    temp = get_index(iol%transpr_age_gr,ch_age)
+    !** Get columns from table structure ---------------------------------------
+    transpr_surv_ill => get_real_column_pointer(iol%trans_pr, "surv_ill")
+    transpr_age_gr   = get_char_column(iol%trans_pr, "age_gr")
+    transpr_sex      = get_char_column(iol%trans_pr, "sex")
+   
+    temp = get_index(transpr_age_gr,ch_age)
 
-    temp1= get_index(iol%transpr_sex,ch_sex)
+    temp1= get_index(transpr_sex,ch_sex)
 
     target_icu_risk_index = find_and(temp,temp1)
+
     ! init surv_ill
     If (control_age_sex == "age") Then
        If (.Not.Allocated(surv_ill))Then
           Allocate(surv_ill(2*Size(target_icu_risk_index)))
        End If
-       surv_ill = (/iol%transpr_surv_ill(target_icu_risk_index),&
-            iol%transpr_surv_ill(target_icu_risk_index)/)
+       surv_ill = (/transpr_surv_ill(target_icu_risk_index),&
+            transpr_surv_ill(target_icu_risk_index)/)
        surv_ill = surv_ill ** (1.0/Real(ill_dur))
     End If
 
@@ -1503,21 +1551,23 @@ Contains
        If (.Not.Allocated(surv_ill))Then
           Allocate(surv_ill(2*19))
        Endif
-       surv_ill(1:2) = iol%transpr_surv_ill(target_icu_risk_index)
+       surv_ill(1:2) = transpr_surv_ill(target_icu_risk_index)
        surv_ill(1:2) = 1.0 - (1.0 - surv_ill(1:2)) ** (1.0/ Real(ill_dur))
        surv_ill(Size(target_icu_risk_index)+1 : 2* Size(target_icu_risk_index)) = surv_ill(2)
        surv_ill(1:Size(target_icu_risk_index)) = surv_ill(1)
     End If
+    
     If (.Not.Allocated(surv_ill_list%age))Then
        Allocate(surv_ill_list%age(Size(surv_ill)))
        Allocate(surv_ill_list%agei(Size(surv_ill)))
        Allocate(surv_ill_list%sex(Size(surv_ill)))
        Allocate(surv_ill_list%risk(Size(surv_ill)))
     End If
-    surv_ill_list%age = (/iol%transpr_age_gr(target_icu_risk_index),iol%transpr_age_gr(target_icu_risk_index)/)
+    surv_ill_list%age = (/transpr_age_gr(target_icu_risk_index),transpr_age_gr(target_icu_risk_index)/)
     surv_ill_list%sex = 'f'
     surv_ill_list%sex(1:19) = 'm'
     surv_ill_list%risk  = surv_ill
+    
     Do ii = 1, Size(surv_ill)
        Read(surv_ill_list%age(ii),*)surv_ill_list%agei(ii)
     End Do
@@ -1560,7 +1610,9 @@ Contains
     Integer, Dimension(:), Allocatable          :: target_icu_risk_index
 
     Real   , Dimension(:), Allocatable          :: surv_icu
-
+    Character(Len=:), allocatable, Dimension(:) :: transpr_sex
+    Character(Len=:), allocatable, Dimension(:) :: transpr_age_gr
+    real(kind=rk), pointer, dimension(:)        :: transpr_surv_icu
     Type(icu_risk_lists)                        :: surv_icu_list
 
     integer                                     :: ii
@@ -1591,10 +1643,15 @@ Contains
             "65","70","75","80","85","90"/)
        ch_sex = (/"m","f"/)
     End If
+    
+    !** Get columns from table structure ---------------------------------------
+    transpr_surv_icu => get_real_column_pointer(iol%trans_pr, "surv_icu")
+    transpr_age_gr   =  get_char_column(iol%trans_pr, "age_gr")
+    transpr_sex      =  get_char_column(iol%trans_pr, "sex")
+    
+    temp = get_index(transpr_age_gr,ch_age)
 
-    temp = get_index(iol%transpr_age_gr,ch_age)
-
-    temp1= get_index(iol%transpr_sex,ch_sex)
+    temp1= get_index(transpr_sex,ch_sex)
 
     target_icu_risk_index = find_and(temp,temp1)
 
@@ -1603,8 +1660,8 @@ Contains
        If (.Not.Allocated(surv_icu))Then
           Allocate(surv_icu(2*Size(target_icu_risk_index)))
        End If
-       surv_icu= (/iol%transpr_surv_icu(target_icu_risk_index),&
-            iol%transpr_surv_icu(target_icu_risk_index)/)
+       surv_icu= (/transpr_surv_icu(target_icu_risk_index),&
+            transpr_surv_icu(target_icu_risk_index)/)
        surv_icu = surv_icu ** (1/Real(ill_dur))
     End If
 
@@ -1612,7 +1669,7 @@ Contains
        If (.Not.Allocated(surv_icu))Then
           Allocate(surv_icu(2*19))
        End If
-       surv_icu(1:2) = iol%transpr_surv_icu(target_icu_risk_index)
+       surv_icu(1:2) = transpr_surv_icu(target_icu_risk_index)
        surv_icu(1:2) = 1.0 - (1.0 - surv_icu(1:2)) ** (1.0/ Real(ill_dur))
        surv_icu(Size(target_icu_risk_index)+1 : 2* Size(target_icu_risk_index)) = surv_icu(2)
        surv_icu(1:Size(target_icu_risk_index)) = surv_icu(1)
@@ -1623,7 +1680,7 @@ Contains
        Allocate(surv_icu_list%sex(Size(surv_icu)))
        Allocate(surv_icu_list%risk(Size(surv_icu)))
     End If
-    surv_icu_list%age = (/iol%transpr_age_gr(target_icu_risk_index),iol%transpr_age_gr(target_icu_risk_index)/)
+    surv_icu_list%age = (/transpr_age_gr(target_icu_risk_index),transpr_age_gr(target_icu_risk_index)/)
     surv_icu_list%sex = 'f'
     surv_icu_list%sex(1:19) = 'm'
     surv_icu_list%risk  = surv_icu

@@ -48,6 +48,10 @@ Module param_tree
      module procedure pt_get_scalar_l
   end interface pt_get
 
+  !============================================================================
+  !== Private routines
+  Private alloc_error
+
   !! -----------------------------------
   !> The parameter tree
   Type(pt_branch), Private, Save :: pt
@@ -1138,5 +1142,326 @@ Contains
     write(pt_umon,*)
     
   End Subroutine read_param_file
+
+  !############################################################################
+  !> \name param tree serialization routines
+  !> @{
+  !> Module procedures for serailizing param tree data structures
+
+  !============================================================================
+  !> Subroutine which serializes a complete pt_branch structure
+  Subroutine serialize_pt(head,size)
+
+    Integer(kind=pt_ik), Intent(out), Dimension(:), Allocatable :: head
+    Integer(kind=pt_ik), Intent(out)                            :: size
+
+    Integer(kind=pt_ik)                                         :: alloc_stat
+    
+    !**********************************************************
+
+    size = 0
+
+    Call get_serial_branch_size(pt,size)
+    
+    Write(pt_umon,*)"Determined ",size," elements to serialize"
+
+    Allocate(head(size), stat=alloc_stat)
+    Call alloc_error(alloc_stat, "head", "serialize_pt", size) 
+
+    head = 0
+    size = 1
+
+    call serialize_branch_rec(pt,head,size)
+
+    size = size - 1
+    write(*,*)SIZE
+  End Subroutine serialize_pt
+
+  !============================================================================
+  !> Subroutine which returns the size necessary to serializes a pt_branch.
+  !>
+  !> Subroutine which returns the size of a field of integer(kind=pt_ik)
+  !> necessary to serializes a complete pt_branch structure with data.
+  Recursive Subroutine get_serial_branch_size(branch, size)
+    
+    Type(pt_branch)    , Intent(In)    :: branch
+    Integer(kind=pt_ik), Intent(InOut) :: size
+
+    Integer(kind=pt_ik)                :: ii, jj, dat_no
+
+    !** Account for branch description **
+    size = size + pt_ce + 2
+
+    !** Account for leaves if any ****************
+    Do ii = 1, branch%no_leaves
+
+       !** Account for leaf description **
+       size = size + pt_ce
+       !** Account for leaf data type, dim and dat_no ***
+       size = size + 2 + branch%leaves(ii)%dat_dim
+
+       dat_no = 1
+       Do jj = 1, branch%leaves(ii)%dat_dim
+          dat_no = dat_no * branch%leaves(ii)%dat_no(jj)
+       End Do
+      
+       !** Account for leaf data *****************
+       if ( dat_no > 0 ) then
+          
+          Select Case (branch%leaves(ii)%dat_ty)
+          
+          Case ("I")
+             size = size + dat_no * 8 / pt_ik
+          Case ("R")
+             size = size + dat_no * 8 / pt_ik
+          Case ("C")
+             size = size + Int(dat_no*pt_ce,pt_ik)
+          Case ("L")
+             size = size + dat_no * kind(branch%leaves(ii)%l(1)) / pt_ik
+
+          Case default
+             Write(pt_umon,*)"Serialization of data type ",&
+                  branch%leaves(ii)%dat_ty," is not jet implemented"
+          End Select
+
+       End if
+       
+    End Do
+    
+    !** Account for branches if any ***
+    Do ii = 1, branch%no_branches
+       Call get_serial_branch_size(branch%branches(ii), size)
+    End Do
+       
+  End Subroutine get_serial_branch_size
+
+  !============================================================================
+  !> Subroutine which serializes a pt_bbranch structure recursively
+  !>
+  !> Subroutine which serializes a pt_branch structure recursively.
+  Recursive Subroutine serialize_branch_rec(branch,head,pos)
+
+    Type(pt_branch)                  , Intent(In)    :: branch
+    Integer(kind=pt_ik), Dimension(:), Intent(InOut) :: head
+    Integer(kind=pt_ik)              , Intent(InOut) :: pos
+
+    Integer(kind=pt_ik),Dimension(pt_ce)             :: char_mold
+
+    Integer(kind=pt_ik)                              :: ii, jj
+    Integer(kind=pt_ik)                              :: no_pt_ik_elems, dat_no
+    
+    !** Fixed Components ******************************************************
+    head(pos:pos+pt_ce-1) = Transfer(branch%desc,char_mold)
+    pos = pos+pt_ce
+
+    head(pos) = branch%no_branches
+    pos = pos+1
+    head(pos) = branch%no_leaves
+    pos = pos+1
+
+    !** Leaves ****************************************************************
+    Do ii = 1, branch%no_leaves
+
+       dat_no = 1
+       Do jj = 1, branch%leaves(ii)%dat_dim
+          dat_no = dat_no * branch%leaves(ii)%dat_no(jj)
+       End Do
+      
+       head(pos:pos+pt_ce-1) = Transfer(branch%leaves(ii)%name,char_mold)
+       pos = pos+pt_ce
+
+       head(pos) = branch%leaves(ii)%dat_dim
+       pos = pos+1
+       head(pos:pos+branch%leaves(ii)%dat_dim-1) = branch%leaves(ii)%dat_no
+       pos = pos + branch%leaves(ii)%dat_dim
+       head(pos) = transfer(branch%leaves(ii)%dat_ty,1_pt_ik)
+       pos = pos+1
+
+       !** Serialize leaf data *****************
+       if ( dat_no > 0) then
+          
+          Select Case (branch%leaves(ii)%dat_ty)
+          
+          Case ("I")
+
+             no_pt_ik_elems = dat_no*8/pt_ik
+             head(pos:pos+no_pt_ik_elems-1) = Transfer(branch%leaves(ii)%i8,head(pos:pos+no_pt_ik_elems-1))
+             pos = pos + no_pt_ik_elems
+             
+          Case ("R")
+
+             no_pt_ik_elems = dat_no*8/pt_ik
+             head(pos:pos+no_pt_ik_elems-1) = Transfer(branch%leaves(ii)%r8,head(pos:pos+no_pt_ik_elems-1))
+             pos = pos + no_pt_ik_elems
+                          
+          Case ("C")
+             
+             no_pt_ik_elems = Int(dat_no*pt_ce,pt_ik)
+             head(pos:pos+no_pt_ik_elems-1) = Transfer(branch%leaves(ii)%ch,head(pos:pos+no_pt_ik_elems-1))
+             pos = pos + no_pt_ik_elems
+             
+          Case ("L")
+             
+             no_pt_ik_elems = dat_no * kind(branch%leaves(ii)%l(1)) / pt_ik
+             head(pos:pos+no_pt_ik_elems-1) = Transfer(branch%leaves(ii)%l,head(pos:pos+no_pt_ik_elems-1))
+             pos = pos + no_pt_ik_elems
+             
+          Case default
+             Write(pt_umon,*)"Serialization of data type ",branch%leaves(ii)%dat_ty," is not jet implemented"
+          End Select
+
+       End if
+       
+    End Do
+
+    write(*,*)branch%no_branches,trim(branch%desc),"--"
+    !** Branches **************************************************************
+    Do ii = 1, branch%no_branches
+       Call serialize_branch_rec(branch%branches(ii),head,pos)
+    End Do
+
+  End Subroutine serialize_branch_rec
+
+  !============================================================================
+  !> Subroutine which deserializes pt_branch structure
+  Subroutine deserialize_pt(head)
+
+    Integer(kind=pt_ik), Dimension(:), Intent(in)  :: head
+
+    Integer(kind=pt_ik)                            :: pos
+   
+    pos = 1
+       
+    call deserialize_branch_rec(pt,head,pos)
+
+  End Subroutine deserialize_pt
+
+  !============================================================================
+  !> Subroutine which deserializes a pt_branch structure recursively
+  Recursive Subroutine deserialize_branch_rec(branch,head,pos)
+
+    Type(pt_branch)                  , Intent(InOut) :: branch
+    Integer(kind=pt_ik), Dimension(:), Intent(in)    :: head
+    Integer(kind=pt_ik)              , Intent(InOut) :: pos
+
+    CHARACTER(len=pt_mcl)                            :: char_mold
+    Integer(kind=pt_ik)                              :: ii, jj
+    Integer(kind=pt_ik)                              :: no_pt_ik_elems, dat_no
+
+    !** Fixed Components ******************************************************
+    branch%desc = Transfer(head(pos:pos+pt_ce-1),branch%desc)
+    pos = pos+pt_ce
+
+    branch%no_branches = head(pos)
+    pos = pos+1
+    branch%no_leaves = head(pos)
+    pos = pos+1
+
+    !** Leaves ****************************************************************
+    If (branch%no_leaves > 0) then
+
+       Allocate(branch%leaves(branch%no_leaves))
+    
+       Do ii = 1, branch%no_leaves
+       
+          branch%leaves(ii)%name = Transfer(head(pos:pos+pt_ce-1),branch%leaves(ii)%name)
+          pos = pos+pt_ce
+          
+          branch%leaves(ii)%dat_dim = head(pos)
+          pos = pos+1
+          branch%leaves(ii)%dat_no = head(pos:pos+branch%leaves(ii)%dat_dim-1)
+          pos = pos + branch%leaves(ii)%dat_dim
+          branch%leaves(ii)%dat_ty = Transfer(head(pos),"C")
+          pos = pos+1
+
+          dat_no = 1
+          Do jj = 1, branch%leaves(ii)%dat_dim
+             dat_no = dat_no * branch%leaves(ii)%dat_no(jj)
+          End Do
+     
+          !** DeSerialize leaf data *****************
+          if ( dat_no > 0 ) then
+                    
+             Select Case (branch%leaves(ii)%dat_ty)
+          
+             Case ("I")
+
+                Allocate(branch%leaves(ii)%i8(dat_no))
+                no_pt_ik_elems = Int(dat_no*8/pt_ik,pt_ik)
+                branch%leaves(ii)%i8 = Transfer(head(pos:pos+no_pt_ik_elems-1),mold=1_pt_ik)
+                pos = pos + no_pt_ik_elems
+                
+             Case ("R")
+
+                Allocate(branch%leaves(ii)%r8(dat_no))
+                no_pt_ik_elems = Int(dat_no*8/pt_ik,pt_ik)
+                branch%leaves(ii)%r8 = Transfer(head(pos:pos+no_pt_ik_elems-1),branch%leaves(ii)%r8)
+                pos = pos + no_pt_ik_elems
+                
+             Case ("C")
+
+                Allocate(branch%leaves(ii)%ch(dat_no))
+                no_pt_ik_elems =  Int(dat_no*pt_ce,pt_ik)
+                branch%leaves(ii)%ch = Transfer(head(pos:pos+no_pt_ik_elems-1),branch%leaves(ii)%ch)
+                pos = pos + no_pt_ik_elems
+                
+             Case ("L")
+                
+                Allocate(branch%leaves(ii)%l(dat_no))
+                no_pt_ik_elems =  dat_no * kind(branch%leaves(ii)%l(1)) / pt_ik
+                branch%leaves(ii)%l = Transfer(head(pos:pos+no_pt_ik_elems-1),branch%leaves(ii)%l)
+                pos = pos + no_pt_ik_elems
+                
+             Case default
+                Write(pt_umon,*)"DeSerialization of data type ",branch%leaves(ii)%dat_ty," is not jet implemented"
+             End Select
+
+          End if
+         
+       End Do
+
+    End If
+
+    !** Branches **************************************************************
+    If ( branch%no_branches > 0 ) then
+       
+       Allocate(branch%branches(branch%no_branches))
+       Do ii = 1, branch%no_branches
+          Call deserialize_branch_rec(branch%branches(ii),head,pos)
+       End Do
+
+    End If
+
+  End Subroutine deserialize_branch_rec
+
+  !> @} 
+  !# End of memeber group "param tree serialization routines" ##################
+
+  !============================================================================
+  !> Subroutine for allocation error handling
+  Subroutine alloc_error(alloc_stat, field, routine, dim)
+
+    Integer(kind=pt_ik), Intent(in)           :: alloc_stat
+    Character(Len=*)   , Intent(in)           :: field, routine
+    Integer(kind=pt_ik), Intent(in) ,optional :: dim
+
+    If (alloc_stat /= 0) Then
+
+       WRITE(pt_umon,*)
+       WRITE(pt_umon,PTF_SEP)
+       WRITE(pt_umon,PTF_E_A)   'Allocation of the field/structure :'
+       WRITE(pt_umon,PTF_E_A)   field
+       WRITE(pt_umon,PTF_E_A)   'faild !!'
+       WRITE(pt_umon,PTF_E_A)   'The error occured in routine      :'
+       WRITE(pt_umon,PTF_E_A)   routine
+       if (present(dim)) then
+          WRITE(pt_umon,PTF_E_AI0) 'The requested dimension was : ',dim
+       End if
+       WRITE(pt_umon,PTF_E_STOP)
+       STOP
+
+    End If
+
+  End Subroutine alloc_error
 
 End Module param_tree

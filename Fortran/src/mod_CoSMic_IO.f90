@@ -51,281 +51,20 @@ module CoSMic_IO
   Use global_types
   Use support_fun, Only: get_file_N
 
+  use mpi
+  
   implicit none
 
 contains
 
   !=============================================================================
-  ! Subroutine to load execution input parameters
-  !=============================================================================
-  Subroutine load_exec_parameters(ep,ep_infile)
-
-    Type(exec_parameters), Intent(InOut) :: ep
-    Character(Len=*)      , Intent(in)   :: ep_infile
-
-    Integer                                :: un_spi, io_stat, pos, spos, ll, ii
-    INteger                                :: no_sim_regions, n_lines
-    Character(Len=1024),Allocatable,Dimension(:)  :: lines
-
-    !---------------------------------------------------------------------------
-    Open(newunit=un_spi, file=ep_infile, action="read", status="old", &
-         iostat=io_stat)
-
-    if (io_stat .ne. 0 ) then
-       write(*,fmt_file_missing)ep_infile
-       stop
-    end if
-
-    n_lines = get_file_N(un_spi)
-
-    Allocate(lines(n_lines))
-
-    Read(un_spi,'(A)',iostat=io_stat)lines
-
-    Close(un_spi)
-
-    !-------------------------------------------------------
-
-    ii = 1
-
-    Do while (ii < n_lines)
-
-       if (lines(ii)(1:9) == "#data_dir") then !---------------------------------
-          ii = ii + 1
-          ep%data_dir = lines(ii)
-
-       else  !-- Unknown keyword -----------------------------------------------
-
-          write(*,*)"Found unknown keyword: ",trim(lines(ii))
-          ii = ii + 1
-
-          Do while ((lines(ii)(1:1) .NE. "#") .AND. (io_stat==0)) 
-
-             Write(*,*)"Line image in unknown keyword:",trim(lines(ii))
-             ii = ii +1 
-
-          End Do
-
-       End if
-
-       ii = ii + 1
-
-    End Do
-
-    close(un_spi)
-
-  end Subroutine load_exec_parameters
-
-  !=============================================================================
-  ! Subroutine to log static input parameters
-  !=============================================================================
-  Subroutine log_exec_parameters(ep)
-
-    Type(exec_parameters), intent(in) :: ep
-
-    character(len=*),parameter                    :: lca = '(A,T18,"| ",A)'
-    character(len=*),parameter                    :: lci = '(A,T18,"| ",I0)'
-    character(len=*),parameter                    :: lcl = '(A,T18,"| ",L)'
-    character(len=*),parameter                    :: tab_h = '(17("-"),"+",42("-"))'
-
-    write(*,'(60("-"))')    
-    write(*,'("--",1X,A)')"execution parameters"
-    write(*,tab_h)
-    write(*,lca)"data_dir"     , trim(ep%data_dir)
-    write(*,tab_h)
-    write(*,*)
-
-  End Subroutine log_exec_parameters
-
-  !=============================================================================
-  ! Subroutine to load static input data
-  !=============================================================================
-  Subroutine load_static_parameters(sp,sp_infile)
-
-    Type(static_parameters), Intent(InOut) :: sp
-    Character(Len=*)      , Intent(in)     :: sp_infile
-
-    Integer                                :: un_spi, io_stat, pos, spos, ll,ii, jj
-    INteger                                :: no_sim_regions, n_lines
-    Character(Len=1024),Allocatable,Dimension(:)  :: lines
-
-    character(len=64), Dimension(4)        :: c64_x_4
-
-    !---------------------------------------------------------------------------
-    Open(newunit=un_spi, file=sp_infile, action="read", status="old", &
-         iostat=io_stat)
-
-    if (io_stat .ne. 0 ) then
-       write(*,fmt_file_missing)sp_infile
-       stop
-    end if
-
-    n_lines = get_file_N(un_spi)
-
-    Allocate(lines(n_lines))
-
-    Read(un_spi,'(A)',iostat=io_stat)lines
-
-    Close(un_spi)
-
-    !Do ii = 1, n_lines
-    !   write(*,*)trim(lines(ii))
-    !End Do
-    !-------------------------------------------------------
-
-    ii = 1
-    Do while (ii <= n_lines)
-
-       if (lines(ii)(1:12) == "#sim_regions") then !----------------------------
-
-          Read(lines(ii)(13:len_trim(lines(ii))),*)no_sim_regions
-
-          if (allocated(sp%sim_regions)) then
-
-             write(*,*)"sp%sim_regions already allocated! Did you specify #sim_regions twice?"
-             stop
-
-          End if
-
-          Allocate(sp%sim_regions(no_sim_regions))
-
-          pos=1
-          Do jj = 1, (no_sim_regions-1) / 4 + 1
-
-             c64_x_4 = ""
-             Read(lines(ii+jj),*,iostat=io_stat)c64_x_4
-             sp%sim_regions(pos:pos+3) = c64_x_4
-             pos = pos + 4
-
-          End Do
-
-          ii = ii +  (no_sim_regions-1) / 4 + 1
-
-       else if (trim(lines(ii)) == "#country") then !---------------------------
-          ii = ii + 1
-          sp%country = lines(ii)
-
-       else if (trim(lines(ii)) == "#seed_date") then !-------------------------
-          ii = ii + 1
-          sp%seed_date = lines(ii)
-
-       else if (trim(lines(ii)) == "#restrict") then !--------------------------
-          ii = ii + 1
-          Read(lines(ii),*)sp%restrict
-
-       else if (trim(lines(ii)) == "#trans_pr") then !--------------------------
-          ii = ii + 1
-          sp%trans_pr = lines(ii)
-
-       else if (trim(lines(ii)) == "#lhc_samples") then !--------------------------
-          ii = ii + 1
-          Read(lines(ii),*)sp%lhc_samples
-
-       else if (trim(lines(ii)) == "#pop") then !--------------------------
-          ii = ii + 1
-          sp%pop = lines(ii)
-
-       else if (trim(lines(ii)) == "#inf_cases") then !-------------------------
-          ii = ii + 1
-          sp%inf_cases = lines(ii)
-
-       else if (trim(lines(ii)) == "#dead_cases") then !------------------------
-          ii = ii + 1
-          sp%dead_cases = lines(ii)
-
-       else if (trim(lines(ii)) == "#connect_work") then !----------------------
-          ii = ii + 1
-          sp%connect_work = lines(ii)
-
-       else if (trim(lines(ii)) == "#connect_total") then !---------------------
-          ii = ii + 1
-          sp%connect_total = lines(ii)
-
-       else if (trim(lines(ii)) == "#states") then !----------------------------
-          ii = ii + 1
-          sp%states = lines(ii)
-
-       else if (trim(lines(ii)) == "#counties") then !--------------------------
-          ii = ii + 1
-          sp%counties = lines(ii)
-
-       else if (trim(lines(ii)) == "#R0_effects") then !---------------------
-          ii = ii + 1
-          sp%R0_effects = lines(ii)
-
-       else  !-- Unknown keyword -----------------------------------------------
-
-          write(*,*)"Found unknown keyword: ",trim(lines(ii))
-          ii = ii + 1
-
-          Do while ((lines(ii)(1:1) .NE. "#") .AND. (io_stat==0)) 
-
-             Write(*,*)"Line image in unknown keyword:",trim(lines(ii))
-             ii = ii +1 
-
-          End Do
-
-          ii = ii - 1
-
-       End if
-
-       ii = ii + 1
-
-    End Do
-
-  end Subroutine load_static_parameters
-
-  !=============================================================================
-  ! Subroutine to log static input parameters
-  !=============================================================================
-  Subroutine log_static_parameters(sp)
-
-    Type(static_parameters), intent(in) :: sp
-
-    character(len=*),parameter                    :: lca = '(A,T18,"| ",A)'
-    character(len=*),parameter                    :: lci = '(A,T18,"| ",I0)'
-    character(len=*),parameter                    :: lcl = '(A,T18,"| ",L)'
-    character(len=*),parameter                    :: tab_h = '(17("-"),"+",42("-"))'
-
-    integer                                       :: ii
-
-    write(*,'(60("-"))')    
-    write(*,'("--",1X,A)')"static parameters"
-    write(*,tab_h)
-    write(*,lca)"country"      , trim(sp%country      )
-    write(*,lca)"seed_date"    , trim(sp%seed_date    )
-    write(*,lcl)"restrict"     , sp%restrict     
-    write(*,lci)"lhc_samples"  , sp%lhc_samples
-    write(*,lca)"trans_pr"     , trim(sp%trans_pr     )
-    write(*,lca)"pop"          , trim(sp%pop)
-    write(*,lca)"inf_cases"    , trim(sp%inf_cases    )
-    write(*,lca)"dead_cases"   , trim(sp%dead_cases   )
-    write(*,lca)"connect_total", trim(sp%connect_total)
-    write(*,lca)"connect_work" , trim(sp%connect_work )
-    write(*,lca)"states"       , trim(sp%states       )
-    write(*,lca)"counties"     , trim(sp%counties     )
-    write(*,lca)"R0_effects"   , trim(sp%R0_effects   )
-    write(*,tab_h)
-    write(*,lci)"# sim_regions", size(sp%sim_regions  )
-    do ii = 1, size(sp%sim_regions)
-       write(*,lca)" ",trim(sp%sim_regions(ii))
-    End do
-    write(*,tab_h)
-    write(*,*)
-
-  End Subroutine log_static_parameters
-
-  !=============================================================================
-  ! Subroutine to load input data from files
-  !=============================================================================
-  Subroutine loaddata(iol, ep, sp)
-
-    Type(exec_parameters)  , intent(in) :: ep
-    Type(static_parameters), intent(in) :: sp
-
+  !> Subroutine to load input data from files
+  Subroutine loaddata(iol)
+
+    Type(iols), Intent(InOut)  :: iol
+    
     Integer                    :: i,j,k,it_ss
     Integer                    :: index, un_in
-    Type(iols)                 :: iol
 
     !=================================================================
     Character(len=:), allocatable :: data_dir
@@ -337,143 +76,68 @@ contains
     ! Read data from file: Transition probabilities ------------------
     call pt_get("#trans_pr",filename)
 
-    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
-
-    ! allocation for the readin variables ------------------
-    Allocate(iol%transpr_age_gr(index-1))
-    Allocate(iol%transpr_sex(index-1))
-    Allocate(iol%transpr_surv_ill(index-1))
-    Allocate(iol%transpr_icu_risk(index-1))
-    Allocate(iol%transpr_surv_icu(index-1))
-
-    ! read the first line(character) -----------------------
-    Read(un_in,*,iostat= k) iol%titel
-
-    Do i = 1, index-1
-       Read(un_in,*,iostat=k) iol%transpr_age_gr(i),iol%transpr_sex(i),&
-            iol%transpr_surv_ill(i),&
-            iol%transpr_icu_risk(i),iol%transpr_surv_icu(i)
-    End Do
-    Close(un_in)
+    call read_TableData( &
+         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         data=iol%trans_pr &
+         )
 
     !read data from file to pop --------------------------------------
     call pt_get("#pop",filename)
 
-    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
-
-    ! allocation for the readin variables ------------------
-    Allocate(iol%pop_distid(index-1))
-    Allocate(iol%pop_date(index-1))
-    Allocate(iol%pop_sex(index-1))
-    Allocate(iol%pop_age(index-1))
-    Allocate(iol%pop_agei(index-1))
-    Allocate(iol%pop_total(index-1))
-
-    ! read the first line(character) -----------------------
-    Read(un_in,*) iol%titel
-
-    Do i = 1,index-1
-       Read(un_in,*) iol%pop_distid(i),iol%pop_date(i),iol%pop_sex(i),&
-            iol%pop_agei(i),iol%pop_total(i)
-    Enddo
-    Do i = 1,index-1
-       write(iol%pop_age(i),'(I2)')iol%pop_agei(i)
-    Enddo
-    Close(un_in)
-
+    call read_TableData( &
+         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         data=iol%pop &
+         )
+    
     !read data from file to seed ---------------------------
     call pt_get("#seed",filename)
 
-    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
-
-    ! allocation for the readin variables ------------------
-    Allocate(iol%seed_distid(index-1))
-    Allocate(iol%seed_date(index-1))
-    Allocate(iol%seed_cases(index-1))
-    ! read the first line(character)
-    Read(un_in,*,iostat= k) iol%seed_titel
-
-    Do i = 1,index-1
-       Read(un_in,*,iostat=k) iol%seed_distid(i),iol%seed_date(i),iol%seed_cases(i)
-    Enddo
-    Close(un_in)
+    call read_TableData( &
+         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         data=iol%seed &
+         )
 
     !read data from file to seeddeath --------------------------------
     call pt_get("#seed_dea",filename)
 
-    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
-
-    ! allocation for the readin variables ------------------
-    Allocate(iol%death_distid(index-1))
-    Allocate(iol%death_date(index-1))
-    Allocate(iol%death_cases(index-1))
-    
-    ! read the first line(character) -----------------------
-    Read(un_in,*,iostat= k) iol%seed_titel
-
-    Do i = 1,Size(iol%death_distid)
-       Read(un_in,*,iostat=k) iol%death_distid(i),iol%death_date(i),iol%death_cases(i)
-    Enddo
-    Close(un_in)
-
+    call read_TableData( &
+         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         data=iol%death &
+         )
+        
     !read data from file to connect_total  ---------------------------
     call pt_get("#connect_total",filename)
 
-    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
-
-    Read(un_in,*,iostat= k) iol%connect_total_name(:)
-    iol%connect_titel = "dist_id"
-    Do i = 1,Size(iol%connect_total_distid)
-       Read(un_in,*,iostat=k) iol%connect_total_distid(i),iol%connect_total(:,i)
-    Enddo
-    Close(un_in)
+    call read_TableData( &
+         trim(data_dir)//trim(filename),sep=",",head=.TRUE.,rownames=.TRUE., &
+         data=iol%connect_total &
+         )
 
     !read data from file to connect_work -----------------------------
     call pt_get("#connect_work",filename)
 
-    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
-
-    Read(un_in,*,iostat= k) iol%connect_work_name(:)
-    Do i = 1,Size(iol%connect_work_distid)
-       Read(un_in,*,iostat=k) iol%connect_work_distid(i),iol%connect_work(:,i)
-    Enddo
-
-    Close(un_in)
-
+    call read_TableData( &
+         trim(data_dir)//trim(filename),sep=",",head=.TRUE.,rownames=.TRUE., &
+         data=iol%connect_work &
+         )
+    
     !read data from file to states -----------------------------------
     call pt_get("#states",filename)
 
-    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
-
-    ! allocation for the readin variables ------------------
-    Allocate(iol%states_code(index-1))
-    Allocate(iol%states_inhabitant(index-1))
-    Allocate(iol%states_shortcut(index-1))
-    Allocate(iol%states_name(index-1))
-    
-    Read(un_in,*,iostat= k) iol%state_titel(:)
-    Do i = 1,index-1 
-       Read(un_in,*,iostat=k) iol%states_code(i),iol%states_inhabitant(i),iol%states_shortcut(i),iol%states_name(i)
-    Enddo
-    Close(un_in)
+    call read_TableData( &
+         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         data=iol%states &
+         )
 
     !read data from file to counties ---------------------------------
     call pt_get("#counties",filename)
 
-    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
+    call read_TableData( &
+         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         data=iol%counties &
+         )
 
-    ! allocation for the readin variables ------------------
-    Allocate(iol%counties_dist_id(index-1))
-    Allocate(iol%counties_name(index-1))
-    Allocate(iol%counties_area(index-1))
-    Allocate(iol%counties_inhabitants(index-1))
-    
-    Read(un_in,*,iostat= k) iol%state_titel(:)
-    Do i = 1,index-1
-       Read(un_in,*,iostat=k) iol%counties_dist_id(i),iol%counties_name(i),&
-            iol%counties_area(i),iol%counties_inhabitants(i)
-    Enddo
-    Close(un_in)
+    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
 
     !Read R0_effects -------------------------------------------------
     call pt_get("#R0_effects",filename)
@@ -527,22 +191,32 @@ contains
 
   !! ===========================================================================
   !> Subroutine to read ASCII formatted table data
+  !>
+  !> The subroutine reads ASCII formatted table data. Per default it assumes to
+  !> read the table into a 2D float array. In case characters are found in the
+  !> first line that is supposed to contain data (the second line of the input
+  !> file in case head=.TRUE.) It creates a data structure with columns.
   Subroutine read_TableData(filename,sep,head,rownames,data)
 
     Character(len=*), intent(in)           :: filename
-        
-    Type(TableData) , intent(out)          :: data 
+
+    Type(TTableData) , intent(out)         :: data 
 
     Character       , intent(in), optional :: sep   
     Logical         , Intent(in), optional :: head, rownames
-    
+
     Character                              :: loc_sep
     Logical                                :: loc_head, loc_rownames
 
-    Integer                                :: io_stat, un, ii
-    Integer                                :: no_lines, dim1, dim2
-    character(len=2048)                    :: l_head
+    Integer                                :: io_stat, un, ii, jj, ls
+    Integer                                :: no_lines, dim1, dim2, sep_pos
+    character(len=16384)                   :: l_head
+    character(len=:),allocatable           :: loc_str_chars
+
     character(len=:),Dimension(:),allocatable :: str_arr
+
+    Character,Dimension(:), allocatable    :: tmp_col_types
+    Integer,Dimension(:), allocatable      :: tmp_col_lengths
 
     !---------------------------------------------------------------------------
     if (present(sep)) then
@@ -563,68 +237,523 @@ contains
        loc_rownames = .FALSE.
     End if
 
-    !! Open file -----------------------------------------------------
-    Open(newunit=un, file=Trim(filename), access='sequential', &
-         form="formatted",iostat=io_stat, status="old")
-    
+    !** Reduce seperator from sequence of characters signaling string data -----
+    sep_pos = scan(str_chars,loc_sep)
+
+    if (sep_pos > 1) then
+       loc_str_chars = str_chars(1:sep_pos-1)//str_chars((sep_pos+1):len_trim(str_chars))
+    else
+       loc_str_chars = str_chars(2:len_trim(str_chars))
+    End if
+
+    !! -------------------------------------------------------------------------
+    !! Open file ---------------------------------------------------------------
+    Open(newunit=un,       file=Trim(filename), access='sequential', &
+         form="formatted", iostat=io_stat,      status="old")
+
     if (io_stat .ne. 0 ) then
        write(*,fmt_file_missing)trim(filename)
        stop
     end if
 
+    write(*,'(80("-"))')
+    write(*,'(A,1X,A)')"Read report for file",trim(filename)
+    
+    !! -------------------------------------------------------------------------
+    !! Determine dimension of table --------------------------------------------
+
     !! Get number of lines in file -------------------------
     no_lines = get_file_N(un)
 
+    !! If a headline is given: Number of lines - 1 gives dim1 ----
     if (loc_head) then
-       !! If a headline is given: Number of lines - 1 gives dim1 ---------------
-       
        dim1 = no_lines - 1
-
-       Read(un,'(A)')l_head
-
-       !! Warning in case maximum line length is almost used up ------
-       if (len_trim(l_head) >= (len(l_head)*0.9)) then
-          write(*,'("WW read_TableData:",A,I0)') &
-               "Length of header line reaches limit of ",len(l_head)
-       end if
-    
-       data%head = strtok(trim(l_head),loc_sep)
-    
-       dim2 = size(data%head)
-
     Else
-       !! If we have no headline, determine dim2 from Number of seperators in --
-       !! first line. ----------------------------------------------------------
-       
        dim1 = no_lines
-
-       Read(un,'(A)')l_head
-
-       !! Warning in case maximum line length is almost used up ------
-       if (len_trim(l_head) >= (len(l_head)*0.9)) then
-          write(*,'("WW read_TableData:",A,I0)') &
-               "Length of header line reaches limit of ",len(l_head)
-       end if
-    
-       str_arr = strtok(trim(l_head),loc_sep)
-    
-       dim2 = size(str_arr)
-
-       Rewind(un)
-       
     End if
 
-    Allocate(data%data(dim1,dim2))
-    
-    if (loc_rownames) then
-       Allocate(data%rownames(dim1),mold=l_head(1:16))
-       Do ii = 1, dim1
-          Read(un,*)data%rownames(ii),data%data(ii,:)
-       End Do
-    Else
-       Read(un,*)data%data
+    !** Read first line in file ---
+    Read(un,'(A)')l_head
+
+    !! Warning in case maximum line length is almost used up ------
+    if (len_trim(l_head) >= (len(l_head)*0.9)) then
+       write(*,'("WW read_TableData:",A,I0)') &
+            "Length of header line reaches limit of ",len(l_head)
     end if
 
+    str_arr = strtok(trim(l_head),loc_sep)
+
+    !! In case headline is included ----------------------------------
+    if (loc_head) then
+       !! Number of cols in head line gives dim2 ---
+       dim2 = size(str_arr)
+
+       !! Init head --------------
+       data%head = str_arr
+
+       !! Read first data line ---
+       Read(un,'(A)')l_head
+
+       !! Remove Quotes --------------------------
+       Do ii = 1, dim2
+          data%head(ii) = unquote(data%head(ii))
+       End Do
+       
+    Else
+
+       !! In case rownames are included number of columns - 1 gives dim2 ---
+       if( loc_rownames ) then
+          dim2 = size(str_arr)-1
+       Else
+          dim2 = size(str_arr)
+       End if
+
+       !! Init head ------------------------------
+       Allocate(data%head(dim2),mold="123456")
+       Do ii = 1, dim2
+          write(data%head(ii),'("C",I5.5)')ii
+       End Do
+
+    End if
+
+    write(*,'(A,1X,I0,1X,A)',ADVANCE="NO")"Head with size",size(data%head),"is set to      "
+    write(*,'(*("|",A))')data%head
+    
+    !! -------------------------------------------------------------------------
+    !! Determine type and in case of character the length of the columns -------
+    tmp_col_types   = type_strtok(l_head,loc_sep)
+    tmp_col_lengths = len_strtok(l_head,loc_sep)
+
+    if (loc_rownames) then
+       tmp_col_types   = tmp_col_types(2:dim2+1)
+       tmp_col_lengths = tmp_col_lengths(2:dim2+1)
+    End if
+    
+    data%col_lengths = tmp_col_lengths
+    data%col_types   = tmp_col_types
+
+    !! size(data%col_lengths) has to be equal dim2+1.
+    if ( size(data%col_lengths) .NE. dim2 ) then
+       write(*,'("WW read_TableData: ",A,/,A,L,2(/,A,I0))') &
+            "Wrong number of data columns in first data line", &
+            "Rownames                            :",loc_rownames, &
+            "Number of columns in first data line:",size(data%col_lengths), &
+            "Number of columns in header         :",dim2   
+    End if
+
+    !! Determine column type and maximum data length --------------
+    !! First data line was already analysed so start at 2. --------
+    Do ii = 2, dim1
+
+       Read(un,'(A)')l_head
+
+       tmp_col_lengths = len_strtok(l_head,loc_sep)
+       tmp_col_types   = type_strtok(l_head,loc_sep)
+
+       !! Warning in case maximum line length is almost used up ------
+       if (len_trim(l_head) >= (len(l_head)*0.9)) then
+          write(*,'("WW read_TableData:",A,I0)') &
+               "Length of header line reaches limit of ",len(l_head)
+       end if
+    
+       !! In case a different number of columns than before was found ---
+       if ( (       loc_rownames .AND. (size(data%col_lengths) .NE. size(tmp_col_lengths)-1) ) .OR. &
+            ( .NOT. loc_rownames .AND. (size(data%col_lengths) .NE. size(tmp_col_lengths)  ) ) ) then
+          write(*,'("WW read_TableData:",A,1X,I0)') &
+               "Different number of columns in data line", ii
+          write(*,'("WW read_TableData:",A,1X,I0)') &
+               "size(data%col_lengths) =",size(data%col_lengths)
+          write(*,'("WW read_TableData:",A,1X,I0)') &
+               "size(tmp_col_lengths) =",size(tmp_col_lengths)
+       End if
+
+       if (loc_rownames) then
+          tmp_col_types   = tmp_col_types(2:dim2+1)
+          tmp_col_lengths = tmp_col_lengths(2:dim2+1)
+       End if
+
+       !! Update column type and maximum length -------------------
+       Do jj = 1, dim2
+          if (data%col_types(jj) .NE. "c") then
+             if (data%col_types(jj) .NE. "r") then
+                data%col_types(jj) = tmp_col_types(jj)
+             End if
+          End if
+          data%col_lengths(jj) = max(data%col_lengths(jj),tmp_col_lengths(jj))
+       End Do
+
+    End Do
+
+    rewind(un)
+
+!    if (PT_DEBUG) then
+       write(*,PTF_M_A)"Column types  :",data%col_types
+       write(*,PTF_M_AI0)"Column lengths:",data%col_lengths
+!    End if
+
+    !! If rownmaes are included allocate the rowname field ---
+    if (loc_rownames) then
+       Allocate(data%rownames(dim1),mold=l_head(1:data%col_lengths(1)))
+    End if
+
+    !! -------------------------------------------------------------------------
+    !! Set data size -----------------------------------------------------------
+    data%data_size(1) = dim1
+    data%data_size(2) = dim2
+    
+    !! -------------------------------------------------------------------------
+    !! Allocate columns --------------------------------------------------------
+    Allocate(data%data(dim2))
+
+    Do ii = 1, dim2
+
+       if (data%col_types(ii) == "i") then
+          allocate(data%data(ii)%cd_i(dim1))
+       Else if (data%col_types(ii) == "r") then
+          allocate(data%data(ii)%cd_r(dim1))
+       Else
+          allocate(data%data(ii)%cd_c(dim1),mold=l_head(1:data%col_lengths(ii)))
+       End if
+    End Do
+
+    !! -------------------------------------------------------------------------
+    !! Read data ---------------------------------------------------------------
+    if (loc_head) then
+       read(un,*)l_head
+    End if
+
+    if (loc_rownames) then
+
+       Do ii = 1, dim1
+
+          Read(un,'(A)')l_head
+          str_arr = strtok(trim(l_head),loc_sep)
+
+          data%rownames(ii) = trim(str_arr(1))
+          
+          Do jj = 1, dim2
+             if (data%col_types(jj) == "i") then
+                Read(str_arr(jj+1),*)data%data(jj)%cd_i(ii)
+             Else if (data%col_types(jj) == "r") then
+                Read(str_arr(jj+1),*)data%data(jj)%cd_r(ii)
+             Else
+                data%data(jj)%cd_c(ii) = trim(str_arr(jj+1))
+             End if
+          End Do
+
+       End Do
+
+    Else
+
+       Do ii = 1, dim1
+          Read(un,'(A)')l_head
+          str_arr = strtok(trim(l_head),loc_sep)
+          
+          Do jj = 1, dim2
+             if (data%col_types(jj) == "i") then
+                Read(str_arr(jj),*)data%data(jj)%cd_i(ii)
+             Else if (data%col_types(jj) == "r") then
+                Read(str_arr(jj),*)data%data(jj)%cd_r(ii)
+             Else
+                data%data(jj)%cd_c(ii) = trim(str_arr(jj))
+             End if
+          End Do
+
+       End Do
+
+    End if
+
+    ! In case we have character columns unquote ----------------------
+    Do jj = 1, dim2
+
+       if (data%col_types(jj) =="c") then
+          Do ii = 1, dim1
+             data%data(jj)%cd_c(ii) = unquote(data%data(jj)%cd_c(ii))
+          End Do
+       End if
+       
+    End Do
+       
   End Subroutine read_TableData
+
+  !! ---------------------------------------------------------------------------
+  !> Function to unquote a string from " or '
+  Function unquote(str) Result(out_str)
+
+    Character(Len=*), intent(in)  :: str
+    Character(Len=:), allocatable :: out_str
+
+    integer                       :: ls
+    
+    out_str = adjustl(str)
+    ls = len_trim(out_str)
+    if ( ((out_str(1:1) == "'") .AND. (out_str(ls:ls) == "'")) .OR. &
+         ((out_str(1:1) == '"') .AND. (out_str(ls:ls) == '"')) ) then
+       out_str = out_str(2:len_trim(out_str)-1)
+    End if
+
+  End Function unquote
+  
+  !! ---------------------------------------------------------------------------
+  !> Function to retreve all real columns of kind rk from the table
+  Function table_to_real_array(table) Result(array)
+
+    Type(TTableData)                          , intent(in)  :: table
+    Real(kind=rk), allocatable, Dimension(:,:)              :: array
+
+    Integer                                                 :: ii, nc
+
+    nc = 0
+    Do ii = 1, table%data_size(2)
+       if (table%col_types(ii) == "r") then
+          nc = nc + 1
+       End if
+    End Do
+    
+    If (nc == 0) then
+       Write(*,*)"WW table_to_real_array: Found no real columns !"
+    End If
+    
+    Allocate(array(table%data_size(1),nc))
+    
+    Do ii = 1, table%data_size(2)
+       if (table%col_types(ii) == "r") then
+          array(:,ii) = table%data(ii)%cd_r
+       End if
+    End Do
+    
+  End Function table_to_real_array
+  
+  !! ---------------------------------------------------------------------------
+  !> Function to retrieve an integer column of kind=ik from the table 
+  Function get_int_table_column(table,col_name) Result(col)
+
+    Type(TTableData)                          , intent(in)  :: table
+    character(len=*)                          , intent(in)  :: col_name
+    Integer(kind=ik), allocatable, Dimension(:)             :: col
+
+    Integer                                                 :: ii
+
+    Do ii = 1, table%data_size(2)
+
+       if (trim(table%head(ii)) == trim(col_name)) then
+          Allocate(col(table%data_size(1)))
+          col = table%data(ii)%cd_i
+          exit
+       End if
+       
+    End Do
+    
+    if (.not. allocated(col)) then
+       write(*,*)"WW get_int_column:",trim(col_name)," could not be found."
+    End if
+    
+  End Function get_int_table_column
+
+  !! ---------------------------------------------------------------------------
+  !> Function to retrieve a real column of kind=rk from the table 
+  Function get_real_table_column(table,col_name) Result(col)
+
+    Type(TTableData)                          , intent(in)  :: table
+    character(len=*)                          , intent(in)  :: col_name
+    Real(kind=rk), allocatable, Dimension(:)                :: col
+
+    Integer                                                 :: ii
+
+    Do ii = 1, table%data_size(2)
+
+       if (trim(table%head(ii)) == trim(col_name)) then
+          Allocate(col(table%data_size(1)))
+          col = table%data(ii)%cd_r
+          exit
+       End if
+       
+    End Do
+    
+    if (.not. allocated(col)) then
+       write(*,*)"WW get_real_column:",trim(col_name)," could not be found."
+    End if
+    
+  End Function get_real_table_column
+
+  !! ---------------------------------------------------------------------------
+  !> Function to retrieve a character column 
+  Function get_char_column(table, col_name) Result(col)
+    
+    Type(TTableData)                           , intent(in)    :: table
+    character(len=*)                           , intent(in)    :: col_name
+    Character(Len=:), allocatable, Dimension(:)                :: col
+    
+    Integer                                                    :: ii
+    
+    Do ii = 1, table%data_size(2)
+
+       if (trim(table%head(ii)) == trim(col_name)) then
+          Allocate(col(table%data_size(1)),mold=table%data(ii)%cd_c(1))
+          col = table%data(ii)%cd_c
+
+          exit
+       End if
+       
+    End Do
+    
+    if (.not. allocated(col)) then
+       write(*,*)"WW get_char_column:",trim(col_name)," could not be found."
+    End if
+    
+  End Function get_char_column
+  
+  !! ---------------------------------------------------------------------------
+  !> Function to retrieve a pointer to an integer column of kind=ik
+  Function get_int_column_pointer(table,col_name) Result(col)
+
+    Type(TTableData) ,Target                  , intent(in)  :: table
+    character(len=*)                          , intent(in)  :: col_name
+    Integer(kind=ik), pointer, Dimension(:)                 :: col
+
+    Integer                                                 :: ii
+
+    col => null()
+    
+    Do ii = 1, table%data_size(2)
+
+       if (trim(table%head(ii)) == trim(col_name)) then
+          col => table%data(ii)%cd_i
+          exit
+       End if
+       
+    End Do
+
+    if (.not. associated(col)) then
+       write(*,*)"WW get_int_column_pointer:",trim(col_name)," could not be found."
+    End if
+    
+  End Function get_int_column_pointer
+
+  !! ---------------------------------------------------------------------------
+  !> Function to retrieve a pointer to a real column of kind=rk
+  Function get_real_column_pointer(table,col_name) Result(col)
+
+    Type(TTableData),Target                   , intent(in)  :: table
+    character(len=*)                          , intent(in)  :: col_name
+    Real(kind=rk), pointer, Dimension(:)                    :: col
+
+    Integer                                                 :: ii
+
+    col => null()
+    
+    Do ii = 1, table%data_size(2)
+
+       if (trim(table%head(ii)) == trim(col_name)) then
+          col => table%data(ii)%cd_r
+          exit
+       End if
+       
+    End Do
+    
+    if (.not. associated(col)) then
+       write(*,*)"WW get_real_column_pointer:",trim(col_name)," could not be found."
+    End if
+    
+  End Function get_real_column_pointer
+
+  !! ---------------------------------------------------------------------------
+  !> Subroutine which broadcasts a complete table data structure      
+  subroutine mpi_bcast_table(MPI_COMM, root_rank_mpi, rank_mpi, table)
+
+    Integer(kind=mpi_ik), Intent(in) :: MPI_COMM
+    Integer(kind=mpi_ik), Intent(in) :: root_rank_mpi
+    Integer(kind=mpi_ik), Intent(in) :: rank_mpi
+    
+    Type(TTableData), Intent(InOut) :: table
+
+    Integer(kind=mpi_ik)               :: ierr, ii
+    Integer(kind=mpi_ik),Dimension(4)  :: data_dim
+
+    Character(len=16384)                :: m_char
+    
+    !! -------------------------------------------------------------------------
+
+    if ( rank_mpi == root_rank_mpi ) then
+       data_dim(1:2) = table%data_size
+       data_dim(3)   = len(table%head(1))
+       if ( allocated(table%rownames) ) then
+          data_dim(4)   = len(table%rownames(1))
+       Else
+          data_dim(4) = 0
+       End if
+    End if
+    
+    !** Broadcast table size, head and rownmae string length ---------
+    Call mpi_bcast(data_dim, 4_mpi_ik, MPI_INTEGER4, &
+         root_rank_mpi, MPI_COMM, ierr)
+    
+    !** Broadcast head -----------------------------------------------
+    if ( rank_mpi .NE. root_rank_mpi ) then
+       table%data_size = data_dim(1:2)
+       Allocate(table%head(table%data_size(2)),mold=m_char(1:data_dim(3)))
+    End if
+    
+    Call mpi_bcast(table%head, Int(table%data_size(2)*data_dim(3),mpi_ik), MPI_CHAR, &
+         root_rank_mpi, MPI_COMM, ierr)
+
+    !** Broadcast rownames -------------------------------------------
+    If ( data_dim(4) > 0 ) then
+       if ( rank_mpi .NE. root_rank_mpi ) then
+          Allocate(table%rownames(table%data_size(1)),mold=m_char(1:data_dim(4)))
+       End if
+
+       Call mpi_bcast(table%rownames, Int(table%data_size(1)*data_dim(4),mpi_ik), MPI_CHAR, &
+            root_rank_mpi, MPI_COMM, ierr)
+    End If
+
+    if ( rank_mpi .NE. root_rank_mpi ) then
+       Allocate(table%col_types(table%data_size(2)))
+       Allocate(table%col_lengths(table%data_size(2)))
+    End if
+    
+    !** Broadcast col_types ------------------------------------------
+    Call mpi_bcast(table%col_types, Int(table%data_size(2),mpi_ik), MPI_CHAR, &
+         root_rank_mpi, MPI_COMM, ierr)
+
+    !** Broadcast col_lengths ----------------------------------------
+    Call mpi_bcast(table%col_lengths, Int(table%data_size(2),mpi_ik), MPI_INTEGER4, &
+         root_rank_mpi, MPI_COMM, ierr)
+
+    !** Allocate and broadcast data ----------------------------------
+    if ( rank_mpi .NE. root_rank_mpi ) then
+       Allocate(table%data(table%data_size(2)))
+    End if
+
+    Do ii = 1, table%data_size(2)
+
+       if (table%col_types(ii) == "i") then
+          
+          if ( rank_mpi .NE. root_rank_mpi ) then         
+             allocate(table%data(ii)%cd_i(table%data_size(1)))
+          End if
+          Call mpi_bcast(table%data(ii)%cd_i, Int(table%data_size(1),mpi_ik), &
+               MPI_INTEGER4,root_rank_mpi, MPI_COMM, ierr)
+    
+       Else if (table%col_types(ii) == "r") then
+    
+          if ( rank_mpi .NE. root_rank_mpi ) then         
+             allocate(table%data(ii)%cd_r(table%data_size(1)))
+          End if
+          Call mpi_bcast(table%data(ii)%cd_r, Int(table%data_size(1),mpi_ik), &
+               MPI_REAL8, root_rank_mpi, MPI_COMM, ierr)
+       Else
+
+          if ( rank_mpi .NE. root_rank_mpi ) then         
+             allocate(table%data(ii)%cd_c(table%data_size(1)),mold=m_char(1:table%col_lengths(ii)))
+          End if
+
+          Call mpi_bcast(table%data(ii)%cd_c, &
+               Int(table%data_size(1)*table%col_lengths(ii),mpi_ik), &
+               MPI_CHAR, root_rank_mpi, MPI_COMM, ierr)
+       End if
+    End Do
+
+  End subroutine mpi_bcast_table
   
 end module CoSMic_IO

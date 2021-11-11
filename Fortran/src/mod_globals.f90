@@ -76,118 +76,61 @@ module global_types
 
   public
   save
-  
-  type TableData
+
+  type TColumnData
  
-     character(len=:), Dimension(:)  , allocatable :: head
-     character(len=:), Dimension(:)  , allocatable :: rownames
-     Real(Kind=rk)   , Dimension(:,:), Allocatable :: data
+     character(len=:), Dimension(:), Allocatable :: cd_c
+     Integer(Kind=ik), Dimension(:), Allocatable :: cd_i
+     Real(Kind=rk)   , Dimension(:), Allocatable :: cd_r
           
-  End type TableData
+  End type TColumnData
+
+  type TTableData
+ 
+     character(len=:), Dimension(:), allocatable :: head        !x
+
+     Integer(kind=4) , Dimension(2)              :: data_size   !x
+
+     Character       , Dimension(:), allocatable :: col_types   !x
+     Integer(kind=4), Dimension(:), allocatable  :: col_lengths !x
+     
+     character(len=:), Dimension(:), allocatable :: rownames    !x
+     
+     Type(TcolumnData),Dimension(:)  , allocatable :: data      !
+          
+  End type TTableData
   
-  !! !!!!!!variables for iol which is a list in R code
+  !> Type to hold all baseline input data --------------------------------------
   type iols
 
-     Type(TableData)                       :: R0_effect
+     Type(TTableData)                       :: R0_effect
+     Type(TTableData)                       :: counties
+     Type(TTableData)                       :: seed
+     Type(TTableData)                       :: death
+     Type(TTableData)                       :: trans_pr
+     Type(TTableData)                       :: pop
+     Type(TTableData)                       :: connect_total
+     Type(TTableData)                       :: connect_work
+     Type(TTableData)                       :: states
      
-     ! variables for trans_pr
-     character*15,allocatable,dimension(:) :: transpr_age_gr
-     character*15,allocatable,dimension(:) :: transpr_sex
-     real,allocatable,dimension(:)         :: transpr_surv_ill
-     real,allocatable,dimension(:)         :: transpr_icu_risk
-     real,allocatable,dimension(:)         :: transpr_surv_icu
-     character*15,dimension(5)             :: titel
-     ! variables for pop
-     integer,allocatable,dimension(:)      :: pop_distid
-     character(10),allocatable,dimension(:):: pop_date
-     character(1),allocatable,dimension(:) :: pop_sex
-     character(2),allocatable,dimension(:) :: pop_age
-     integer,allocatable,dimension(:)      :: pop_agei
-     integer,allocatable,dimension(:)      :: pop_total
-     ! variable for seed
-     integer,allocatable,dimension(:)      :: seed_distid
-     character*10,allocatable,dimension(:) :: seed_date
-     integer,allocatable,dimension(:)      :: seed_cases
-     character*15,dimension(3)             :: seed_titel
-     !variables for seed_dea
-     integer,allocatable,dimension(:)      :: death_distid
-     character*10,allocatable,dimension(:) :: death_date
-     integer,allocatable,dimension(:)      :: death_cases
-     !variable for connect_total
-     integer,dimension(401)                :: connect_total_distid
-     character*15,dimension(401)           :: connect_total_name
-     real,dimension(401,401)               :: connect_total
-     character*15                          :: connect_titel
-     !variable for connect_work
-     integer,dimension(401)                :: connect_work_distid
-     character*15,dimension(401)           :: connect_work_name
-     real,dimension(401,401)               :: connect_work
-     !variable for states
-     integer,allocatable,dimension(:)      :: states_code
-     integer,allocatable,dimension(:)      :: states_inhabitant
-     character*15,allocatable,dimension(:) :: states_shortcut
-     character*30,allocatable,dimension(:) :: states_name
-     character*15,dimension(4)             :: state_titel
-     !variable for counties
-     integer,allocatable,dimension(:)      :: counties_dist_id
-     character*50,allocatable,dimension(:) :: counties_name
-     real,allocatable,dimension(:)         :: counties_area
-     integer,allocatable,dimension(:)      :: counties_inhabitants
+!!$     !variable for connect_total
+!!$     integer,dimension(401)                :: connect_total_distid
+!!$     character*15,dimension(401)           :: connect_total_name
+!!$     real,dimension(401,401)               :: connect_total
+!!$     character*15                          :: connect_titel
+!!$     !variable for connect_work
+!!$     integer,dimension(401)                :: connect_work_distid
+!!$     character*15,dimension(401)           :: connect_work_name
+!!$     real,dimension(401,401)               :: connect_work
+!!$     !variable for states
+!!$     integer,allocatable,dimension(:)      :: states_code
+!!$     integer,allocatable,dimension(:)      :: states_inhabitant
+!!$     character*15,allocatable,dimension(:) :: states_shortcut
+!!$     character*30,allocatable,dimension(:) :: states_name
+!!$     character*15,dimension(4)             :: state_titel
 
   end type iols
 
-  !variable declaration for pspace
-  type ps_scalar
-     real                                  :: param
-     character*10                          :: var_type
-     character*10                          :: name
-  end type ps_scalar
-
-  type ps_vector
-     real,allocatable                      :: param(:,:)
-     character*20,allocatable              :: param_char(:,:)                        
-     character*10                          :: var_type
-  end type ps_vector
-
-  type pspaces
-     type(ps_scalar),dimension(8)          :: Ps_scalar_list
-     type(ps_vector)                       :: ROeffect_ps
-  end type pspaces
-
-  !-------------------------------------------------------------------------------
-  !> Type to hold execution parameters
-  type exec_parameters
-
-     character(len=mcl) :: exec_procedure
-     character(len=mcl) :: data_dir
-     character(len=mcl) :: output_dir
-     character(len=mcl) :: model_version
-     character(len=mcl) :: export_name
-
-  end type exec_parameters
-
-  type static_parameters
-
-     character(len=mcl), Dimension(:), Allocatable :: sim_regions
-
-     character(len=mcl)                            :: country    = "Germany"
-     character(len=10)                             :: seed_date  = "2021-03-09"
-     Logical                                       :: restrict
-     integer                                       :: lhc_samples
-
-     ! File names of input files -----------------------------
-     character(len=mcl)                            :: trans_pr=""     
-     character(len=mcl)                            :: pop=""     
-     character(len=mcl)                            :: inf_cases=""    
-     character(len=mcl)                            :: dead_cases=""   
-     character(len=mcl)                            :: connect_total=""
-     character(len=mcl)                            :: connect_work="" 
-     character(len=mcl)                            :: states=""       
-     character(len=mcl)                            :: counties=""     
-     character(len=mcl)                            :: R0_effects=""   
-     
-  end type static_parameters
-  
 end module global_types
 
 !===============================================================================

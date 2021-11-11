@@ -19,6 +19,10 @@ Module strings
 
   implicit none
   
+  Character(Len=*), Parameter :: str_chars='!"#$%&'//&
+       "'()*+,/:;<=>?@ABCDFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdfghijklmnopqrstuvwxyz{|}~"
+  Character(Len=*), Parameter :: real_chars='.eE'
+  
 contains
   
   !! ---------------------------------------------------------------------------
@@ -45,10 +49,10 @@ contains
 
   !! ---------------------------------------------------------------------------
   !> Function to split a string into tokens according to the passed seperator
-  Function strtok(string,char) Result(str_arr)
+  Function strtok(string,sep_char) Result(str_arr)
     
     character(len=*)     , Intent(in) :: string
-    character            , Intent(in) :: char
+    character            , Intent(in) :: sep_char
     
     integer, Dimension(:),allocatable :: pos_arr
     
@@ -64,13 +68,13 @@ contains
     !! Determine number of seperators in string ----------------------
     nn = 0
     Do ii = 1, str_len
-       if (string(ii:ii) == char) nn = nn + 1 
+       if (string(ii:ii) == sep_char) nn = nn + 1 
     End Do
 
     !! Number of fields = number of seperators + 1 -------------------
     nf = nn + 1
 
-    !! Save position of chars in string ------------------------------
+    !! Save position of sep_chars in string ------------------------------
     if (str_len > 0) then
 
        lpos   = 0
@@ -82,7 +86,7 @@ contains
        nn = 1
 
        Do ii = 1, str_len
-          if (string(ii:ii) == char) then
+          if (string(ii:ii) == sep_char) then
              nn = nn + 1
              pos_arr(nn) = ii
              maxlen = max(maxlen,ii-lpos-1)
@@ -115,6 +119,172 @@ contains
     End if
 
   End Function strtok
+
+  !! ---------------------------------------------------------------------------
+  !> Function to return the lenghts of the substrings in case a string would
+  !> be split into tokens according to the passed seperator
+  Function len_strtok(string,sep_char) Result(str_lengths)
+    
+    character(len=*)     , Intent(in) :: string
+    character            , Intent(in) :: sep_char
+    
+    integer, Dimension(:),allocatable :: pos_arr
+
+    integer, Dimension(:),allocatable :: str_lengths
+
+    integer                           :: ii, nn, lpos
+    integer                           :: str_len, nf
+
+    !---------------------------------------------------------------------------
+
+    str_len = len_trim(string)
+
+    !! Determine number of seperators in string ----------------------
+    nn = 0
+    Do ii = 1, str_len
+       if (string(ii:ii) == sep_char) nn = nn + 1 
+    End Do
+
+    !! Number of fields = number of seperators + 1 -------------------
+    nf = nn + 1
+
+    !! Save position of sep_chars in string ------------------------------
+    if (str_len > 0) then
+
+       lpos   = 0
+
+       Allocate(pos_arr(nf+1))
+       pos_arr(1) = 0
+
+       nn = 1
+
+       Do ii = 1, str_len
+          if (string(ii:ii) == sep_char) then
+             nn = nn + 1
+             pos_arr(nn) = ii
+             lpos = ii
+          End if
+       End Do
+
+       pos_arr(NF+1) = len_trim(string)+1
+
+       Allocate(str_lengths(nf))
+
+       Do ii = 1, nf
+          str_lengths(ii) = pos_arr(ii+1)-pos_arr(ii)-1
+       End Do
+
+    else
+
+       Allocate(str_lengths(0))
+
+    End if
+
+  End Function len_strtok
+
+  !! ---------------------------------------------------------------------------
+  !> Function to return the types of the substrings in case a string would
+  !> be split into tokens according to the passed seperator.
+  Function type_strtok(in_string,sep_char) Result(str_types)
+    
+    character(len=*)     , Intent(in)  :: in_string
+    character            , Intent(in)  :: sep_char
+    
+    integer, Dimension(:),allocatable  :: pos_arr
+
+    Character,Dimension(:),allocatable :: str_types
+
+    integer                            :: ii, nn, lpos
+    integer                            :: str_len, nf, sep_pos
+    integer                            :: io_stat
+    
+    Real                               :: tmp_real
+    integer                            :: tmp_int
+    
+    character(len=:),allocatable       :: loc_str_chars
+
+    character(len=:),allocatable       :: string
+    
+    !---------------------------------------------------------------------------
+
+    string = adjustl(in_string)
+    
+    str_len = len_trim(string)
+
+    !! Determine number of seperators in string ----------------------
+    nn = 0
+    Do ii = 1, str_len
+       if (string(ii:ii) == sep_char) nn = nn + 1 
+    End Do
+
+    !! Number of fields = number of seperators + 1 -------------------
+    nf = nn + 1
+
+    !! Save position of sep_chars in string ------------------------------
+    if (str_len > 0) then
+
+       lpos   = 0
+
+       Allocate(pos_arr(nf+1))
+       pos_arr(1) = 0
+
+       nn = 1
+
+       Do ii = 1, str_len
+          if (string(ii:ii) == sep_char) then
+             nn = nn + 1
+             pos_arr(nn) = ii
+             lpos = ii
+          End if
+       End Do
+
+       pos_arr(NF+1) = len_trim(string)+1
+
+       Allocate(str_types(nf))
+       
+       !** Reduce seperator from sequence of characters signaling string data -----
+       sep_pos = scan(str_chars,sep_char)
+
+       if (sep_pos > 1) then
+          loc_str_chars = str_chars(1:sep_pos-1)//str_chars((sep_pos+1):len_trim(str_chars))
+       else
+          loc_str_chars = str_chars(2:len_trim(str_chars))
+       End if
+       
+       Do ii = 1, nf
+
+          if( scan(string((pos_arr(ii)+1):pos_arr(ii+1)-1), loc_str_chars) > 0 ) then
+             !**  Check whether we have chars signaling characters -------------
+             str_types(ii) = "c"
+          Else
+             !** If not check whether we have chars signaling real -------------
+             if (scan(string((pos_arr(ii)+1):pos_arr(ii+1)-1),real_chars) > 0 ) then
+
+                !** Check whether real can be read -----------------------------
+                Read(string((pos_arr(ii)+1):pos_arr(ii+1)-1),*,iostat=io_stat)tmp_real
+                if (io_stat .NE. 0) then
+                   str_types(ii) = "c"
+                else
+                   str_types(ii) = "r"
+                end if
+             Else
+                Read(string((pos_arr(ii)+1):pos_arr(ii+1)-1),*,iostat=io_stat)tmp_int
+                if (io_stat .NE. 0) then
+                   str_types(ii) = "c"
+                else
+                   str_types(ii) = "i"
+                end if
+             End if
+          End if
+       End Do
+
+    else
+
+       Allocate(str_types(0))
+
+    End if
+
+  End Function type_strtok
 
   !! ---------------------------------------------------------------------------
   !> Function to convert characters to lower case

@@ -49,5 +49,6 @@ Module precision
   Integer, Parameter :: mcl = 128
   Integer, Parameter :: rk  = 8
   Integer, Parameter :: ik  = 4
+  Integer, Parameter :: mpi_ik  = 4
   
 End Module precision
