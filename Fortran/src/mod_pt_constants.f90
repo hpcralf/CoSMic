@@ -25,6 +25,9 @@ Module pt_constants
   !> Whether to write debug output ---------------------------------------------
   Logical,   parameter :: PT_DEBUG = .FALSE.
 
+  !> How many data points to put in log file -----------------------------------
+  Integer,   parameter :: PT_DATA_LOG_SIZE = 100
+
   ! Character constants for nice output ----------------------------------------
   Character(Len=*), Parameter :: PTF_E_A    = "('EE ',A)"
   Character(Len=*), Parameter :: PTF_E_AI0  = "('EE ',*(A,1X,I0))"

@@ -781,8 +781,8 @@ Contains
     End Do
        
     !***********************************************************
-    !** n_data in [0,30] ***************************************
-    If (n_data <= 30) then
+    !** n_data in [0,PT_DATA_LOG_SIZE] *************************
+    If (n_data <= PT_DATA_LOG_SIZE) then
 
        Write(un_lf, "('"//fmt_str//"   |')",ADVANCE='NO')
 
@@ -1174,7 +1174,7 @@ Contains
     call serialize_branch_rec(pt,head,size)
 
     size = size - 1
-    write(*,*)SIZE
+        
   End Subroutine serialize_pt
 
   !============================================================================
@@ -1387,10 +1387,10 @@ Contains
              Case ("I")
 
                 Allocate(branch%leaves(ii)%i8(dat_no))
-                no_pt_ik_elems = Int(dat_no*8/pt_ik,pt_ik)
-                branch%leaves(ii)%i8 = Transfer(head(pos:pos+no_pt_ik_elems-1),mold=1_pt_ik)
+                no_pt_ik_elems = Int(dat_no*kind(branch%leaves(ii)%i8(1))/pt_ik,pt_ik)
+                branch%leaves(ii)%i8 = Transfer(head(pos:pos+no_pt_ik_elems-1),branch%leaves(ii)%i8)
                 pos = pos + no_pt_ik_elems
-                
+
              Case ("R")
 
                 Allocate(branch%leaves(ii)%r8(dat_no))

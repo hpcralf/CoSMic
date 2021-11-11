@@ -75,21 +75,21 @@ Module kernel
      Integer,Allocatable             :: dist_id(:)
      Integer,Allocatable             :: dist_id_rn(:)
      Character,Allocatable           :: sex(:)
-     Integer(kind=1),Allocatable             :: age(:)
-     Integer(kind=1),Allocatable             :: t1(:)
-     Integer(kind=1),Allocatable             :: t2(:)
+     Integer(kind=1),Allocatable     :: age(:)
+     Integer(kind=1),Allocatable     :: t1(:)
+     Integer(kind=1),Allocatable     :: t2(:)
      Integer,Allocatable             :: d(:)
   End Type sims
 
   !> states an individual can reach
   Integer, Parameter ::   missing    = -1
-  Integer, Parameter ::   healthy    = 0
-  Integer, Parameter ::   inf_noncon = 1
-  Integer, Parameter ::   inf_contag = 2
-  Integer, Parameter ::   ill_contag = 3
-  Integer, Parameter ::   ill_ICU    = 4
-  Integer, Parameter ::   immune     = 5
-  Integer, Parameter ::   dead       = 6
+  Integer, Parameter ::   healthy    =  0
+  Integer, Parameter ::   inf_noncon =  1
+  Integer, Parameter ::   inf_contag =  2
+  Integer, Parameter ::   ill_contag =  3
+  Integer, Parameter ::   ill_ICU    =  4
+  Integer, Parameter ::   immune     =  5
+  Integer, Parameter ::   dead       =  6
 
   Integer, Parameter ::   min_state  = -1
   Integer, Parameter ::   max_state  =  6
@@ -432,6 +432,7 @@ Contains
        seed_inf_ncont_dur(i)  = (temp_int - Date2Unixtime(seed_inf_ncont%date(i)))/86400&
             + inf_dur + cont_dur + 2
     End Do
+
     Allocate(temp(Size(seed_inf_ncont%cases)))
     temp = 0
     temp_int = 0
@@ -721,7 +722,7 @@ Contains
        if (OMP_GET_THREAD_NUM() == 0) then
           call start_timer("Sim Loop",reset=.FALSE.)
        End if
-
+write(*,*)time_n
        Call CoSMic_TimeLoop(time_n, pop_size, size(counties_index), counties_index, &
             Real(R0matrix,rk), Real(connect,rk), surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim ,&
             healthy_cases_final, inf_noncon_cases_final,inf_contag_cases_final, &

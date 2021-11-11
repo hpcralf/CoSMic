@@ -112,22 +112,6 @@ module global_types
      Type(TTableData)                       :: connect_total
      Type(TTableData)                       :: connect_work
      Type(TTableData)                       :: states
-     
-!!$     !variable for connect_total
-!!$     integer,dimension(401)                :: connect_total_distid
-!!$     character*15,dimension(401)           :: connect_total_name
-!!$     real,dimension(401,401)               :: connect_total
-!!$     character*15                          :: connect_titel
-!!$     !variable for connect_work
-!!$     integer,dimension(401)                :: connect_work_distid
-!!$     character*15,dimension(401)           :: connect_work_name
-!!$     real,dimension(401,401)               :: connect_work
-!!$     !variable for states
-!!$     integer,allocatable,dimension(:)      :: states_code
-!!$     integer,allocatable,dimension(:)      :: states_inhabitant
-!!$     character*15,allocatable,dimension(:) :: states_shortcut
-!!$     character*30,allocatable,dimension(:) :: states_name
-!!$     character*15,dimension(4)             :: state_titel
 
   end type iols
 
