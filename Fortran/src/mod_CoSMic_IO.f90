@@ -141,11 +141,13 @@ contains
 
     !Read R0_effects -------------------------------------------------
     call pt_get("#R0_effects",filename)
-    
-    call read_TableData( &
-         trim(data_dir)//trim(filename),sep=" ",head=.TRUE., &
-         rownames=.TRUE., data=iol%R0_effect &
-         )
+
+    If (trim(filename) .NE. "LHC") then
+       call read_TableData( &
+            trim(data_dir)//trim(filename),sep=" ",head=.TRUE., &
+            rownames=.TRUE., data=iol%R0_effect &
+            )
+    End If
 
   End Subroutine loaddata
   
@@ -515,10 +517,12 @@ contains
     End If
     
     Allocate(array(table%data_size(1),nc))
-    
+
+    nc = 1
     Do ii = 1, table%data_size(2)
        if (table%col_types(ii) == "r") then
-          array(:,ii) = table%data(ii)%cd_r
+          array(:,nc) = table%data(ii)%cd_r
+          nc = nc + 1
        End if
     End Do
     

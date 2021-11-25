@@ -60,9 +60,7 @@ Program CoSMic
 
   Type(iols)                    :: iol
 
-  Integer,Allocatable           :: counties_integer(:)
-
-  Integer(kind=ik)                              :: iter
+  Integer(kind=ik)                              :: iter, iter_s, iter_e, n_iter
   Integer(kind=ik)                              :: inf_dur
   Integer(kind=ik)                              :: cont_dur
   Integer(kind=ik)                              :: ill_dur
@@ -79,17 +77,36 @@ Program CoSMic
   character(len=:), Allocatable                 :: seed_date
   Integer(kind=ik)                              :: seed_before    
   Integer(kind=ik)                              :: sam_size
-  Real(kind=rk)                                 :: R0
 
-  Character(len=pt_mcl)                         :: logfile
+  Integer(kind=ik)                              :: lhc_samples
+  Integer(kind=ik)                              :: n_lhc_samples
+  Integer(kind=ik)                              :: lhc_samples_s
+  Integer(kind=ik)                              :: lhc_samples_e
+
+  Integer(kind=ik)                              :: cur_week
+  
+  Real(kind=rk)                                   :: R0
+  Real(kind=rk),    Allocatable, Dimension(:,:)   :: R0_effects, R0_effects_lhc
+  Character(len=:), Allocatable                   :: R0_effects_fn
+  Character(len=:), Allocatable                   :: lhc_dir
+
+  Character(Len=:), allocatable, Dimension(:)     :: region_ids
+  Character(Len=:), allocatable, Dimension(:)     :: region_ids_R0e
+  integer(kind=ik), allocatable, dimension(:)     :: region_index
+  
+  Character(len=pt_mcl)                           :: filename
+  
+  Character(len=pt_mcl)                           :: logfile
 
   !-- MPI Variables -----------------------------------------------------------
-  Integer(kind=mpi_ik)                               :: ierr
-  Integer(kind=mpi_ik)                               :: rank_mpi, size_mpi
+  Integer(kind=mpi_ik)                            :: ierr
+  Integer(kind=mpi_ik)                            :: rank_mpi, size_mpi
 
   Integer(kind=pt_ik), Dimension(:), Allocatable :: serial_pt
   Integer(kind=pt_ik)                            :: serial_pt_size
 
+  Integer(kind=pt_ik)                            :: ii, jj
+  Integer(kind=ik)                               :: num_counties
   !=============================================================================
   Call mpi_init(ierr)
 
@@ -178,12 +195,18 @@ Program CoSMic
   Call start_Timer("Broadcast input data")
 
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%counties)
-  Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%R0_effect)
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%seed)
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%trans_pr)
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%death)
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%pop)
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%connect_work)
+
+  call pt_get("#R0_effects",R0_effects_fn)
+
+  If (trim(R0_effects_fn) .NE. "LHC") then
+     Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%R0_effect)
+  End If
+  
   !Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%connect_total)
   !Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%connect_states)
   
@@ -221,21 +244,107 @@ Program CoSMic
   call pt_get("#sam_size",sam_size)
   call pt_get("#R0"      ,R0      )
 
+  If (trim(R0_effects_fn) .NE. "LHC") then
+     R0_effects = table_to_real_array(iol%R0_effect)
+  End If
+  
   Call end_Timer("Load pt variables")
 
-  !=============================================================================
-  ! Execute model ==============================================================
-  Call start_Timer("Exec. Simulation")
+  If (trim(R0_effects_fn) .EQ. "LHC") then
+     !=============================================================================
+     ! Load input data from param tree ============================================
+     Call start_Timer("Load LHC variables")
 
-  Call COVID19_Spatial_Microsimulation_for_Germany(iol, &
-       iter , &
-       inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
-       less_contagious, R0_force, immune_stop, &
-       R0change, R0delay ,R0delay_days, R0delay_type, &
-       control_age_sex, seed_date, seed_before, sam_size, R0)
+     call pt_get("#lhc.samples",lhc_samples)
 
-  Call end_Timer("Exec. Simulation")
+     if ( mod(lhc_samples,size_mpi) .NE. 0 ) then
+        n_lhc_samples = Int(lhc_samples / size_mpi ) + 1
+     else
+        n_lhc_samples = Int(lhc_samples / size_mpi )
+     End if
+     
+     lhc_samples_s = rank_mpi * n_lhc_samples + 1
+     lhc_samples_e = min((rank_mpi + 1 ) * n_lhc_samples , lhc_samples)
+     
+     write(*,*)rank_mpi,lhc_samples_s,lhc_samples_e,n_lhc_samples,lhc_samples
 
+     iter_s = 1
+     iter_e = iter
+
+     call pt_get("#current.week",cur_week)
+     call pt_get("#lhc.dir",lhc_dir)
+     
+     write(filename,'(3(A,I0),A)')"lhc_var_",cur_week-2,&
+          "_constant_",lhc_samples_s,"_",lhc_samples_e,".csv"
+     
+     call read_TableData( &
+          trim(lhc_dir)//"/"//trim(filename),sep=" ",head=.TRUE., &
+          rownames=.TRUE., data=iol%R0_effect &
+          )
+
+     R0_effects_lhc = table_to_real_array(iol%R0_effect)
+     region_ids     = get_char_column(iol%counties,'Nuts2')
+     region_ids_R0e = iol%R0_effect%head(1:38*(cur_week+1):cur_week+1)(1:4)
+
+     num_counties = size(region_ids)
+     allocate(region_index(num_counties))
+
+     do ii = 1, num_counties
+        do jj = 1, size(region_ids_R0e)
+           if (trim(region_ids(ii)) == trim(region_ids_R0e(jj)))then
+              region_index(ii) = jj
+           endif
+        end do
+     end do
+
+     Call end_Timer("Load LHC variables")
+
+     Call start_Timer("Exec. Simulation")
+     Do ii = 1, n_lhc_samples
+
+        R0_effects = reshape(R0_effects_lhc(ii,1:38*(cur_week+1)),(/cur_week+1,38 /))
+
+        Call COVID19_Spatial_Microsimulation_for_Germany(iol, &
+             iter_s, iter_e , &
+             inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
+             less_contagious, R0_force, immune_stop, &
+             R0change, R0delay ,R0delay_days, R0delay_type, &
+             control_age_sex, seed_date, seed_before, sam_size, R0, &
+             R0_effects, region_index, &
+             rank_mpi)
+        
+     End Do
+     Call end_Timer("Exec. Simulation")
+
+
+  Else
+     !==========================================================================
+     ! Execute single model instance ===========================================
+     Call start_Timer("Exec. Simulation")
+     
+     if ( mod(iter,size_mpi) .NE. 0 ) then
+        n_iter = Int(iter / size_mpi ) + 1
+     else
+        n_iter = Int(iter / size_mpi )
+     End if
+     
+     iter_s = rank_mpi * n_iter + 1
+     iter_e = min((rank_mpi + 1 ) * n_iter , iter)
+     
+     write(*,*)rank_mpi,iter_s,iter_e,n_iter,iter
+     
+     Call COVID19_Spatial_Microsimulation_for_Germany(iol, &
+          iter_s, iter_e , &
+          inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
+          less_contagious, R0_force, immune_stop, &
+          R0change, R0delay ,R0delay_days, R0delay_type, &
+          control_age_sex, seed_date, seed_before, sam_size, R0, &
+          R0_effects, region_index, rank_mpi)
+     
+     Call end_Timer("Exec. Simulation")
+
+  ENd If
+  
 1001 Continue
   
   call end_timer("CoSMic")

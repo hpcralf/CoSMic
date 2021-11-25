@@ -98,18 +98,19 @@ Contains
   
   Subroutine COVID19_Spatial_Microsimulation_for_Germany( &
        iol, &
-       iter , &
+       iter_s, iter_e, &
        inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
        less_contagious, R0_force, immune_stop, &
        R0change, R0delay ,R0delay_days, R0delay_type, &
-       control_age_sex, seed_date, seed_before, sam_size, R0)
+       control_age_sex, seed_date, seed_before, sam_size, R0, &
+       R0_effects, region_index, proc)
 
     !===========================================================================
     ! Declaration
     !===========================================================================
 
     Type(iols), Target                                        :: iol
-    Integer(kind=ik)                             , intent(in) :: iter
+    Integer(kind=ik)                             , intent(in) :: iter_s, iter_e
     Integer(kind=ik)                             , intent(in) :: inf_dur
     Integer(kind=ik)                             , intent(in) :: cont_dur
     Integer(kind=ik)                             , intent(in) :: ill_dur
@@ -127,14 +128,16 @@ Contains
     Integer(kind=ik)                             , intent(in) :: seed_before    
     Integer(kind=ik)                             , intent(in) :: sam_size
     Real(kind=rk)                                , intent(in) :: R0
-
+    Real(kind=rk),    Allocatable, Dimension(:,:),intent(in)  :: R0_effects
+    Integer(kind=ik)                             , intent(in) :: proc
+    integer(kind=ik), allocatable, dimension(:)  , intent(in) :: region_index
     !---------------------------------------------------------------------------
 
     Integer(kind=ik)   :: i, j, index, temp_int,icounty,county,it_ss,status
     character(len=:), Allocatable   :: seed_date_mod
     Integer(kind=ik), Allocatable , Dimension(:) :: counties_index
-    Real(kind=rk),    Allocatable, Dimension(:,:) :: R0_effects
-
+    Integer(kind=ik)                             :: n_iter
+    
     Character(Len=10)             :: seed_before_char,seed_temp
     Character(Len=10),Allocatable :: seed_seq(:),seed_inf_cont_seq(:),seed_inf_ncont_seq(:)
     Character(Len=10),Allocatable :: seed_d_seq(:)
@@ -175,7 +178,9 @@ Contains
     Integer                         :: max_date,n_change
     character(len=10)               :: l_seed_date
     Real                            :: iter_pass_handle(6)
-
+    logical                         :: exs
+    Character*8                     :: proc_char
+    
     Type(tTimer)                    :: timer
 
     Integer(kind=ik), Allocatable, Dimension(:)     :: dist_id_cref 
@@ -265,15 +270,15 @@ Contains
 
     num_counties = Size(counties_index)
 
-    Allocate(healthy_cases_final(num_counties,time_n,iter))
-    Allocate(inf_noncon_cases_final(num_counties,time_n,iter))
-    Allocate(inf_contag_cases_final(num_counties,time_n,iter))
-    Allocate(ill_contag_cases_final(num_counties,time_n,iter))
-    Allocate(ill_ICU_cases_final(num_counties,time_n,iter))
-    Allocate(immune_cases_final(num_counties,time_n,iter))
-    Allocate(dead_cases_final(num_counties,time_n,iter))
+    n_iter = iter_e - iter_s + 1
 
-    R0_effects = table_to_real_array(iol%R0_effect)
+    Allocate(healthy_cases_final(num_counties,time_n,n_iter))
+    Allocate(inf_noncon_cases_final(num_counties,time_n,n_iter))
+    Allocate(inf_contag_cases_final(num_counties,time_n,n_iter))
+    Allocate(ill_contag_cases_final(num_counties,time_n,n_iter))
+    Allocate(ill_ICU_cases_final(num_counties,time_n,n_iter))
+    Allocate(immune_cases_final(num_counties,time_n,n_iter))
+    Allocate(dead_cases_final(num_counties,time_n,n_iter))
 
     inf_seed_date = get_char_column(iol%seed,'date')
 
@@ -468,10 +473,10 @@ Contains
     End if
 
 !!!=============================================================================
-!!! Iteration over parameter space
+!!! Non-Deterministic Iteration
 !!!=============================================================================
 
-    !!=======================================================================
+    !!==============================================================
     !! Init population
     pop_total  => get_int_column_pointer(iol%pop,'total')
     pop_distid => get_int_column_pointer(iol%pop,'dist_id')
@@ -496,7 +501,7 @@ Contains
     !$OMP& firstprivate(seed_ill_dur,seed_inf_cont_dur,seed_inf_ncont_dur,l_seed_date) 
 
     !$OMP DO
-    Do it_ss = 1, iter
+    Do it_ss = 1, (iter_e-iter_s+1)
 
        !call start_timer("Init Sim Loop",reset=.FALSE.)
 
@@ -681,7 +686,7 @@ Contains
 
        Do i = 1,n_change
 
-          getchange = R0_effects(i,(counties_index/1000))
+          getchange = R0_effects(i,region_index)
 
           gettime = generate_seq(R0change(1,i),R0change(2,i),1)
 
@@ -713,7 +718,7 @@ Contains
 
        connect = transpose(connect)
 
-       ! call end_timer("Init Sim Loop")
+       ! call end_timer("Init Sim Loop") 
 
 !!!=============================================================================
 !!! Simulation Loop ============================================================
@@ -722,7 +727,7 @@ Contains
        if (OMP_GET_THREAD_NUM() == 0) then
           call start_timer("Sim Loop",reset=.FALSE.)
        End if
-write(*,*)time_n
+
        Call CoSMic_TimeLoop(time_n, pop_size, size(counties_index), counties_index, &
             Real(R0matrix,rk), Real(connect,rk), surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim ,&
             healthy_cases_final, inf_noncon_cases_final,inf_contag_cases_final, &
@@ -747,32 +752,68 @@ write(*,*)time_n
     !$OMP END PARALLEL
 
     call start_timer("+- Writeout",reset=.FALSE.)
+    
+    write(proc_char,'("_",I7.7)')proc
+    exs = .FALSE.
+    
+    Inquire(file = "./output/"//proc_char//"_ill_ICU_cases.csv", exist=exs)
+    
+    If (exs) then
+       Open (101, file = "./output/"//proc_char//"_ill_ICU_cases.csv",&
+            position="Append", status ="old", access="stream")
+    else
+       Open (101, file = "./output/"//proc_char//"_ill_ICU_cases.csv",&
+            access="stream", status="replace")
+       !write the head file
+       !Write(101,10)Label,iter_char,R0change_name,"iter","x.dist_id"
+    End If
 
-    iter_pass_handle = (/Real(sam_size,rk),R0,Real(icu_dur,rk),0._rk,0._rk,0._rk/)
+    write(101)ill_ICU_cases_final
 
-    Call write_data_v2(healthy_cases_final,iter_pass_handle, table_to_real_array(iol%R0_effect),counties_index,1)
-    Call write_data_v2(inf_noncon_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,2)
-    Call write_data_v2(inf_contag_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,3)
-    Call write_data_v2(ill_contag_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,4)
-    Call write_data_v2(ill_ICU_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,5)
-    Call write_data_v2(immune_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,6)
-    Call write_data_v2(dead_cases_final,iter_pass_handle,table_to_real_array(iol%R0_effect),counties_index,7)
+    Close(101)
+!!$    
+!!$    iter_pass_handle = (/Real(sam_size,rk),R0,Real(icu_dur,rk),0._rk,0._rk,0._rk/)
+!!$
+!!$    Call write_data_v2(healthy_cases_final,iter_pass_handle, &
+!!$         table_to_real_array(iol%R0_effect),counties_index,1, &
+!!$         "_healthy_cases.csv",proc,iter_s,iter_e)
+!!$    Call write_data_v2(inf_noncon_cases_final,iter_pass_handle, &
+!!$         table_to_real_array(iol%R0_effect),counties_index,2, &
+!!$         "_inf_noncon_cases.csv",proc,iter_s,iter_e)
+!!$    Call write_data_v2(inf_contag_cases_final,iter_pass_handle, &
+!!$         table_to_real_array(iol%R0_effect),counties_index,3, &
+!!$         "_inf_contag_cases.csv",proc,iter_s,iter_e)
+!!$    Call write_data_v2(ill_contag_cases_final,iter_pass_handle, &
+!!$         table_to_real_array(iol%R0_effect),counties_index,4, &
+!!$         "_ill_contag_cases.csv",proc,iter_s,iter_e)
+!!$    Call write_data_v2(ill_ICU_cases_final,iter_pass_handle, &
+!!$         table_to_real_array(iol%R0_effect),counties_index,5, &
+!!$         "_ill_ICU_cases.csv",proc,iter_s,iter_e)
+!!$    Call write_data_v2(immune_cases_final,iter_pass_handle, &
+!!$         table_to_real_array(iol%R0_effect),counties_index,6, &
+!!$         "_immune_cases.csv",proc,iter_s,iter_e)
+!!$    Call write_data_v2(dead_cases_final,iter_pass_handle, &
+!!$         table_to_real_array(iol%R0_effect),counties_index,7, &
+!!$         "_dead_cases.csv",proc,iter_s,iter_e)
 
     call end_timer("+- Writeout")
 
   End Subroutine COVID19_Spatial_Microsimulation_for_Germany
 
-  Subroutine write_data_v2(healthy_cases_final,iter_pass_handle,R0Change,counties_index,type_file)
-    Real,Dimension(:)        :: iter_pass_handle(:)
-    Real(kind=rk),Dimension(:,:)      :: R0Change
-    Real,Allocatable         :: R0change_rep(:,:),R0change_exp(:,:),temp_output(:)
-    Integer,Dimension(:,:,:) :: healthy_cases_final
-    Integer,Dimension(:)     :: counties_index
-    Integer                  :: iter
-    Integer                  :: type_file
- 
+  Subroutine write_data_v2(healthy_cases_final,iter_pass_handle,R0Change,counties_index,&
+       type_file,filename,proc,iter_s,iter_e)
+    Real,Dimension(:)             :: iter_pass_handle(:)
+    Real(kind=rk),Dimension(:,:)  :: R0Change
+    Real,Allocatable              :: R0change_rep(:,:),R0change_exp(:,:),temp_output(:)
+    Integer,Dimension(:,:,:)      :: healthy_cases_final
+    Integer,Dimension(:)          :: counties_index
+    Integer                       :: iter_s,iter_e, n_iter
+    Integer                       :: type_file, proc
+    Character(Len=*), intent(in)  :: filename
+    
     Integer :: county_size, count 
     Character*15                :: iter_char(6)
+    Character*8                 :: proc_char
     Character*5,Allocatable     :: R0change_name(:)
     Character*2                 :: counties(16)
     Integer,Allocatable         :: counties_index_out(:),iter_array(:)
@@ -788,7 +829,9 @@ write(*,*)time_n
 
     Character*15 dir_prefix
 
-    iter        = Size(healthy_cases_final,DIM=3)
+    logical :: exs
+    
+    n_iter      = iter_e-iter_s+1
     county_size = Size(healthy_cases_final,DIM=1)
 
     iter_char = (/"sam_size       ",&
@@ -801,12 +844,14 @@ write(*,*)time_n
     counties  = (/"SH","HH","NI","HB","NW","HE","RP","BW","BY","SL",&
          "BE","BB","MV","SN","ST","TH"/)
 
+    write(proc_char,'("_",I7.7)')proc
+    
     Allocate(R0change_rep(Size(R0Change),1))
-    Allocate(R0change_exp(iter*county_size,Size(R0change_rep)))
-    Allocate(temp_output(iter*county_size))
+    Allocate(R0change_exp(n_iter*county_size,Size(R0change_rep)))
+    Allocate(temp_output(n_iter*county_size))
     Allocate(R0change_name(Size(R0Change)))
-    Allocate(iter_array(county_size*iter))
-    Allocate(counties_index_out(county_size*iter))
+    Allocate(iter_array(county_size*n_iter))
+    Allocate(counties_index_out(county_size*n_iter))
     Allocate(Label(Size(healthy_cases_final,dim=2)))
 
     Call date_and_Time(b(1),b(2),b(3),date_time)
@@ -843,52 +888,35 @@ write(*,*)time_n
        day = "0"//Adjustl(day)
     End If
     time = year//month//day
-    If (type_file == 1)Then
-       Open (101, file = Trim(dir_prefix)//time//"healthy_cases.csv")
+    
+    exs = .FALSE.
+    Inquire(file = Trim(dir_prefix)//time//proc_char//trim(filename), exist=exs)
+    If (exs) then
+       Open (101, file = Trim(dir_prefix)//time//proc_char//trim(filename),&
+            position="Append", status ="old")
+    else
+       Open (101, file = Trim(dir_prefix)//time//proc_char//trim(filename),&
+            status ="new")
+       !write the head file
+       Write(101,10)Label,iter_char,R0change_name,"iter","x.dist_id"
     End If
-
-    If (type_file == 2)Then
-       Open (101, file = Trim(dir_prefix)//time//"inf_noncon_cases.csv")
-    End If
-
-    If (type_file == 3)Then
-       Open (101, file = Trim(dir_prefix)//time//"inf_contag_cases.csv")
-    End If
-
-    If (type_file == 4)Then
-       Open (101, file = Trim(dir_prefix)//time//"ill_contag_cases.csv")
-    End If
-
-    If (type_file == 5)Then
-       Open (101, file = Trim(dir_prefix)//time//"ill_ICU_cases.csv")
-    End If
-
-    If (type_file == 6)Then
-       Open (101, file = Trim(dir_prefix)//time//"immune_cases.csv")
-    End If
-
-    If (type_file == 7)Then
-       Open (101, file = Trim(dir_prefix)//time//"dead_cases.csv")
-    End If
-
-10  Format(1x,*(g0,","))
-
-    !write the head file
-    Write(101,10)Label,iter_char,R0change_name,"iter","x.dist_id"
-
+    
     R0change_rep = Reshape(R0Change,(/Size(R0change),1/))
-    R0change_exp = Transpose(Spread(R0change_rep(:,1),2,iter*county_size))
+    R0change_exp = Transpose(Spread(R0change_rep(:,1),2,n_iter*county_size))
 
     count = 1
-    Do i = 1,iter
+    Do i = 1,n_iter
        Do j = 1,county_size
           Write(101,10)healthy_cases_final(j,:,i),iter_pass_handle,R0change_exp(count,:),&
-               i,counties_index(j)
+               (i-1+iter_s),counties_index(j)
           count = count+1
        End Do
     End Do
 
     Close(101)
+    
+10  Format(1x,*(g0,","))
+    
   End Subroutine write_data_v2
 
   !!============================================================================
@@ -911,7 +939,7 @@ write(*,*)time_n
     Real(Kind=rk)   , Allocatable, Dimension(:,:,:)   , Intent(In) ::  ICU_risk_pasd
     Real(Kind=rk)   , Allocatable, Dimension(:,:)     , Intent(In) ::  surv_icu_pas
     
-    Type(sims)                                     , Intent(InOut) :: sim
+    Type(sims)                                        , Intent(InOut) :: sim
 
     Integer         , Allocatable, Dimension(:,:,:), Intent(inout) :: healthy_cases
     Integer         , Allocatable, Dimension(:,:,:), Intent(inout) :: inf_noncon_cases

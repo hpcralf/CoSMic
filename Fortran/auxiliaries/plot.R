@@ -43,15 +43,16 @@ library(pracma)
 library(RColorBrewer)
 
 ### Import functions ###########################################################
-src.dir <- "/quobyte/qb1/s33094/s33094/cosmic/CoSMic/R"
+base.dir  <- "/run/user/1000/gvfs/sftp:host=vulcan.hww.hlrs.de"
+src.dir   <- paste0(base.dir,"/quobyte/qb1/s33094/s33094/cosmic/CoSMic/R")
+input.dir <- paste0(base.dir,"/lustre/nec/ws3/ws/hpcralf-BIB/cosmic-projection-W64+6-06-02-21-20:07:15/Results-v12.0-2021-06-02_20:07:17")
+data.dir  <- "./"
+
 for ( i in dir(src.dir,pattern="*.R$") ) { source(paste(src.dir,i,sep="/")) }
 
-args = commandArgs(trailingOnly=TRUE)
-
-date.str  <- args[1]
-input.dir <- args[2]
-
-cur.dir <- getwd()
+#args = commandArgs(trailingOnly=TRUE)
+#date.str  <- args[1]
+#input.dir <- args[2]
 
 ################################################################################
 ### Reload baseline parameters                                                 #
@@ -63,6 +64,66 @@ pspace        <- readRDS(paste(input.dir,dir(input.dir,pattern="pspace"),sep="/"
 ################################################################################
 ### Load Fortran results                                                       #
 ################################################################################
+ldf <- list()
+cnt <- 0
+for ( f in  dir("./",pattern="ill_ICU_cases.csv")) {
+
+    to.read = file(f,"rb")
+
+    vec<-readBin(to.read, integer(), size=4, n=401*106*24*2, endian = "little")
+
+    mat<-matrix(vec[1:(401*106*24*2)],nrow=401)
+
+    df <- data.frame(mat)
+
+    ldf[[f]] <- do.call(rbind,apply(do.call(cbind,df),1,function(x){data.frame(t(matrix(x,nrow=106)))}))
+    
+    ldf[[f]]$SH1       <- rep(rep(c(1,2),each=24),401)+cnt
+    ldf[[f]]$iter      <- rep(seq(24),401*2)
+    ldf[[f]]$x.dist_id <- rep(iol$counties$dist_id,each=24*2)
+
+    ldf[[f]]<-ldf[[f]][order(ldf[[f]]$SH1,ldf[[f]]$iter),]
+    cnt <- cnt + 2
+}
+
+tmp<-do.call(rbind,ldf)
+tmp<-tmp[order(tmp$SH1,tmp$iter),]
+
+rr<-list("healthy"=tmp,"inf_noncon"=2,
+         "inf_contag"=3,"ill_contag"=4,
+         "ill_ICU"=tmp,"dead"=6,"immune"=7)
+
+plots.by.country (outfile         = "plot.by.country.pdf",
+                  sp              = sp,
+                  seed_icu        = iol$icu.cases.by.country,
+                  seed_dea        = iol$dead.cases.by.country,
+                  iol             = iol,
+                  pspace          = pspace,
+                  rr              = rr,
+                  ind.states      = c(5),
+                  global.plot     = FALSE,
+                  split.in        ="SH1")
+
+## Every diagram its own scale ------------------------------
+plots.by.state(outfile      = "plot.by.state.pdf",
+               sp           = sp,
+               seed_icu     = NULL,
+               seed_dea     = NULL,
+               iol          = iol,
+               pspace       = pspace,
+               rr           = rr,
+               region       = "nuts2",
+               fix.lim      = FALSE,
+               filtered     = FALSE,
+               Sec.Axis     = c("RMS"),
+               silent       = FALSE,
+               fk.cases     = rep(1/ 7,  7),
+               fk.sec       = rep(1/15, 15),
+               ind.states   = c(5),
+               split.in     ="SH1")
+
+################################################################################
+
 
 setwd("../output/")
 date.str<-"20211005"

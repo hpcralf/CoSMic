@@ -423,8 +423,13 @@ Contains
              arr = branch%leaves(ii)%r8(1)
              success = .TRUE.
              exit
+          Else if (branch%leaves(ii)%dat_ty == "I") then
+             arr = branch%leaves(ii)%i8(1)
+             success = .TRUE.
+             write(pt_umon,PTF_W_A)trim(p_name)//" was found but has type integer!"
+             exit
           End if
-          
+
        end if
 
     End do
