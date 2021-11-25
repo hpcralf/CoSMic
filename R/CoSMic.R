@@ -2266,6 +2266,15 @@ init.lhc <-  function(pspace,sp) {
             names( unlist(pspace.params[[1]])[which(unlist(pspace.sd)==0)]) )
         
         rownames(lhc)  <- NULL
+
+        ## Add 0 to week ids less than 10 --------------------
+        if (sum(is.na(as.numeric(substring(names(lhc),5)))) == 0) {
+            names(lhc) <- apply(
+                data.frame(
+                    substring(names(lhc),1,4),
+                    sprintf("%02d", as.numeric(substring(names(lhc),5)))
+                ),1,paste,collapse="")
+        }
         
         ## Order the columns --------------------------------
         if (dim(lhc)[2] > 1) {
