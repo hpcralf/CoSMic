@@ -54,7 +54,8 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
                              iol, pspace,
                              rr,  ind.states=NULL, global.plot,
                              x.min=NULL,x.max=NULL, relative=FALSE,
-                             silent=FALSE, split.in = NULL, y.max=NULL) {
+                             silent=FALSE, split.in = NULL, y.max=NULL,
+                             prog=NULL) {
 
     if (is.null(x.max) & is.null(sp$time_n)) {
         warning(paste("is.null(x.max) & is.null(sp$time_n) holds TRUE.",
@@ -193,6 +194,14 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
             state.list <- split(state.data, state.data[,split.by])
         }
 
+        if  ( (!is.null(prog)) & (length(state.list) != length(prog)) ) {
+            prog <- NULL
+            warning(paste0("length(prog) is not equal length(state.list) ",
+                           "found by splitting current data.frame of state ",ii,"\n",
+                           "prog is set to NULL."))
+            prog <- NULL
+        }
+        
         if (relative & (ii == "ill_ICU")) {
             main.title <- paste(sp$country,paste0(ii," [%]"),sep=" - ")
             y.title <- paste(ii,"[%]")
@@ -238,16 +247,20 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
             
             plt[[ii]] <- plt[[ii]] +
                 geom_ribbon(data=df.gg,aes(x=time, ymax=dt.max, ymin=dt.min), fill="red", alpha=.15) +
-                geom_line(data=df.gg,aes(x=time,y = dt.max), colour = "red",linetype = "dashed") +
-                geom_line(data=df.gg,aes(x=time,y = dt.min), colour = "red",linetype = "dashed") +
+                geom_line(data=df.gg,aes(x=time,y = dt.max),  colour = "red",linetype = "dashed") +
+                geom_line(data=df.gg,aes(x=time,y = dt.min),  colour = "red",linetype = "dashed") +
                 geom_line(data=df.gg,aes(x=time,y = dt.mean), colour = "red", size=1)
                 
         } else {
             
             for ( pg in seq(length(state.list)) ) {
-                
-                fill.dt <- paste(round(unique(state.list[[pg]][1,split.by]),3),collapse=" - ")
 
+                if ( is.null(prog) ) {
+                    fill.dt <- paste(round(unique(state.list[[pg]][1,split.by]),3),collapse=" - ")
+                } else {
+                    fill.dt <- prog[pg]
+                }
+                
                 if (relative & (ii == "ill_ICU")) {
                     state.min[[pg]]  <- state.min[[pg]]  / sum(iol$icu.cap$sum) *100
                     state.mean[[pg]] <- state.mean[[pg]] / sum(iol$icu.cap$sum) *100
@@ -257,12 +270,12 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
                 df.gg <- data.frame(time=time,
                                     dt.min = state.min[[pg]], dt.mean=state.mean[[pg]], dt.max=state.max[[pg]],
                                     data = fill.dt)
-                
+                 
                 plt[[ii]] <- plt[[ii]] +
                     geom_ribbon(data=df.gg,aes(x=time, ymax=dt.max, ymin=dt.min, fill=data), alpha=.15) +
-                    geom_line(data=df.gg,aes(x=time,y = dt.max), colour = fill.col[pg],linetype = "dashed") +
-                    geom_line(data=df.gg,aes(x=time,y = dt.min), colour = fill.col[pg],linetype = "dashed") +
-                    geom_line(data=df.gg,aes(x=time,y = dt.mean), colour = fill.col[pg], size=1)
+                    geom_line(data=df.gg,aes(x=time,y = dt.max , colour = data),linetype = "dashed") +
+                    geom_line(data=df.gg,aes(x=time,y = dt.min , colour = data),linetype = "dashed") +
+                    geom_line(data=df.gg,aes(x=time,y = dt.mean, colour = data), size=1)
                 
             }
         }
@@ -283,12 +296,35 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
             } else {
                 observed <- seed_icu
             }
-            
+                          
             plt[[ii]] <- plt[[ii]] +
                 geom_line(data=observed,
                           aes(x=date,y=cases,color="Observed")) +
-                scale_color_manual(values = c('Observed' = 'black')) +
                 theme(legend.title = element_blank())
+
+            m.cs <- "black"
+            names(m.cs) <- "Observed"
+
+            if (!global.plot) {
+                if ("prog.RKI" %in% prog) {
+                    m.cs <- c(m.cs, prog.RKI="red")
+                }
+                if ("constant" %in% prog) {
+                    m.cs <- c(m.cs, constant="deepskyblue")
+                }
+
+                if (length(m.cs) < (length(state.list)+1)) {
+                    m.cs <- c(m.cs,fill.col)
+                    names(m.cs)[names(m.cs)==""] <- round(as.numeric(names(state.list)),3)
+                }
+
+                plt[[ii]] <- plt[[ii]] +
+                    scale_color_manual(values = m.cs)+
+                    scale_fill_manual (values = m.cs)
+            } else {
+                plt[[ii]] <- plt[[ii]] +
+                    scale_color_manual(values = m.cs)
+            }
         }
 
         # Observerd dead cases ---------------------------------------
@@ -348,7 +384,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                            Sec.Axis = "RMS", fk.sec=rep(1/15, 15),
                            sec.text = FALSE,
                            ind.states=NULL, silent=FALSE, relative=FALSE,
-                           split.in = NULL, y.max=NULL) {
+                           split.in = NULL, y.max=NULL, prog=NULL) {
 
         ## -------------------------------------------------------------------------
         ## Select parpameters from pspace to group by
@@ -528,6 +564,14 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
             } else {
                 state.list <- split(state.data, state.data[,split.by])
             }
+
+            if ( (!is.null(prog)) & (length(state.list) != length(prog)) ) {
+                prog <- NULL
+                warning(paste0("length(prog) is not equal length(state.list) ",
+                               "found by splitting current data.frame of state ",ii,"\n",
+                               "prog is set to NULL."))
+                prog <- NULL
+            }
             
             plt[[ii]] <- plt[[ii]] + labs(x="Time [days]", y=sp.states.map[jj])
             
@@ -561,9 +605,13 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                     state.mean[[pg]] <- state.mean[[pg]] / cap
                     state.max[[pg]]  <- state.max[[pg]]  / cap
                 }
-                
-                fill.dt <- paste(round(unique(state.list[[pg]][1,split.by]),3),collapse=" - ")
 
+                if ( is.null(prog) ) {
+                    fill.dt <- paste(round(unique(state.list[[pg]][1,split.by]),3),collapse=" - ")
+                } else {
+                    fill.dt <- prog[pg]
+                }
+                
                 if (filtered) {
 
                     df.gg <- data.frame(time=time,
@@ -573,20 +621,20 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                                             stats::filter(state.mean[[pg]],fk.cases,sides=2)),
                                         dt.max  = as.numeric(
                                             stats::filter(state.max[[pg]],fk.cases,sides=2)),
-                                        data = paste0("Split - ",split.by,"=",fill.dt,"pg-",pg))
+                                        data = fill.dt) # paste0("Split - ",split.by,"=",fill.dt,"pg-",pg))
                 } else {
                     df.gg <- data.frame(time=time,
                                         dt.min  = state.min[[pg]],
                                         dt.mean = state.mean[[pg]],
                                         dt.max  = state.max[[pg]],
-                                        data = paste0("Split - ",split.by,"=",fill.dt,"pg-",pg))
+                                        data = fill.dt) # paste0("Split - ",split.by,"=",fill.dt,"pg-",pg))
                 }
                 
                 plt[[ii]] <- plt[[ii]] +
                     geom_ribbon(data=df.gg,aes(x=time, ymax=dt.max, ymin=dt.min, fill=data), alpha=.15) +
-                    geom_line(data=df.gg,aes(x=time,y = dt.max), colour = fill.col[pg],linetype = "dashed") +
-                    geom_line(data=df.gg,aes(x=time,y = dt.min), colour = fill.col[pg],linetype = "dashed") +
-                    geom_line(data=df.gg,aes(x=time,y = dt.mean), colour = fill.col[pg], size=1)
+                    geom_line(data=df.gg,aes(x=time,y = dt.max,  color = data),linetype = "dashed") +
+                    geom_line(data=df.gg,aes(x=time,y = dt.min,  color = data),linetype = "dashed") +
+                    geom_line(data=df.gg,aes(x=time,y = dt.mean, color = data), size=1)
                 
                 ## Store global maximum ------------------------------
                 glob.max[ii] <- max(c(glob.max[ii],max(df.gg[,2:4])))
@@ -640,6 +688,11 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                               aes(x=date,y=cases,color='Observed')) +
                     theme(legend.title = element_blank())
 
+                ## Standard colours are hard to differentiate ------------------
+                ## Black for Observed
+                m.cs <- "black"
+                names(m.cs) <- "Observed"
+                
                 ## if limits are not globaly fixed -----------------------------
                 if ( !fix.lim ) {
 
@@ -649,6 +702,12 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
 
                         for ( pg in seq(length(state.list)) ) {
 
+                            if ( is.null(prog) ) {
+                                fill.dt <- paste(round(unique(state.list[[pg]][1,split.by]),3),collapse=" - ")
+                            } else {
+                                fill.dt <- prog[pg]
+                            }
+                            
                             if ( region == "state" ) {
                                 gg.R0e <- data.frame(date = sp$seed_date +
                                                          unlist(lapply(sp$R0change,
@@ -657,7 +716,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                                                      R0e = as.numeric(
                                                          state.list[[pg]][1,paste0(iol$states[st,"Shortcut"],
                                                          (1:length(sp$R0change)))]),
-                                                     name= paste0("R0effect pg-",pg))
+                                                     name= paste("R0effect",fill.dt))
                             }
                             if ( region == "nuts2" ) {
                                 gg.R0e <- data.frame(date = sp$seed_date +
@@ -667,7 +726,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                                                      R0e = as.numeric(
                                                          state.list[[pg]][1,paste0(st,
                                                          (1:length(sp$R0change)))]),
-                                                     name= paste0("R0effect pg-",pg))
+                                                     name= paste("R0effect",fill.dt))
                             }
                             
                             
@@ -678,9 +737,18 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                                 geom_point(data=gg.R0e,aes(x=date,y=R0e*!!enquo(s.coeff)))
 
                         }
+
+                        tm.cs <- seq(length(state.list))
+                        if (!is.null(prog)) {
+                            names(tm.cs) <- paste(paste("R0effect",prog))
+                        } else {
+                            names(tm.cs) <- names(state.list)
+                        }
+                        
+                        m.cs <- c(m.cs, tm.cs)
+
                     }
-
-
+                    
                     ## ---------------------------------------------------------
                     ## Plot R0effect as used by model on daily basis -----------
                     if ( ("R0effect.daily" %in% Sec.Axis) & ( region == "state" ) ) {
@@ -703,6 +771,16 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                             plt[[ii]] <- plt[[ii]] +
                                 geom_line (data=gg.R0e.ds,aes(x=time,y=R0e.ds*!!enquo(s.coeff),color=name))
                         }
+                        
+                        tm.cs <- seq(length(state.list))
+                        if (!is.null(prog)) {
+                            names(tm.cs) <- paste(paste("R0effect.daily",prog))
+                        } else {
+                            names(tm.cs) <- names(state.list)
+                        }
+                        
+                        m.cs <- c(m.cs, tm.cs)
+
                         
                     }
                     if ( ("R0effect.daily" %in% Sec.Axis) & ( region == "nuts2" ) ) {
@@ -764,9 +842,12 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                         plt[[ii]] <- plt[[ii]] +
                             geom_line(data=diff.weekly, #ref.data,
                                       aes(x=date,y=diff*!!enquo(s.coeff),
-                                          color='Scaled weekly Grad.')) +
+                                          color='Scaled.weekly.Grad.')) +
                             theme(legend.title = element_blank())
-                        
+                                                tm.cs <- seq(length(state.list))
+
+                        m.cs <- c(m.cs, Scaled.weekly.Grad.='Scaled weekly Grad.')
+
                         ## Standard colours are hard to differentiate ------------------
                         ## plt[[ii]] <- plt[[ii]] + scale_color_manual(
                         ##                              values = c("Observed"  = 'black',
@@ -817,7 +898,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                         
                         ## Add line for 10% of cases per week (on second y-axis) ---
                         plt[[ii]] <- plt[[ii]] +
-                            geom_line (data=cmp,aes(x=date,y=Cases*!!enquo(s.coeff),color='10% of cases'),
+                            geom_line (data=cmp,aes(x=date,y=Cases*!!enquo(s.coeff),color='Scaled.cases.10pc'),
                                        linetype = "dashed", size = 1) +
                             geom_point(data=cmp,aes(x=date,y=Cases*!!enquo(s.coeff)))
                         if (sec.text) {
@@ -828,7 +909,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                         
                         ## Add line for root mean square (on second y-axis) --------
                         plt[[ii]] <- plt[[ii]] +
-                            geom_line (data=cmp,aes(x=date,y=RMS*!!enquo(s.coeff),color='RMS cases')) +
+                            geom_line (data=cmp,aes(x=date,y=RMS*!!enquo(s.coeff),color='RMS.cases')) +
                             geom_point(data=cmp,aes(x=date,y=RMS*!!enquo(s.coeff)))
                         if (sec.text) {
                             plt[[ii]] <- plt[[ii]] +
@@ -838,7 +919,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                         
                         ## Add line for root mean square of bounds (on second y-axis) --------
                         plt[[ii]] <- plt[[ii]] +
-                            geom_line (data=cmp,aes(x=date,y=RMSB*!!enquo(s.coeff),color='RMS bounds')) +
+                            geom_line (data=cmp,aes(x=date,y=RMSB*!!enquo(s.coeff),color='RMS.bounds')) +
                             geom_point(data=cmp,aes(x=date,y=RMSB*!!enquo(s.coeff)))
                         if (sec.text) {
                             plt[[ii]] <- plt[[ii]] +
@@ -846,6 +927,10 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                                            hjust=-0.1, vjust=-0.5)
                         }
 
+                        m.cs <- c(m.cs,
+                                  Scaled.cases.10pc='Scaled.cases.10pc',
+                                  RMS.cases='RMS.cases',
+                                  RMS.bounds='RMS.bounds')
                     }
 
                     if ( ! is.null(Sec.Axis) ) {
@@ -853,26 +938,34 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                         plt[[ii]] <- plt[[ii]] +
                             scale_y_continuous(
                                 sec.axis=sec_axis(~./max(.)*ax.scale,
-                                                  name=" Root mean square"))+
+                                                  name="-"))+
                             ## Zoom in the plot to original scale ------------------
                             coord_cartesian(xlim=c(sp$seed_date,as.POSIXct.Date(x.range)),
                                             ylim=c(0,y.range))
-                    } else {
-                        plt[[ii]] <- plt[[ii]] + scale_color_manual(values = c(Observed = 'black'))
                     }
-                                        
-                    ## Standard colours are hard to differentiate ------------------
-                    ##plt[[ii]] <- plt[[ii]] + scale_color_manual(values = c("Observed"     = 'black',
-                    ##                                                           "RMS cases"    = 'deepskyblue',
-                    ##                                                           "RMS bounds"   = 'yellowgreen',
-                    ##                                                           "10% of cases" = 'darkorchid1'))
-                    
-                    
-                } else {
-                    ## Standard colours are hard to differentiate ------------------
-                    plt[[ii]] <- plt[[ii]] + scale_color_manual(values = c(Observed = 'black'))
+
+                    m.cs[-1] <- rainbow(length(m.cs)-1)
+                } 
+                
+                if ("prog.RKI" %in% prog) {
+                    m.cs <- c(m.cs, prog.RKI="red")
                 }
-                                
+                if ("constant" %in% prog) {
+                    m.cs <- c(m.cs, constant="deepskyblue")
+                }
+
+                if (length(m.cs) < (length(state.list)+1)) {
+                    m.cs <- c(m.cs,fill.col)
+                    if (is.null(prog)) {
+                        names(m.cs)[names(m.cs)==""] <- round(as.numeric(names(state.list)),3)
+                    } else {
+                        names(m.cs)[names(m.cs)==""] <- prog
+                    }
+                }
+                
+                plt[[ii]] <- plt[[ii]] +
+                    scale_color_manual(values = m.cs)+
+                    scale_fill_manual (values = m.cs)                  
             }
 
             ## Observerd dead cases ----------------------------------
