@@ -1391,17 +1391,17 @@ convert.Rp.to.Fp <- function(filename, sp, iol, R0_effects, outpath="./") {
     for ( i in names(sp) ) {
 
         ## If the element contains a value ---------------------------
-        if ( !is.null(static.params[[i]]) ) {
+        if ( !is.null(sp[[i]]) ) {
 
             ## If the parameter is a list we unlist to a vector ------
             ## but create a shape string
-            if (class(static.params[[i]]) == "list") {
-                tmp <- unlist(static.params[[i]])
-                shape <- paste(length(static.params[[i]][[1]]),
-                               length(static.params[[i]]),sep=",")
+            if (class(sp[[i]]) == "list") {
+                tmp <- unlist(sp[[i]])
+                shape <- paste(length(sp[[i]][[1]]),
+                               length(sp[[i]]),sep=",")
             } else {
-                tmp <- static.params[[i]]
-                shape <- length(static.params[[i]])
+                tmp <- sp[[i]]
+                shape <- length(sp[[i]])
             }
 
             if (class(tmp) == "character") {
