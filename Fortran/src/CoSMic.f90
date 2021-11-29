@@ -90,6 +90,7 @@ Program CoSMic
   Character(len=:), Allocatable                   :: R0_effects_fn
   Character(len=:), Allocatable                   :: lhc_dir
 
+  Character(len=:), Allocatable                   :: region
   Character(Len=:), allocatable, Dimension(:)     :: region_ids
   Character(Len=:), allocatable, Dimension(:)     :: region_ids_R0e
   integer(kind=ik), allocatable, dimension(:)     :: region_index
@@ -244,6 +245,8 @@ Program CoSMic
   call pt_get("#sam_size",sam_size)
   call pt_get("#R0"      ,R0      )
 
+  call pt_get("#region"  ,region  )
+
   If (trim(R0_effects_fn) .NE. "LHC") then
      R0_effects = table_to_real_array(iol%R0_effect)
   End If
@@ -332,7 +335,32 @@ Program CoSMic
      iter_e = min((rank_mpi + 1 ) * n_iter , iter)
      
      write(*,*)rank_mpi,iter_s,iter_e,n_iter,iter
-     
+
+     if (trim(region) == "states") then
+
+        write(*,*)"Found head iol%R0_effect%head: ",iol%R0_effect%head
+        region_index   = int(get_int_table_column(iol%counties,"dist_id")/1000)
+        
+     Else
+
+        region_ids     = get_char_column(iol%counties,'Nuts2')
+        write(*,*)"Found head iol%R0_effect%head: ",iol%R0_effect%head
+        write(*,*) region_ids
+
+        num_counties = size(region_ids)
+        allocate(region_index(num_counties))
+        
+        do ii = 1, num_counties
+           do jj = 1, size(iol%R0_effect%head)
+              if (trim(region_ids(ii)) == trim(iol%R0_effect%head(jj)))then
+                 region_index(ii) = jj
+              endif
+           end do
+        end do
+        
+     end if
+
+     write(*,*)region_index
      Call COVID19_Spatial_Microsimulation_for_Germany(iol, &
           iter_s, iter_e , &
           inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
