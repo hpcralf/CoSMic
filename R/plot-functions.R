@@ -742,7 +742,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                         if (!is.null(prog)) {
                             names(tm.cs) <- paste(paste("R0effect",prog))
                         } else {
-                            names(tm.cs) <- names(state.list)
+                            names(tm.cs) <- paste("R0effect",round(as.numeric(names(state.list)),3))
                         }
                         
                         m.cs <- c(m.cs, tm.cs)
@@ -954,7 +954,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                     m.cs <- c(m.cs, constant="deepskyblue")
                 }
 
-                if (length(m.cs) < (length(state.list)+1)) {
+                if (sum(c("prog.RKI","constant") %in% prog) < (length(state.list)+1)) {
                     m.cs <- c(m.cs,fill.col)
                     if (is.null(prog)) {
                         names(m.cs)[names(m.cs)==""] <- round(as.numeric(names(state.list)),3)
