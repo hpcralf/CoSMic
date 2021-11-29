@@ -75,7 +75,7 @@
 #' $export_name
 #' [1] "v12.0-2020-11-07_21:53:00"
 #' ```
-#' @import rlist
+#' @import rlist, stringr
 #' @export
 set.exec.params <- function(exec.procedure  = "Basic-Param",
                             parallel.method = "OMP",
@@ -1424,7 +1424,19 @@ convert.Rp.to.Fp <- function(filename, sp, iol, R0_effects, outpath="./") {
             }
             
             if ( class(tmp) == "character" ) {
-                cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
+                sl <- str_length(paste(as.integer(tmp),collapse=","))
+                if ( sl > 80 ) {
+                    s  <- seq(1,length(tmp),by=as.integer(sl/80))
+                    ss <- s[1:(length(s))]
+                    se <- s[2:(length(s))]
+                    se[length(se)+1] <- length(tmp)
+                    a <- apply(data.frame(ss,se),1,
+                               function(x){
+                                   cat(paste0('"',paste(tmp[x[1]:x[2]],collapse='","'),'"','\n'))
+                               })
+                } else {
+                    cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
+                }
             } else if (class(tmp) == "logical") {
                 cat(paste0('.',paste(tmp,collapse='","'),'.','\n'))
             } else if (class(tmp) == "Date") {
@@ -1432,8 +1444,18 @@ convert.Rp.to.Fp <- function(filename, sp, iol, R0_effects, outpath="./") {
             } else {
                 if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
                     cat(paste0(paste(tmp,collapse=","),'\n'))
-                } else {
-                    cat(paste0(paste(as.integer(tmp),collapse=","),'\n'))
+                } else {                   
+                    sl <- str_length(paste(as.integer(tmp),collapse=","))
+                    if ( sl > 80 ) {
+                        s  <- seq(1,length(tmp),by=as.integer(sl/80))
+                        ss <- s[1:(length(s))]
+                        se <- s[2:(length(s))]-1
+                        se[length(se)+1] <- length(tmp)
+                        a <- apply(data.frame(ss,se),1,
+                                   function(x){cat(paste0(as.integer(tmp[x[1]:x[2]]),collapse=","),"\n")})
+                    } else {
+                        cat(paste0(paste(as.integer(tmp),collapse=","),'\n'))
+                    }
                 }
              }
          }
