@@ -818,6 +818,8 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
             
             for(timestep in start.time:sp$time_n) {
 
+                print(timestep)
+                
                 ## Cat for each day
                 ## cat(".")
     
@@ -1672,9 +1674,8 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                            silent=FALSE,
                            fk.cases=rep(1/ 7,  7),
                            fk.sec  =rep(1/15, 15),
-                           ind.states   = c(1,2,3,4,5,6,7))
-
-
+                           ind.states   = c(5))
+        
             ## Every diagram its own scale with R0effects ----------------------
             ## This is only meaningfull if R0effects vary on state level -------
             if ( R0effect.region == "state" ) {
@@ -1693,7 +1694,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                                region       = "state",
                                fix.lim      = FALSE,
                                filtered     = FALSE,
-                               Sec.Axis     = c("R0effect","R0effect.daily"),
+                               Sec.Axis     = c("R0effect"),
                                silent       = FALSE,
                                fk.cases     = rep(1/ 7,  7),
                                fk.sec       = rep(1/15, 15),
@@ -1701,21 +1702,21 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
             }
             
             ## Global fixed scale accross all diagramms -----------------
-            outfile <- paste0(ep$output.dir,
-                              "Rplots-ByState-iter=",sp$iter,"-sam_size=",
-                              pspace[["sam_size"]]$param[1],"-",
-                              ep$export_name,"-fixed-scale",".pdf",sep="")
-            
-            plots.by.state(outfile      = outfile,
-                           sp           = sp,
-                           seed_icu     = op$opt.target$icu.bs,
-                           seed_dea     = op$opt.target$dea.bs,
-                           iol          = iol,
-                           pspace       = pspace,
-                           rr           = rr,
-                           region       = "state",
-                           fix.lim      = TRUE,
-                           ind.states   = c(1,2,3,4,5,6,7))
+            ## outfile <- paste0(ep$output.dir,
+            ##                   "Rplots-ByState-iter=",sp$iter,"-sam_size=",
+            ##                   pspace[["sam_size"]]$param[1],"-",
+            ##                   ep$export_name,"-fixed-scale",".pdf",sep="")
+            ## 
+            ## plots.by.state(outfile      = outfile,
+            ##                sp           = sp,
+            ##                seed_icu     = op$opt.target$icu.bs,
+            ##                seed_dea     = op$opt.target$dea.bs,
+            ##                iol          = iol,
+            ##                pspace       = pspace,
+            ##                rr           = rr,
+            ##                region       = "state",
+            ##                fix.lim      = TRUE,
+            ##                ind.states   = c(1,2,3,4,5,6,7))
         }
         
         ## #####################################################################
