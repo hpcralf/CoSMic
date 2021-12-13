@@ -67,17 +67,14 @@ contains
     Integer                    :: index, un_in
 
     !=================================================================
-    Character(len=:), allocatable :: data_dir
     Character(len=:), allocatable :: filename
     !=================================================================
 
-    call pt_get("#data_dir",data_dir)
-    
     ! Read data from file: Transition probabilities ------------------
     call pt_get("#trans_pr",filename)
 
     call read_TableData( &
-         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         trim(filename),sep=",",head=.TRUE., &
          data=iol%trans_pr &
          )
 
@@ -85,7 +82,7 @@ contains
     call pt_get("#pop",filename)
 
     call read_TableData( &
-         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         trim(filename),sep=",",head=.TRUE., &
          data=iol%pop &
          )
     
@@ -93,7 +90,7 @@ contains
     call pt_get("#seed",filename)
 
     call read_TableData( &
-         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         trim(filename),sep=",",head=.TRUE., &
          data=iol%seed &
          )
 
@@ -101,7 +98,7 @@ contains
     call pt_get("#seed_dea",filename)
 
     call read_TableData( &
-         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         trim(filename),sep=",",head=.TRUE., &
          data=iol%death &
          )
         
@@ -109,7 +106,7 @@ contains
     call pt_get("#connect_total",filename)
 
     call read_TableData( &
-         trim(data_dir)//trim(filename),sep=",",head=.TRUE.,rownames=.TRUE., &
+         trim(filename),sep=",",head=.TRUE.,rownames=.TRUE., &
          data=iol%connect_total &
          )
 
@@ -117,7 +114,7 @@ contains
     call pt_get("#connect_work",filename)
 
     call read_TableData( &
-         trim(data_dir)//trim(filename),sep=",",head=.TRUE.,rownames=.TRUE., &
+         trim(filename),sep=",",head=.TRUE.,rownames=.TRUE., &
          data=iol%connect_work &
          )
     
@@ -125,7 +122,7 @@ contains
     call pt_get("#states",filename)
 
     call read_TableData( &
-         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         trim(filename),sep=",",head=.TRUE., &
          data=iol%states &
          )
 
@@ -133,18 +130,18 @@ contains
     call pt_get("#counties",filename)
 
     call read_TableData( &
-         trim(data_dir)//trim(filename),sep=",",head=.TRUE., &
+         trim(filename),sep=",",head=.TRUE., &
          data=iol%counties &
          )
 
-    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
+    call open_and_index(trim(filename),un_in,index)
 
     !Read R0_effects -------------------------------------------------
     call pt_get("#R0_effects",filename)
 
     If (trim(filename) .NE. "LHC") then
        call read_TableData( &
-            trim(data_dir)//trim(filename),sep=" ",head=.TRUE., &
+            trim(filename),sep=" ",head=.TRUE., &
             rownames=.TRUE., data=iol%R0_effect &
             )
     End If

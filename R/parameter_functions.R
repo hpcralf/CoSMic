@@ -94,14 +94,16 @@ set.exec.params <- function(exec.procedure  = "Basic-Param",
     ## E1. Execution procedure ---------------------------------------
     ##  Valid values : "Basic-Param" or "Optimization"
     if (exec.procedure == "Basic-Param" |
-        exec.procedure == "Optimization" ) {
+        exec.procedure == "Optimization"|
+        exec.procedure == "Prepare-Fortran" ) {
         
         ep <- list.append(ep,
                           exec.procedure  = exec.procedure)
     } else {
         stop(paste("Unsupported value for exec.procedure specified:",
                    exec.procedure,"\n ",
-                   "Please specify either \"Basic-Param\" or \"Optimzation\""))
+                   "Please specify either \"Basic-Param\", \"Optimzation\"
+		   or \"Prepare-Fortran\""))
     }
 
     ## E2. Parallel Execution Method ---------------------------------
@@ -1260,7 +1262,8 @@ save.optimization.params <- function(ep, op) {
 #'
 #' @param ep An execution parameter list as decribed in [set.exec.params()].
 #' @param sp A list with static model parameters as described in [set.static.params()].
-#' 
+#'
+#' @import stringr
 #' @export
 checkpoint.check.reload <- function(ep, sp) {
 
@@ -1333,9 +1336,115 @@ map.R0effects <- function(R0effect.nuts2,R0effect.states,rows=NULL) {
 #' @param sp A list with static model parameters as described in [set.static.params()].
 #' 
 #' @export
-convert.Rp.to.Fp <- function(filename, sp, iol, R0_effects, outpath="./") {
+convert.Rp.to.Fp <- function(filename.sp, sp,
+                             filename.ep, ep,
+                             iol, R0_effects, outpath="./") {
 
-    sink(file=filename)
+    if (!str_ends(outpath,"/")) {
+        outpath <- paste0(outpath,"/")
+    }
+
+    ## Per R0change, determine in which kind of region it should change,    ----
+    ## either states or Nuts2.                                              ----
+
+    ## grepl pattern with state shortcuts ----------------------------------
+    np.s <- paste(iol[["states"]]$Shortcut,collapse="|")
+    ## grepl pattern with nuts2 shortcuts ----------------------------------
+    np.n <- paste(iol[["counties"]]$Nuts2,collapse="|")
+    
+    ## In which region R0effect changes ------------------------------------
+    if (sum(grepl(np.s,names(pspace$R0effect$param$R0effect.ps1))) > 0) {
+        ## If state shortcuts are found in names(lhc) ----------------
+        R0effect.region <- "states"         
+    } else if (sum(grepl(np.s,names(pspace$R0effect$param$R0effect.ps1))) > 0) {
+        ## If Nuts2 shortcuts are found in names(lhc) ----------------
+        R0effect.region <- "nuts2"
+    } else {
+        stop(paste("Names in R0_effect are:\n",
+                   paste(names(pspace$R0effect$param$R0effect.ps1),collapse=","),"\n",
+                   "No state or Nuts2 shortcuts could be found.\n"))
+    }
+    sp$region <- R0effect.region
+    
+    ## Convert execution parameters --------------------------------------------
+    sink(file=filename.ep)
+
+    ## Loop over all names in exec parameters list ----------------
+    for ( i in names(ep) ) {
+
+        ## If the element contains a value ---------------------------
+        if ( !is.null(ep[[i]]) ) {
+
+            ## If the parameter is a list we unlist to a vector ------
+            ## but create a shape string
+            if (class(ep[[i]]) == "list") {
+                tmp <- unlist(ep[[i]])
+                shape <- paste(length(ep[[i]][[1]]),
+                               length(ep[[i]]),sep=",")
+            } else {
+                tmp <- ep[[i]]
+                shape <- length(ep[[i]])
+            }
+
+            if (class(tmp) == "character") {
+                ## if we have a parameter of type character ----------
+                cat(paste(paste0("#",i),", c ,",shape,"\n"))
+            } else if  (class(tmp) == "logical") {
+                ## if we have a parameter of type logical ------------
+                cat(paste(paste0("#",i),", l ,",shape,"\n"))
+            } else if  (class(tmp) == "Date") {
+                ## if we have a parameter of type logical ------------
+                cat(paste(paste0("#",i),", c ,",shape,"\n"))
+            } else {
+                if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
+                    ## if we have a parameter of type float ----------
+                    cat(paste(paste0("#",i),",r ,",shape,"\n"))
+                } else {
+                    ## if we have a parameter of type integer --------
+                    cat(paste(paste0("#",i),",i ,",shape,"\n"))
+                }
+            }
+            
+            if ( class(tmp) == "character" ) {
+                sl <- str_length(paste(as.integer(tmp),collapse=","))
+                if ( sl > 80 ) {
+                    s  <- seq(1,length(tmp),by=as.integer(sl/80))
+                    ss <- s[1:(length(s))]
+                    se <- s[2:(length(s))]
+                    se[length(se)+1] <- length(tmp)
+                    a <- apply(data.frame(ss,se),1,
+                               function(x){
+                                   cat(paste0('"',paste(tmp[x[1]:x[2]],collapse='","'),'"','\n'))
+                               })
+                } else {
+                    cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
+                }
+            } else if (class(tmp) == "logical") {
+                cat(paste0('.',paste(tmp,collapse='","'),'.','\n'))
+            } else if (class(tmp) == "Date") {
+                cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
+            } else {
+                if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
+                    cat(paste0(paste(tmp,collapse=","),'\n'))
+                } else {                   
+                    sl <- str_length(paste(as.integer(tmp),collapse=","))
+                    if ( sl > 80 ) {
+                        s  <- seq(1,length(tmp),by=as.integer(sl/80))
+                        ss <- s[1:(length(s))]
+                        se <- s[2:(length(s))]-1
+                        se[length(se)+1] <- length(tmp)
+                        a <- apply(data.frame(ss,se),1,
+                                   function(x){cat(paste0(as.integer(tmp[x[1]:x[2]]),collapse=","),"\n")})
+                    } else {
+                        cat(paste0(paste(as.integer(tmp),collapse=","),'\n'))
+                    }
+                }
+            }
+        }
+    }
+    sink()
+    
+    sink(file=filename.sp)
 
     ## Convert pspace parameters -----------------------------------------------
 

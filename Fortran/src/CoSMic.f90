@@ -94,9 +94,10 @@ Program CoSMic
   Character(Len=:), allocatable, Dimension(:)     :: region_ids
   Character(Len=:), allocatable, Dimension(:)     :: region_ids_R0e
   integer(kind=ik), allocatable, dimension(:)     :: region_index
-  
-  Character(len=pt_mcl)                           :: filename
-  
+
+  character(len=:), Allocatable                   :: output_dir
+  character(len=:), Allocatable                   :: export_name
+  Character(len=pt_mcl)                           :: filename   
   Character(len=pt_mcl)                           :: logfile
 
   !-- MPI Variables -----------------------------------------------------------
@@ -247,6 +248,9 @@ Program CoSMic
 
   call pt_get("#region"  ,region  )
 
+  call pt_get("#output.dir" , output_dir)
+  call pt_get("#export_name", export_name)
+  
   If (trim(R0_effects_fn) .NE. "LHC") then
      R0_effects = table_to_real_array(iol%R0_effect)
   End If
@@ -314,7 +318,7 @@ Program CoSMic
              R0change, R0delay ,R0delay_days, R0delay_type, &
              control_age_sex, seed_date, seed_before, sam_size, R0, &
              R0_effects, region_index, &
-             rank_mpi)
+             output_dir, export_name, rank_mpi)
         
      End Do
      Call end_Timer("Exec. Simulation")
@@ -367,7 +371,7 @@ Program CoSMic
           less_contagious, R0_force, immune_stop, &
           R0change, R0delay ,R0delay_days, R0delay_type, &
           control_age_sex, seed_date, seed_before, sam_size, R0, &
-          R0_effects, region_index, rank_mpi)
+          R0_effects, region_index, output_dir, export_name, rank_mpi)
      
      Call end_Timer("Exec. Simulation")
 

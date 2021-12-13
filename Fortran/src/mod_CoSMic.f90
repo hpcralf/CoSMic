@@ -103,7 +103,7 @@ Contains
        less_contagious, R0_force, immune_stop, &
        R0change, R0delay ,R0delay_days, R0delay_type, &
        control_age_sex, seed_date, seed_before, sam_size, R0, &
-       R0_effects, region_index, proc)
+       R0_effects, region_index, output_dir, export_name, proc)
 
     !===========================================================================
     ! Declaration
@@ -131,7 +131,10 @@ Contains
     Real(kind=rk),    Allocatable, Dimension(:,:),intent(in)  :: R0_effects
     Integer(kind=ik)                             , intent(in) :: proc
     integer(kind=ik), allocatable, dimension(:)  , intent(in) :: region_index
-    !---------------------------------------------------------------------------
+    character(len=:), Allocatable                , intent(in) :: output_dir
+    character(len=:), Allocatable                , intent(in) :: export_name
+    
+    !--------------------------------------------------------------------------
 
     Integer(kind=ik)   :: i, j, index, temp_int,icounty,county,it_ss,status
     character(len=:), Allocatable   :: seed_date_mod
@@ -178,7 +181,7 @@ Contains
     Integer                         :: max_date,n_change
     character(len=10)               :: l_seed_date
     Real                            :: iter_pass_handle(6)
-    logical                         :: exs
+
     Character*8                     :: proc_char
     
     Type(tTimer)                    :: timer
@@ -210,7 +213,7 @@ Contains
     Character(Len=:), allocatable, Dimension(:)     :: transpr_sex
 
     Integer(kind=ik), pointer    , Dimension(:)     :: connect_work_distid
-    
+   
     !===========================================================================
     ! Implementation
     !===========================================================================
@@ -731,8 +734,8 @@ Contains
        Call CoSMic_TimeLoop(time_n, pop_size, size(counties_index), counties_index, &
             Real(R0matrix,rk), Real(connect,rk), surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim ,&
             healthy_cases_final, inf_noncon_cases_final,inf_contag_cases_final, &
-            ill_contag_cases_final, ill_ICU_cases_final, immune_cases_final, &
-            dead_cases_final,it_ss)
+            ill_contag_cases_final, ill_ICU_cases_final,  &
+            immune_cases_final,dead_cases_final,it_ss)
 
        if (OMP_GET_THREAD_NUM() == 0) then
           call end_timer("Sim Loop")
@@ -754,51 +757,65 @@ Contains
     call start_timer("+- Writeout",reset=.FALSE.)
     
     write(proc_char,'("_",I7.7)')proc
-    exs = .FALSE.
+
+    call write_data(trim(output_dir)//"healthy_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+         healthy_cases_final)                                    
+    call write_data(trim(output_dir)//"inf_noncon_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+         inf_noncon_cases_final)                                 
+    call write_data(trim(output_dir)//"inf_contag_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+         inf_contag_cases_final)                                 
+    call write_data(trim(output_dir)//"ill_contag_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+         ill_contag_cases_final)                                 
+    call write_data(trim(output_dir)//"ill_ICU_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+         ill_ICU_cases_final)                                    
+    call write_data(trim(output_dir)//"dead_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+         dead_cases_final)
+    call write_data(trim(output_dir)//"immune_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+         immune_cases_final)
     
-    Inquire(file = "./output/"//proc_char//"_ill_ICU_cases.csv", exist=exs)
-    
-    If (exs) then
-       Open (101, file = "./output/"//proc_char//"_ill_ICU_cases.csv",&
-            position="Append", status ="old", access="stream")
-    else
-       Open (101, file = "./output/"//proc_char//"_ill_ICU_cases.csv",&
-            access="stream", status="replace")
-       !write the head file
-       !Write(101,10)Label,iter_char,R0change_name,"iter","x.dist_id"
-    End If
-
-    write(101)ill_ICU_cases_final
-
-    Close(101)
-!!$    
-!!$    iter_pass_handle = (/Real(sam_size,rk),R0,Real(icu_dur,rk),0._rk,0._rk,0._rk/)
-!!$
-!!$    Call write_data_v2(healthy_cases_final,iter_pass_handle, &
-!!$         table_to_real_array(iol%R0_effect),counties_index,1, &
-!!$         "_healthy_cases.csv",proc,iter_s,iter_e)
-!!$    Call write_data_v2(inf_noncon_cases_final,iter_pass_handle, &
-!!$         table_to_real_array(iol%R0_effect),counties_index,2, &
-!!$         "_inf_noncon_cases.csv",proc,iter_s,iter_e)
-!!$    Call write_data_v2(inf_contag_cases_final,iter_pass_handle, &
-!!$         table_to_real_array(iol%R0_effect),counties_index,3, &
-!!$         "_inf_contag_cases.csv",proc,iter_s,iter_e)
-!!$    Call write_data_v2(ill_contag_cases_final,iter_pass_handle, &
-!!$         table_to_real_array(iol%R0_effect),counties_index,4, &
-!!$         "_ill_contag_cases.csv",proc,iter_s,iter_e)
-!!$    Call write_data_v2(ill_ICU_cases_final,iter_pass_handle, &
-!!$         table_to_real_array(iol%R0_effect),counties_index,5, &
-!!$         "_ill_ICU_cases.csv",proc,iter_s,iter_e)
-!!$    Call write_data_v2(immune_cases_final,iter_pass_handle, &
-!!$         table_to_real_array(iol%R0_effect),counties_index,6, &
-!!$         "_immune_cases.csv",proc,iter_s,iter_e)
-!!$    Call write_data_v2(dead_cases_final,iter_pass_handle, &
-!!$         table_to_real_array(iol%R0_effect),counties_index,7, &
-!!$         "_dead_cases.csv",proc,iter_s,iter_e)
-
     call end_timer("+- Writeout")
 
   End Subroutine COVID19_Spatial_Microsimulation_for_Germany
+
+  Subroutine write_data(filename, data)
+
+    character(len=*)                      , intent(in) :: filename
+    Integer, Dimension(:,:,:), Allocatable, intent(in) :: data
+    
+    logical                                            :: exs
+    Integer                                            :: un
+
+    !---------------------------------------------------------------------------
+    exs = .FALSE.
+    
+    Inquire(file = trim(filename), exist=exs)
+    
+    If (exs) then
+
+       Open (newunit=un, file = trim(filename)//".head",&
+            position="Append", status ="old")
+       write(un,'(A,3(",",I0)))')"int",shape(data)
+       close(un)
+
+       Open (newunit=un, file = trim(filename),&
+            position="Append", status ="old", access="stream")
+    else
+
+       Open (newunit=un, file = trim(filename)//".head",&
+            status ="new")
+       write(un,'(A)')"type , dim1 , dim2 , dim3"
+       write(un,'(A,3(",",I0)))')"int",shape(data)
+       close(un)
+
+       Open (newunit=un, file = trim(filename),&
+            access="stream", status="new")
+    End If
+    
+    write(un)data
+    
+    Close(un)
+    
+  End Subroutine write_data
 
   Subroutine write_data_v2(healthy_cases_final,iter_pass_handle,R0Change,counties_index,&
        type_file,filename,proc,iter_s,iter_e)
@@ -926,7 +943,7 @@ Contains
        R0matrix, connect, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, &
        sim, &
        healthy_cases, inf_noncon_cases, inf_contag_cases, ill_contag_cases,&
-       ill_ICU_cases, immune_cases    , dead_cases      , it_ss)
+       ill_ICU_cases , immune_cases, dead_cases , it_ss)
     
     Integer(Kind=ik)                       , Intent(In) :: time_n
     Integer(Kind=ik)                       , Intent(In) :: pop_size
@@ -1010,9 +1027,9 @@ Contains
     inf_contag_cases(:,timestep,it_ss) = state_count_pl(inf_contag,:)
     ill_contag_cases(:,timestep,it_ss) = state_count_pl(ill_contag,:)
     ill_ICU_cases(:,timestep,it_ss)    = state_count_pl(ill_ICU   ,:)
-    immune_cases(:,timestep,it_ss)     = state_count_pl(immune    ,:)
     dead_cases(:,timestep,it_ss)       = state_count_pl(dead      ,:)
-       
+    immune_cases(:,timestep,it_ss)     = state_count_pl(immune    ,:)
+    
     Do timestep = 2, time_n
 
        !call start_timer("+- From healthy to infected",reset=.FALSE.)
@@ -1211,7 +1228,7 @@ Contains
                 End if
              else
                 if (risk_pi(nn) <= ICU_risk_pasd(sim%age(ii),2,sim%d(ii))) then
-                   !** Individual dies -------------------------------
+                   !** Individual moves to icu -----------------------
                    sim%t2(ii) = ill_ICU
                    d_new(ii)  = 1
                 Else
@@ -1265,7 +1282,7 @@ Contains
 
              if (sim%sex(ii) == "m") then
                 if (risk_pi(nn) >= surv_icu_pas(sim%age(ii),1)) then
-                   !** Individual moves to icu -----------------------
+                   !** Individual dies -------------------------------------
                    sim%t2(ii) = dead
                    d_new(ii)  = 1
                 Else
