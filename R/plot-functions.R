@@ -156,6 +156,8 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
 
     if (is.null(ind.states)) {
         ind.states.to.plot <- names(rr)
+        sp.states.map <- sp$sp.states
+        names(sp.states.map) <- ind.states.to.plot
     } else {
 
         if ( class(ind.states) == "character" ) {
@@ -181,7 +183,7 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
     plt <- list()
     
     for ( ii in  ind.states.to.plot ) {
-        
+
         ## ------------------------------------------------------------------------------
         ## Plot States ------------------------------------------------------------------
         ## ------------------------------------------------------------------------------
@@ -258,7 +260,7 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
                 if ( is.null(prog) ) {
                     fill.dt <- paste(round(unique(state.list[[pg]][1,split.by]),3),collapse=" - ")
                 } else {
-                    fill.dt <- prog[pg]
+                    fill.dt <- prog[names(state.list)[pg]]
                 }
                 
                 if (relative & (ii == "ill_ICU")) {
@@ -380,14 +382,27 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
 #' @export
 plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                            pspace, rr, region, fix.lim,
+                           x.min=NULL,x.max=NULL,
                            filtered = FALSE, fk.cases=rep(1/7, 7),
                            Sec.Axis = "RMS", fk.sec=rep(1/15, 15),
                            sec.text = FALSE,
                            ind.states=NULL, silent=FALSE, relative=FALSE,
                            split.in = NULL, y.max=NULL, prog=NULL) {
 
-        ## -------------------------------------------------------------------------
-        ## Select parpameters from pspace to group by
+    if (is.null(x.max) & is.null(sp$time_n)) {
+        warning(paste("is.null(x.max) & is.null(sp$time_n) holds TRUE.",
+                      "Both will be reset to max. value in R0change + 1"))
+        sp$time_n <- max(unlist(sp$R0change))+1
+    }
+    
+    if (is.null(x.min)) x.min <- sp$seed_date
+    if (is.null(x.max)) x.max <- sp$seed_date + sp$time_n
+
+    if (class(x.min) != "Date") x.min <- sp$seed_date + x.min
+    if (class(x.max) != "Date") x.max <- sp$seed_date + x.max
+    
+    ## -------------------------------------------------------------------------
+    ## Select parpameters from pspace to group by
         
     if ( is.null(split.in) ) {
         ## Extract parameter types from paramter list ---------------------
@@ -475,6 +490,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
         ind.states.to.plot <- names(rr)
         sp.states.map <- ind.states.to.plot
         names(sp.states.map) <- ind.states.to.plot
+        print(ind.states.to.plot)
     } else {
 
         if ( class(ind.states) == "character" ) {
@@ -609,7 +625,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                 if ( is.null(prog) ) {
                     fill.dt <- paste(round(unique(state.list[[pg]][1,split.by]),3),collapse=" - ")
                 } else {
-                    fill.dt <- prog[pg]
+                    fill.dt <- prog[names(state.list)[pg]]
                 }
                 
                 if (filtered) {
@@ -705,7 +721,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                             if ( is.null(prog) ) {
                                 fill.dt <- paste(round(unique(state.list[[pg]][1,split.by]),3),collapse=" - ")
                             } else {
-                                fill.dt <- prog[pg]
+                                fill.dt <- prog[names(state.list)[pg]]
                             }
                             
                             if ( region == "state" ) {
@@ -978,6 +994,8 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                         theme(legend.title = element_blank())
                 }
             }
+
+            plt[[ii]] <- plt[[ii]] + xlim(x.min,x.max)
             
             if ( !is.null(split.by) ) {
                 plt[[ii]] <- plt[[ii]] + labs(fill = split.by, colour=NULL)
@@ -987,7 +1005,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
             
             glob.max[ii] <- 0
         }
-        
+
         if (fix.lim) {
             if ( ! is.null(y.max) ) { glob.max  <-  y.max }
             ii <- 1
