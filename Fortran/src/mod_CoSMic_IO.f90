@@ -475,6 +475,25 @@ contains
     Enddo
     Close(un_in)
 
+    call pt_get("#icu_cases",filename)
+
+    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
+
+    ! allocation for the readin variables ------------------
+    Allocate(iol%obsicu_date(index-1))
+    Allocate(iol%obsicu_cases(index-1))
+    Allocate(iol%obsicu_states_shortcut(index-1))
+
+    ! read the first line(character) -----------------------
+    Read(un_in,*,iostat= k) iol%seed_titel
+       
+    Do i = 1, index-1
+       Read(un_in,*,iostat= k) iol%obsicu_date(i),iol%obsicu_cases(i),&
+              iol%obsicu_states_shortcut(i)
+    End Do
+    Close(un_in)
+
+
     !Read R0_effects -------------------------------------------------
     call pt_get("#R0_effects",filename)
     
@@ -483,6 +502,7 @@ contains
          rownames=.TRUE., data=iol%R0_effect &
          )
 
+     
   End Subroutine loaddata
   
   !! ===========================================================================

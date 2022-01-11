@@ -47,7 +47,9 @@ Program CoSMic
 
   Use global_constants
   Use global_types
-  Use global_vars  
+  Use global_vars
+
+  Use genetic_algorithm  
   
   !! Legacy Modules --------------------------------------------------
   Use cosmic_io
@@ -154,13 +156,21 @@ Program CoSMic
   ! Execute model ==============================================================
   Call start_Timer("Exec. Simulation")
 
-  Call COVID19_Spatial_Microsimulation_for_Germany(iol,counties_integer, &
+  Call ga(iol,counties_integer, &
        iter , &
        inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
        less_contagious, R0_force, immune_stop, &
        R0change, R0delay ,R0delay_days, R0delay_type, &
        control_age_sex, seed_date, seed_before, sam_size, R0, &
        iol%R0_effect%data)
+
+!  Call COVID19_Spatial_Microsimulation_for_Germany(iol,counties_integer, &
+!       iter , &
+!       inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
+!       less_contagious, R0_force, immune_stop, &
+!       R0change, R0delay ,R0delay_days, R0delay_type, &
+!       control_age_sex, seed_date, seed_before, sam_size, R0, &
+!       iol%R0_effect%data)
   
   Call end_Timer("Exec. Simulation")
 

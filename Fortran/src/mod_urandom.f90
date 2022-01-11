@@ -43,8 +43,34 @@
 !! 
 !!##############################################################################
 module urandom
+implicit none
 
 contains
+
+
+     !! --------------------------------------------------
+     !> https://masuday.github.io/fortran_tutorial/random.html
+     !! standard uniform
+     subroutine random_stduniform(n,u)
+
+          integer,intent(in)            :: n  
+          real,dimension(:),intent(out) :: u
+
+          real,dimension(n)             :: r
+          call random_number(r)
+          u = 1 - r
+     end subroutine random_stduniform
+
+     !! uniform distribution
+     function random_uniform(n,a,b) Result(x)
+
+          integer,intent(in)           :: n
+          real,intent(in)              :: a,b
+          real,dimension(n)            :: x
+          real,dimension(n)            :: u
+          call random_stduniform(n,u)
+          x = (b-a)*u + a
+     end function random_uniform
 
   !! ---------------------------------------------------------------------------
   !> Function that returns a seed array filled with random values.
