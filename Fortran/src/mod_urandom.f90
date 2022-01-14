@@ -43,10 +43,12 @@
 !! 
 !!##############################################################################
 module urandom
+use precision
+
 implicit none
 
-contains
 
+contains
 
      !! --------------------------------------------------
      !> https://masuday.github.io/fortran_tutorial/random.html
@@ -54,7 +56,8 @@ contains
      subroutine random_stduniform(n,u)
 
           integer,intent(in)            :: n  
-          real,dimension(:),intent(out) :: u
+          real,dimension(n),intent(out) :: u
+
 
           real,dimension(n)             :: r
           call random_number(r)
@@ -63,13 +66,13 @@ contains
 
      !! uniform distribution
      function random_uniform(n,a,b) Result(x)
-
           integer,intent(in)           :: n
           real,intent(in)              :: a,b
-          real,dimension(n)            :: x
-          real,dimension(n)            :: u
+          real(kind=rk),dimension(n)   :: x
+          real         ,dimension(n)   :: u
           call random_stduniform(n,u)
           x = (b-a)*u + a
+     !     print *,size(x)
      end function random_uniform
 
   !! ---------------------------------------------------------------------------

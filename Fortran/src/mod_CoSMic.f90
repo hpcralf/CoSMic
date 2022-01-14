@@ -103,13 +103,13 @@ Contains
        less_contagious, R0_force, immune_stop, &
        R0change, R0delay ,R0delay_days, R0delay_type, &
        control_age_sex, seed_date, seed_before, sam_size, R0, &
-       R0_effects)
+       R0_effects,ill_ICU_cases_final)
 
     !===========================================================================
     ! Declaration
     !===========================================================================
  
-    Type(iols)                                                :: iol
+    Type(iols)                                   , intent(in)             :: iol
     Integer(kind=ik)             , Dimension(:)  , intent(in) :: counties_index
     Integer(kind=ik)                             , intent(in) :: iter
     Integer(kind=ik)                             , intent(in) :: inf_dur
@@ -160,7 +160,7 @@ Contains
     Real                            :: R0_daily
     Real,Allocatable                :: R0matrix(:,:),connect(:,:)
     Integer,Allocatable             :: healthy_cases_final(:,:,:)
-    Integer,Allocatable             :: ill_ICU_cases_final(:,:,:)
+    Integer,Allocatable,intent(out)            :: ill_ICU_cases_final(:,:,:)
     Integer,Allocatable             :: immune_cases_final(:,:,:)
     Integer,Allocatable             :: inf_noncon_cases_final(:,:,:)
     Integer,Allocatable             :: inf_contag_cases_final(:,:,:)
@@ -189,6 +189,8 @@ Contains
     Real(Kind=rk)   , Allocatable, Dimension(:,:,:) :: ICU_risk_pasd
     Real(Kind=rk)   , Allocatable, Dimension(:,:)   :: surv_icu_pas
     
+
+    integer,allocatable,dimension(:)      :: tmp_total
     !===========================================================================
     ! Implementation
     !===========================================================================
@@ -272,25 +274,28 @@ Contains
 
     !!=======================================================================
     !! Init population                 
-    iol%pop_total = Nint(Real(iol%pop_total)/Real(Sum(iol%pop_total)) * sam_size)
-    pop_size      = Sum(iol%pop_total)
+!    iol%pop_total = Nint(Real(iol%pop_total)/Real(Sum(iol%pop_total)) * sam_size)
+    tmp_total = Nint(Real(iol%pop_total)/Real(Sum(iol%pop_total)) * sam_size)
+!    pop_size      = Sum(iol%pop_total)
+    pop_size = Sum(tmp_total)
 
     call random_seed(size=ii)               ! Get size of seed array.
     ii = max(ii,OMP_GET_MAX_THREADS())
     call random_seed(put=urandom_seed(ii))  ! Put seed array into PRNG.
+    print *,"num of threads",OMP_GET_MAX_THREADS()
 
     
-    !$OMP PARALLEL default(shared) &
-    !$OMP& private(sim) &
-    !$OMP& firstprivate(index,temp_int,i,temp,days,icounty,county,jj,kk,ii,tmp_count) &
-    !$OMP& firstprivate(seed_ill,seed_inf_cont,seed_inf_ncont,seed_death,seed_d_seq,temp_date) &
-    !$OMP& firstprivate(R0_daily,R0matrix,n_change,getchange,gettime,tmp_d_new,connect) &
-    !$OMP& firstPRIVATE(il_d,inf_ill,inf_c_d,inf_cont,inf_nc_d,inf_ncont,inf_dth) &
-    !$OMP& firstPRIVATE(rownumbers_left,rownumbers) &
-    !$OMP& firstPRIVATE(rownumbers_ill,rownumbers_cont,rownumbers_ncont,rownumbers_dea) &
-    !$OMP& firstprivate(seed_ill_dur,seed_inf_cont_dur,seed_inf_ncont_dur,l_seed_date) 
+    !!$OMP PARALLEL default(shared) &
+    !!$OMP& private(sim) &
+    !!$OMP& firstprivate(index,temp_int,i,temp,days,icounty,county,jj,kk,ii,tmp_count) &
+    !!$OMP& firstprivate(seed_ill,seed_inf_cont,seed_inf_ncont,seed_death,seed_d_seq,temp_date) &
+    !!$OMP& firstprivate(R0_daily,R0matrix,n_change,getchange,gettime,tmp_d_new,connect) &
+    !!$OMP& firstPRIVATE(il_d,inf_ill,inf_c_d,inf_cont,inf_nc_d,inf_ncont,inf_dth) &
+    !!$OMP& firstPRIVATE(rownumbers_left,rownumbers) &
+    !!$OMP& firstPRIVATE(rownumbers_ill,rownumbers_cont,rownumbers_ncont,rownumbers_dea) &
+    !!$OMP& firstprivate(seed_ill_dur,seed_inf_cont_dur,seed_inf_ncont_dur,l_seed_date) 
     
-    !$OMP DO
+    !!$OMP DO
     Do it_ss = 1, iter
       
        !call start_timer("Init Sim Loop",reset=.FALSE.)
@@ -307,8 +312,11 @@ Contains
 
        index = 0 ! position index
 
-       Do i = 1, Size(iol%pop_total)
-          temp_int = iol%pop_total(i)
+   !    Do i = 1, Size(iol%pop_total)
+   !       temp_int = iol%pop_total(i)
+
+       Do i = 1, Size(tmp_total)
+          temp_int = tmp_total(i)
           sim%dist_id(index+1: index+temp_int) = iol%pop_distid(i)
           sim%sex(index+1: index+temp_int)   = iol%pop_sex(i)
           sim%age( index+1: index+temp_int)  = iol%pop_age(i)
@@ -711,8 +719,8 @@ Contains
        l_seed_date        = add_date(l_seed_date,days)
               
     End Do     ! end do it_ss
-    !$OMP END DO
-    !$OMP END PARALLEL
+    !!$OMP END DO
+    !!$OMP END PARALLEL
 
     call start_timer("+- Writeout",reset=.FALSE.)
     
@@ -1252,7 +1260,8 @@ Contains
           write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6
           write(un_lf,'(8(I10))')state_count_t2
        End if
-       write(*,'(9(I10))')timestep,state_count_t2
+       ! comment out the print log
+      ! write(*,'(9(I10))')timestep,state_count_t2
        !** DEBUG ------------------------------------------------------------
 
        !** Population summary per location -------------------------------------
