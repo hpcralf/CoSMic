@@ -759,32 +759,33 @@ Contains
     write(proc_char,'("_",I7.7)')proc
 
     call write_data(trim(output_dir)//"healthy_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         healthy_cases_final)                                    
+         healthy_cases_final,R0_effects)                                    
     call write_data(trim(output_dir)//"inf_noncon_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         inf_noncon_cases_final)                                 
+         inf_noncon_cases_final,R0_effects)
     call write_data(trim(output_dir)//"inf_contag_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         inf_contag_cases_final)                                 
+         inf_contag_cases_final,R0_effects)
     call write_data(trim(output_dir)//"ill_contag_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         ill_contag_cases_final)                                 
+         ill_contag_cases_final,R0_effects)
     call write_data(trim(output_dir)//"ill_ICU_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         ill_ICU_cases_final)                                    
+         ill_ICU_cases_final,R0_effects)
     call write_data(trim(output_dir)//"dead_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         dead_cases_final)
+         dead_cases_final,R0_effects)
     call write_data(trim(output_dir)//"immune_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         immune_cases_final)
+         immune_cases_final,R0_effects)
     
     call end_timer("+- Writeout")
 
   End Subroutine COVID19_Spatial_Microsimulation_for_Germany
 
-  Subroutine write_data(filename, data)
+  Subroutine write_data(filename, data, R0_effects)
 
-    character(len=*)                      , intent(in) :: filename
-    Integer, Dimension(:,:,:), Allocatable, intent(in) :: data
+    character(len=*)                      , intent(in)        :: filename
+    Integer, Dimension(:,:,:), Allocatable, intent(in)        :: data
+    Real(kind=rk),    Allocatable, Dimension(:,:),intent(in)  :: R0_effects
     
     logical                                            :: exs
-    Integer                                            :: un
-
+    Integer                                            :: un, i,j
+ 
     !---------------------------------------------------------------------------
     exs = .FALSE.
     
@@ -794,7 +795,10 @@ Contains
 
        Open (newunit=un, file = trim(filename)//".head",&
             position="Append", status ="old")
-       write(un,'(A,3(",",I0)))')"int",shape(data)
+       write(un,'(A,3(",",I0))',Advance="NO")"int",shape(data)
+       write(un,*)(",",R0_effects(1,j),&
+            (",",R0_effects(i,j), i=2, size(R0_effects,dim=1)),&
+            j=1,size(R0_effects,dim=2))
        close(un)
 
        Open (newunit=un, file = trim(filename),&
@@ -803,8 +807,15 @@ Contains
 
        Open (newunit=un, file = trim(filename)//".head",&
             status ="new")
-       write(un,'(A)')"type , dim1 , dim2 , dim3"
-       write(un,'(A,3(",",I0)))')"int",shape(data)
+       write(un,'(A)',ADVANCE="NO")"type , dim1 , dim2 , dim3 "
+       write(un,'(*(",",A,I3.3))',ADVANCE="NO")("R",i, i=1, size(R0_effects)-1)
+       write(un,'(A,I0)')"R",size(R0_effects)
+
+       write(un,'(A,3(",",I0))',Advance="NO")"int",shape(data)
+       write(un,*)(",",R0_effects(1,j),&
+            (",",R0_effects(i,j), i=2, size(R0_effects,dim=1)),&
+            j=1,size(R0_effects,dim=2))
+       
        close(un)
 
        Open (newunit=un, file = trim(filename),&
@@ -1329,7 +1340,7 @@ Contains
           write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6
           write(un_lf,'(8(I10))')state_count_t2
        End if
-       write(*,'(9(I10))')timestep,state_count_t2
+       !write(*,'(9(I10))')timestep,state_count_t2
        !** DEBUG ------------------------------------------------------------
 
        !** Population summary per location -------------------------------------
