@@ -2202,7 +2202,7 @@ CoSMic.Opt <- function(ep, sp, iol, pspace, sim.struc, op, cl) {
 #'         dim(lhc) will be \[sp$iter x <potentially_variable_model_params>\]
 #' 
 #' @export
-init.lhc <-  function(pspace,sp) {
+init.lhc <-  function(pspace,sp,rep.iter=TRUE) {
         
     ## Extract parameter types from paramter list ---------------------
     pspace.types <- lapply(pspace,function(x){x$type})
@@ -2268,12 +2268,21 @@ init.lhc <-  function(pspace,sp) {
         
         rownames(lhc)  <- NULL
 
-        ## Add 0 to week ids less than 10 --------------------
+        ## This is not nice !!! Should determine that based on region ----------
+        ## specification in sp but specification is not implemented.  ----------
         if (sum(is.na(as.numeric(substring(names(lhc),5)))) == 0) {
+            ## Add 0 to week ids less than 10 in case of NUTS2 ---
             names(lhc) <- apply(
                 data.frame(
                     substring(names(lhc),1,4),
                     sprintf("%02d", as.numeric(substring(names(lhc),5)))
+                ),1,paste,collapse="")
+        } else {
+            ## Add 0 to week ids less than 10 in case of states --
+            names(lhc) <- apply(
+                data.frame(
+                    substring(names(lhc),1,2),
+                    sprintf("%02d", as.numeric(substring(names(lhc),3)))
                 ),1,paste,collapse="")
         }
         
@@ -2355,9 +2364,11 @@ init.lhc <-  function(pspace,sp) {
                               lhc.dat)
         }
     }
-    
-    ## Each Parameter set sp$iter times ---------------------------------
-    lhc <- lhc %>% slice(rep(row_number(), sp$iter))
+
+    if (rep.iter) {
+        ## Each Parameter set sp$iter times ---------------------------------
+        lhc <- lhc %>% slice(rep(row_number(), sp$iter))
+    }
     
     ## Order according to equal parameter sets -----------------------
     lhc <- arrange_all(lhc)
