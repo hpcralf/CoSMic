@@ -1344,27 +1344,10 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
         outpath <- paste0(outpath,"/")
     }
 
-    ## Per R0change, determine in which kind of region it should change,    ----
-    ## either states or Nuts2.                                              ----
-
-    ## grepl pattern with state shortcuts ----------------------------------
-    np.s <- paste(iol[["states"]]$Shortcut,collapse="|")
-    ## grepl pattern with nuts2 shortcuts ----------------------------------
-    np.n <- paste(iol[["counties"]]$Nuts2,collapse="|")
-    
-    ## In which region R0effect changes ------------------------------------
-    if (sum(grepl(np.s,names(pspace$R0effect$param$R0effect.ps1))) > 0) {
-        ## If state shortcuts are found in names(lhc) ----------------
-        R0effect.region <- "states"         
-    } else if (sum(grepl(np.s,names(pspace$R0effect$param$R0effect.ps1))) > 0) {
-        ## If Nuts2 shortcuts are found in names(lhc) ----------------
-        R0effect.region <- "nuts2"
-    } else {
-        stop(paste("Names in R0_effect are:\n",
-                   paste(names(pspace$R0effect$param$R0effect.ps1),collapse=","),"\n",
-                   "No state or Nuts2 shortcuts could be found.\n"))
+    if (is.null(sp$region)) {
+        stop(paste("No region specification in static parameters.\n",
+                   "Please set sp.region."))
     }
-    sp$region <- R0effect.region
     
     ## Convert execution parameters --------------------------------------------
     sink(file=filename.ep)
@@ -1443,7 +1426,7 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
         }
     }
     sink()
-    
+     
     sink(file=filename.sp)
 
     ## Convert pspace parameters -----------------------------------------------
@@ -1585,9 +1568,13 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
     }
 
     ## Write R0_effects -------------------------------------
-    cat(paste(paste0("#","R0_effects"),", c , 1\n"))
-    cat(paste0('"',outpath,'R0_effects.csv"','\n'))
-    write.table(R0_effects, paste0(outpath,"R0_effects.csv"), row.names=TRUE,sep=" ")
-    
+    if (R0_effects == "LHC") {
+        cat(paste(paste0("#","R0_effects"),", c , 1\n"))
+        cat(paste0('"LHC"','\n'))
+    } else {
+        cat(paste(paste0("#","R0_effects"),", c , 1\n"))
+        cat(paste0('"',outpath,'R0_effects.csv"','\n'))
+        write.table(R0_effects, paste0(outpath,"R0_effects.csv"), row.names=TRUE,sep=" ")
+    }
     sink()
 }
