@@ -67,7 +67,7 @@ Module genetic_algorithm
         Integer,Dimension(:), Allocatable             :: opt_names_dur
         Real                        				  :: opt_lb = 0.1
         Real                                          :: opt_ub = 1.0
-        Integer 									  :: opt_pop_size = 8
+        Integer 									  :: opt_pop_size = 4
         Integer    								      :: opt_num_gene = 2
 
     end type opt_parameters
@@ -149,6 +149,9 @@ Contains
         Integer,dimension(:), Allocatable             :: obs_lb, obs_ub, eval_lb, eval_ub
         Integer                                       :: inteval_days, status
         Real                                          :: coefficient
+
+        !==============================for selection====================
+        Integer,dimension(:), Allocatable             :: sel_par
 
 
         ! TODO: parameters checking
@@ -359,6 +362,14 @@ Contains
         do i = 1,opt%opt_pop_size
             print *,i,": ",fitness(i)
         enddo
+
+        allocate(sel_par(opt%opt_pop_size))
+        call selection(fitness, sel_par)
+
+
+
+
+
         deallocate(pos_se)
       
         deallocate(seltarget_icu_by_state)
@@ -388,6 +399,65 @@ Contains
 
 
     end subroutine population
+
+
+    subroutine selection(fitness, sel_par) !select the fittest parents
+        Real, Allocatable, Dimension(:)         :: fitness
+        Integer, Dimension(:),intent(out)       :: sel_par
+
+        Real, Dimension(size(fitness))          :: fscaled, prob
+        Real                                    :: fmin, fave, fmax
+        Real                                    :: delta, a, b
+        Integer                                 :: sfactor = 2
+
+        fmin = minval(fitness)
+        if (fmin .lt. 0.0) then
+            fitness(:) = fitness(:) - fmin
+            fmin = minval(fitness)
+        end if
+        fmax = maxval(fitness)
+        fave = sum(fitness)/size(fitness)
+
+        if (fmin .gt. (sfactor*fave - fmax)/(sfactor - 1)) then
+            delta = fmax - fave
+            a = (sfactor - 1.0)*fave/delta 
+            b = fave * (fmax - sfactor*fave)/delta 
+        else
+            delta = fave - fmin
+            a = fave/delta 
+            b = -1*fmin*fave/delta 
+        endif
+        fscaled = a*fitness(:) + b
+        prob = abs(fscaled)/sum(abs(fscaled))
+        sel_par = sample_weight(size(fitness), prob)
+
+        print *,sel_par
+        
+
+    end subroutine selection
+
+
+    function sample_weight(input, prop)Result(sel_par)
+        Integer                  :: input
+        Real,dimension(input)    :: prop
+        Integer,dimension(input) :: sel_par
+
+        Integer                  :: idx,i 
+        Real                     :: sample_rmd, acum_prop
+
+        do i = 1,input
+            call random_number(sample_rmd)
+
+            acum_prop = 0.0
+            do idx = 1,input
+                acum_prop = acum_prop + prop(idx)
+                if(sample_rmd .le. acum_prop) then
+                    exit
+                end if
+            end do
+            sel_par(i) = idx
+        end do
+    end function
 
     subroutine loadobsdata(iol)
 
