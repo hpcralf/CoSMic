@@ -109,6 +109,7 @@ Program CoSMic
 
   Integer(kind=pt_ik)                            :: ii, jj
   Integer(kind=ik)                               :: num_counties
+  Integer(kind=ik)                               :: num_regions
   !=============================================================================
   Call mpi_init(ierr)
 
@@ -288,28 +289,42 @@ Program CoSMic
           trim(lhc_dir)//"/"//trim(filename),sep=" ",head=.TRUE., &
           rownames=.TRUE., data=iol%R0_effect &
           )
-
+ 
      R0_effects_lhc = table_to_real_array(iol%R0_effect)
-     region_ids     = get_char_column(iol%counties,'Nuts2')
-     region_ids_R0e = iol%R0_effect%head(1:38*(cur_week+1):cur_week+1)(1:4)
 
-     num_counties = size(region_ids)
-     allocate(region_index(num_counties))
+     if (trim(region) == "states") then
 
-     do ii = 1, num_counties
-        do jj = 1, size(region_ids_R0e)
-           if (trim(region_ids(ii)) == trim(region_ids_R0e(jj)))then
-              region_index(ii) = jj
-           endif
+        !write(*,*)"Found head iol%R0_effect%head: ",iol%R0_effect%head
+        region_index   = int(get_int_table_column(iol%counties,"dist_id")/1000)
+        num_regions    = 16
+        
+     Else
+
+        write(*,*)"Not yet implemented"
+        write(*,*)"Program halted"
+        goto 1001
+        
+        region_ids     = get_char_column(iol%counties,'Nuts2')
+        region_ids_R0e = iol%R0_effect%head(1:38*(cur_week+1):cur_week+1)(1:4)
+        
+        num_counties = size(region_ids)
+        allocate(region_index(num_counties))
+        
+        do ii = 1, num_counties
+           do jj = 1, size(region_ids_R0e)
+              if (trim(region_ids(ii)) == trim(region_ids_R0e(jj)))then
+                 region_index(ii) = jj
+              endif
+           end do
         end do
-     end do
-
+     End if
+     
      Call end_Timer("Load LHC variables")
 
      Call start_Timer("Exec. Simulation")
      Do ii = 1, n_lhc_samples
 
-        R0_effects = reshape(R0_effects_lhc(ii,1:38*(cur_week+1)),(/cur_week+1,38 /))
+        R0_effects = reshape(R0_effects_lhc(ii,1:num_regions*(cur_week+1)),(/cur_week+1,num_regions/))
 
         Call COVID19_Spatial_Microsimulation_for_Germany(iol, &
              iter_s, iter_e , &
