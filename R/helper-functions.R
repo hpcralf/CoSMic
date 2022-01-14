@@ -173,13 +173,93 @@ setup.projection <- function(R0effect, sp,
 }
 
 ################################################################################
-#' Export csv
+#' Load Fortran results as data.frame    
 #' 
-#' The function exports the contents of rr as csv files.
+#' The function converts the result files of the Fortran model version in
+#' single model execution mode to data.frames.
 #'
 #' @export
-export.csv <- function(rr) {
+fres.to.dataframe <- function(data.dir,basename) {
 
+    files <- dir(data.dir, pattern=basename,full.names=TRUE)
+
+    ldf   <- list()
+    cnt   <- 1
     
+    for ( f in  files[grep(pattern=".dat$",files)]) {
+
+        head    <- read.table(paste0(f,".head"),head=TRUE,sep=",")
+        to.read <- file(f,"rb")
+        
+        vec <- readBin(to.read, integer(), size=4, n=prod(head[1,2:4])*dim(head)[1], endian = "little")
+
+        close(to.read)
+        
+        mat <- matrix(vec, nrow=head[,2])
+
+        df <- data.frame(t(mat))
+        a  <- apply(df,2,function(x){data.frame(matrix(x,ncol=head[,4]))})
+
+        ldf[[f]] <- data.frame(t(do.call(cbind,a)))
     
+        ldf[[f]]$SH1       <- 1 # rep(rep(c(1,2),each=24),401)+cnt
+        ldf[[f]]$iter      <- rep(seq(head[1,4]*(cnt-1)+1,head[1,4]*cnt),head[1,2])
+        ldf[[f]]$x.dist_id <- rep(iol$counties$dist_id,each=head[1,4])
+        
+        cnt <- cnt + 1
+    }
+    
+    tmp <- do.call(rbind,ldf)
+    tmp <- tmp[order(tmp$SH1,tmp$iter),]
+
+}
+
+################################################################################
+#' Load Fortran training results as data.frame    
+#' 
+#' The function converts the result files of the Fortran model version in
+#' training execution mode to data.frames.
+#'
+#' @export
+ftrain.to.dataframe <- function(data.dir,basename,split.col="SH1") {
+ 
+    files <- dir(data.dir, pattern=basename,full.names=TRUE)
+
+    ldf   <- list()
+    cnt   <- 1
+    
+    for ( f in  files[grep(pattern=".dat$",files)]) {
+        print(f)
+        head    <- read.table(paste0(f,".head"),head=TRUE,sep=",")
+        to.read <- file(f,"rb")
+        
+        vec <- readBin(to.read, integer(), size=4, n=prod(head[1,2:4])*dim(head)[1], endian = "little")
+
+        close(to.read)
+
+        mat.elems <- head[1,2]*head[1,3]
+        n.mat     <- head[1,4]*dim(head)[1]
+        
+        ind <- cbind(seq(from = 1,         by = mat.elems, length.out=n.mat),
+                     seq(from = mat.elems, by = mat.elems, length.out=n.mat)
+                     )
+
+        ldf[[f]] <-  do.call(rbind,
+                             apply(ind,1,
+                                   function(x){
+                                       data.frame(matrix(vec[seq(x[1],x[2])],nrow=head[1,2]))
+                                   }))
+
+        ldf[[f]]$x.dist_id  <- rep(iol$counties$dist_id,
+                                   n.mat)
+        ldf[[f]]$iter       <- rep(rep(seq(1,head[1,4]),
+                                       each=head[1,2]),
+                                   dim(head)[1])
+        ldf[[f]][split.col] <- rep(seq(dim(head)[1]*(cnt-1)+1,dim(head)[1]*cnt),
+                                   each=head[1,2]*head[1,4])
+        cnt <- cnt + 1
+    }
+    
+    return(do.call(rbind,ldf))
+
 }
