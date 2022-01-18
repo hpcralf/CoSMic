@@ -672,7 +672,8 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                             getchange <- as.numeric(t(lhc[it.ss,
                                                           paste0(iol[["states"]][
                                                               as.character(as.integer(as.integer(
-                                                                  getcounties)/1000)),"Shortcut"],change)]))
+                                                                  getcounties)/1000)),"Shortcut"],
+                                                              sprintf("%02d",change))]))
                         }
 
                         ## If R0effect changes per Nuts2 region per change -----
@@ -686,7 +687,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                        
                     } else if ( pspace$R0effect$type == "directv" ) {
                         ## Per change ------------------------------------------
-                        getchange <- lhc[it.ss,paste0("R0effect",change)]
+                        getchange <- lhc[it.ss,paste0("R0effect",sprintf("%02d",change))]
                         
                     } else {
                         ## Globally constant -----------------------------------
@@ -2359,6 +2360,11 @@ init.lhc <-  function(pspace,sp,rep.iter=TRUE) {
             lhc.dat <- do.call(rbind,lapply(i$param,unlist))
             
             rownames(lhc.dat) <- NULL
+
+            colnames(lhc.dat) <- paste0(rep(names(i$param[[1]]),
+                                            each=dim(i$param[[1]])[1]),
+                                        sprintf("%02d",rep(seq(1,dim(i$param[[1]])[1]),
+                                                           dim(i$param[[1]])[2])))
             
             lhc <- data.frame(lhc %>% slice(rep(row_number(), each=dim(lhc.dat)[1])),
                               lhc.dat)
