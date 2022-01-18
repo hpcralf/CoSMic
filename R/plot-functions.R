@@ -731,7 +731,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                                                                            as.integer(x[1]+(x[2]-x[1])/2)})),
                                                      R0e = as.numeric(
                                                          state.list[[pg]][1,paste0(iol$states[st,"Shortcut"],
-                                                         (1:length(sp$R0change)))]),
+                                                         sprintf("%02d",(1:length(sp$R0change))))]),
                                                      name= paste("R0effect",fill.dt))
                             }
                             if ( region == "nuts2" ) {
