@@ -50,11 +50,15 @@ Module genetic_algorithm
     use precision
     use cosmic_io
     use kernel
+    use qsort_c_module
+    use quicksort_nr
 
     Use data_preprocessing
     Use cosmic_io
 
     implicit none
+
+    Real, parameter :: INV = 99.0
 
     type opt_parameters
     					
@@ -63,12 +67,13 @@ Module genetic_algorithm
         Logical                                       :: opt_filter  = .TRUE.
         character(len=mcl)							  :: use_sug_sol = "NULL"
         character(len=8)							  :: opt_target_region = "state"
-        character(len=8), Dimension(:), Allocatable   :: opt_names 
+        character(len=8), Dimension(:), Allocatable   :: opt_names
         Integer,Dimension(:), Allocatable             :: opt_names_dur
         Real                        				  :: opt_lb = 0.1
         Real                                          :: opt_ub = 1.0
         Integer 									  :: opt_pop_size = 4
         Integer    								      :: opt_num_gene = 2
+        Integer                                       :: opt_elitism
 
     end type opt_parameters
 
@@ -108,10 +113,10 @@ Contains
         Integer(kind=ik)                             ,intent(in) :: R0delay_days
         Character(len=:), Allocatable                 ,intent(in):: R0delay_type
         character(len=:), Allocatable                 ,intent(in):: control_age_sex
-        character(len=:), Allocatable             ,intent(in)    :: seed_date
-        Integer(kind=ik)                          ,intent(in)    :: seed_before    
-        Integer(kind=ik)                          ,intent(in)    :: sam_size
-        Real(kind=rk)                              ,intent(in)   :: R0
+        character(len=:), Allocatable                 ,intent(in):: seed_date
+        Integer(kind=ik)                              ,intent(in):: seed_before    
+        Integer(kind=ik)                              ,intent(in):: sam_size
+        Real(kind=rk)                                 ,intent(in):: R0
         Real(kind=rk),    Allocatable, Dimension(:,:) ,intent(in):: R0_effects
 
         !---------------------------------------------------------------------------
@@ -120,9 +125,9 @@ Contains
         Integer                                       :: nvals
         Type(opt_parameters)                          :: opt
 
-        Real, Allocatable, Dimension(:)               :: fitness
+        Real, Allocatable, Dimension(:)               :: fitness, tmp_fitness, sorted_fitness
 
-        Real(kind=rk),Dimension(:,:), Allocatable     :: ini_pop ! in line with the R0_effect
+        Real(kind=rk),Dimension(:,:), Allocatable     :: ini_pop, tmp_pop, sorted_pop ! in line with the R0_effect
         Integer,dimension(:,:,:), Allocatable         :: ill_ICU_cases_final
         Integer,dimension(:), Allocatable             :: uniq_distid
         Integer, dimension(:), Allocatable            :: opt_index
@@ -138,8 +143,7 @@ Contains
         Real,dimension(:), Allocatable                :: tmp_filter
         
         Integer                                       :: time_n, num_states
-        Character(len=:),Dimension(:),allocatable     :: sim_regions
-        Character(len=8),Dimension(1)                 :: given_sc
+        Character*15,Dimension(1)                     :: given_sc
 
         Character*10                                  :: seed_date_mod
         Real,dimension(:), Allocatable                :: diff
@@ -153,6 +157,11 @@ Contains
         !==============================for selection====================
         Integer,dimension(:), Allocatable             :: sel_par
 
+        !==============================for sorting======================
+        integer,dimension(:),Allocatable              :: sorted_index
+        integer                                       :: idx
+        real                                          :: pre_fitv, curr_fitv
+
 
         ! TODO: parameters checking
         ! ====================================================================
@@ -165,11 +174,21 @@ Contains
         opt%opt_names = (/ "def0", "de60", "de91", "de92", "de93", "de94", "de50" /)
         opt%opt_names_dur = (/ 6, 6, 6, 6, 6 ,6 ,6 /)
         nvals = sum(opt%opt_names_dur)
+        opt%opt_elitism = max(1,NINT(opt%opt_pop_size*0.05))
 
         ! Generate beginning population
         Allocate(ini_pop(nvals, opt%opt_pop_size))
         Allocate(fitness(opt%opt_pop_size))
+        Allocate(tmp_pop(nvals, opt%opt_pop_size))
+        !Allocate(sorted_pop(nvals, opt%opt_pop_size))
+        Allocate(tmp_fitness(opt%opt_pop_size))
+        !Allocate(sorted_fitness(opt%opt_pop_size))
         Allocate(opt_index(size(opt%opt_names)))
+        !allocate(sorted_index(opt%opt_pop_size))
+
+        allocate(sorted_pop(nvals, opt%opt_elitism))
+        allocate(sorted_fitness(opt%opt_elitism))
+        allocate(sorted_index(opt%opt_pop_size))
 
         time_n = maxval(R0change) + 1
         uniq_distid = get_unique(counties_index/1000)
@@ -286,6 +305,8 @@ Contains
                 startid = endid + 1
             enddo
 
+            !print *,ini_pop(:,pop_ii)
+
             Call COVID19_Spatial_Microsimulation_for_Germany(iol,counties_index, &
                 iter , &
                 inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
@@ -362,16 +383,60 @@ Contains
         do i = 1,opt%opt_pop_size
             print *,i,": ",fitness(i)
         enddo
+        
+        call SORTRX_REAL(opt%opt_pop_size,fitness,sorted_index)
 
+        i = 1
+        j = opt%opt_pop_size
+        pre_fitv = INV
+        do while(i .le. opt%opt_elitism)
+            if (j .eq. 0) then
+                print *,"too many duplicates lead to insufficient elitism"
+                call exit(status)
+            endif
+            idx = sorted_index(j)
+            curr_fitv = fitness(idx)
+            if (curr_fitv .ne. pre_fitv) then
+                sorted_fitness(i) = curr_fitv
+                sorted_pop(:,i) = ini_pop(:,idx)
+                i = i + 1
+            endif
+            j = j - 1
+            pre_fitv = curr_fitv
+        enddo
+
+        print *,"elitism:"
+        print *,sorted_fitness
+        print *,sorted_pop
+
+        tmp_fitness = fitness
         allocate(sel_par(opt%opt_pop_size))
-        call selection(fitness, sel_par)
+        call selection(tmp_fitness, sel_par)
+        do i = 1,opt%opt_pop_size
+            tmp_pop(:,i) = ini_pop(:,sel_par(i))
+            tmp_fitness(i) = fitness(sel_par(i))
+        enddo   
+        ini_pop = tmp_pop
+        fitness = tmp_fitness
+        call crossover(ini_pop, fitness, pcrossover, sel_par)
+        do i = 1,nvals
+            print *,ini_pop(i,:)
+        enddo
 
+        print *,fitness
 
+        if(pmutation .ne. 0.0) then
+            call mutation(ini_pop, fitness, pmutation, opt%opt_lb, opt%opt_ub)
 
+            do i = 1,nvals
+                print *,ini_pop(i,:)
+            enddo
+            print *,fitness
+        endif
 
+        call elitism(fitness, ini_pop, sorted_pop, sorted_fitness)
 
         deallocate(pos_se)
-      
         deallocate(seltarget_icu_by_state)
         deallocate(obs_ub)
         deallocate(obs_lb)
@@ -381,6 +446,12 @@ Contains
         deallocate(fitness)
         deallocate(uniq_distid)
         deallocate(opt_index)
+        deallocate(tmp_pop)
+        deallocate(tmp_fitness)
+        deallocate(sorted_pop)
+        deallocate(sorted_fitness)
+        deallocate(sorted_index)
+        !deallocate(sel_par)
         !===== TODO: if we need to deallocate the member seltarget_icu_by_state(i)%icucases ====
     end subroutine ga
 
@@ -396,8 +467,6 @@ Contains
         do j = 1, popsize
             ini_pop(:,j) = random_uniform(nvals,lb,ub)
         enddo
-
-
     end subroutine population
 
 
@@ -418,6 +487,7 @@ Contains
         fmax = maxval(fitness)
         fave = sum(fitness)/size(fitness)
 
+        print *,"comare: ",(sfactor*fave - fmax)/(sfactor - 1)
         if (fmin .gt. (sfactor*fave - fmax)/(sfactor - 1)) then
             delta = fmax - fave
             a = (sfactor - 1.0)*fave/delta 
@@ -429,13 +499,115 @@ Contains
         endif
         fscaled = a*fitness(:) + b
         prob = abs(fscaled)/sum(abs(fscaled))
+        print *,"a: ",a," b: ",b," prob: ",prob
         sel_par = sample_weight(size(fitness), prob)
 
         print *,sel_par
-        
-
     end subroutine selection
 
+    subroutine crossover(ini_pop, fitness, pcrossover, sel_par) 
+        Real(kind=rk),dimension(:,:),Allocatable,intent(inout)    :: ini_pop
+        Real,dimension(:),Allocatable,intent(inout)               :: fitness
+        Integer,dimension(:),Allocatable,intent(in)               :: sel_par
+        Real,intent(in)                                           :: pcrossover
+
+        Integer,dimension(:),Allocatable                          :: sample_input, sample_parents
+        Integer                                                   :: start_id, end_id, nmating,i,j
+        Real(kind=rk)                                             :: ran
+        Real(kind=rk),dimension(size(ini_pop,dim=1))              :: lchild, rchild
+
+        nmating = size(fitness)/2 !get the floor
+        allocate(sample_input(nmating*2))
+        allocate(sample_parents(nmating*2))
+
+        print *,size(ini_pop,dim=1)
+        do i = 1,size(lchild)
+            print *,ini_pop(i,:)
+        enddo
+        print *,fitness
+
+        do i = 1, 2*nmating 
+            sample_input(i) = i
+        enddo
+      
+        sample_parents = sample_i4(sample_input,2*nmating)
+        print *,sample_parents
+        
+        do i = 1, nmating 
+            call random_number(ran)
+            print *,"crossover ran: ",ran
+            end_id = i * 2 
+            start_id = end_id - 1 
+            start_id = sample_parents(start_id)
+            end_id = sample_parents(end_id)
+
+            if((pcrossover > ran) .and.&
+             (sel_par(start_id) .ne. sel_par(end_id))) then
+                call random_number(ran)
+                print *,"ran: ",ran
+                lchild = ran*ini_pop(:,start_id) + (1.0-ran)*ini_pop(:,end_id)
+                rchild = (1.0-ran)*ini_pop(:,start_id) + ran*ini_pop(:,end_id)
+
+                ini_pop(:,start_id) = lchild
+                ini_pop(:,end_id)   = rchild
+
+                fitness(start_id) = INV 
+                fitness(end_id)   = INV 
+            endif
+        enddo
+    end subroutine crossover
+
+    subroutine mutation(ini_pop, fitness, pmutation, lb, ub)
+        Real(kind=rk),dimension(:,:),Allocatable,intent(inout)    :: ini_pop
+        Real,dimension(:),Allocatable,intent(inout)               :: fitness
+        Real,intent(in)                                           :: pmutation
+        Real,intent(in)                                           :: lb, ub
+
+        Integer,dimension(size(ini_pop,dim=1))                    :: sample_input
+        Integer,dimension(1)                                      :: sample_parents
+        Integer                                                   :: i
+        Real                                                      :: ran
+        Real(kind=rk),dimension(1)                                :: Res
+
+        do i = 1,size(sample_input)
+            sample_input(i) = i
+        enddo
+        print *,"mutation"
+        do i = 1,size(fitness)
+            call random_number(ran)
+            if (pmutation > ran) then
+                sample_parents = sample_i4(sample_input,size(sample_parents))
+                Res = random_uniform(1,lb,ub)
+                ini_pop(sample_parents(1),i) = Res(1)
+                print *,"the number",i," sample_parents: ",sample_parents(1)," res: ", Res(1)
+                fitness(i) = INV
+            endif
+        enddo
+
+    end subroutine mutation
+
+    subroutine elitism(fitness, ini_pop, sorted_pop, sorted_fitness)
+        Real(kind=rk),dimension(:,:),Allocatable,intent(inout)    :: ini_pop
+        Real,dimension(:),Allocatable,intent(inout)               :: fitness
+        Real(kind=rk),dimension(:,:),Allocatable,intent(in)       :: sorted_pop                                   
+        Real,dimension(:),Allocatable,intent(in)                  :: sorted_fitness
+        Integer,dimension(size(fitness))                          :: sorted_index
+        Integer                                                   :: num
+
+        print *,"elitism"
+
+        call SORTRX_REAL(size(fitness),fitness,sorted_index)
+        num = size(sorted_fitness)
+        fitness(sorted_index(1:num)) = sorted_fitness
+        ini_pop(:,sorted_index(1:num)) = sorted_pop
+        
+        print *,fitness 
+        do num = 1,size(ini_pop,1)
+           print *,ini_pop(num,:)
+        enddo
+
+
+    end subroutine elitism
 
     function sample_weight(input, prop)Result(sel_par)
         Integer                  :: input
@@ -458,6 +630,7 @@ Contains
             sel_par(i) = idx
         end do
     end function
+
 
     subroutine loadobsdata(iol)
 

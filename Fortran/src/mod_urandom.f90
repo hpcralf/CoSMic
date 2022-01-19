@@ -11,6 +11,7 @@
 !#
 !# Authors:      Qifeng Pan
 !#               Ralf Schneider
+!#               Huan Zhou
 !#               Christian Dudel
 !#               Matthias Rosenbaum-Feldbruegge
 !#               Sebastian Kluesener
@@ -55,21 +56,19 @@ contains
      !! standard uniform
      subroutine random_stduniform(n,u)
 
-          integer,intent(in)            :: n  
-          real,dimension(n),intent(out) :: u
-
-
-          real,dimension(n)             :: r
+          integer,intent(in)                     :: n  
+          real(kind=rk),dimension(:),intent(out) :: u
+          real(kind=rk),dimension(n)             :: r
           call random_number(r)
           u = 1 - r
      end subroutine random_stduniform
 
      !! uniform distribution
      function random_uniform(n,a,b) Result(x)
-          integer,intent(in)           :: n
-          real,intent(in)              :: a,b
-          real(kind=rk),dimension(n)   :: x
-          real         ,dimension(n)   :: u
+          integer,intent(in)                    :: n
+          real,intent(in)                       :: a,b
+          real(kind=rk),dimension(n)            :: x
+          real(kind=rk)         ,dimension(n)   :: u
           call random_stduniform(n,u)
           x = (b-a)*u + a
      !     print *,size(x)
