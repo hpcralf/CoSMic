@@ -14,6 +14,8 @@ plots.by.state(
   rr,
   region,
   fix.lim,
+  x.min = NULL,
+  x.max = NULL,
   filtered = FALSE,
   fk.cases = rep(1/7, 7),
   Sec.Axis = "RMS",
@@ -23,7 +25,8 @@ plots.by.state(
   silent = FALSE,
   relative = FALSE,
   split.in = NULL,
-  y.max = NULL
+  y.max = NULL,
+  prog = NULL
 )
 }
 \description{

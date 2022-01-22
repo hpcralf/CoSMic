@@ -4,12 +4,20 @@
 \alias{convert.Rp.to.Fp}
 \title{Convert R-model parameters to Fortran-model input files}
 \usage{
-convert.Rp.to.Fp(filename, sp, iol, R0_effects, outpath = "./")
+convert.Rp.to.Fp(
+  filename.sp,
+  sp,
+  filename.ep,
+  ep,
+  iol,
+  R0_effects,
+  outpath = "./"
+)
 }
 \arguments{
-\item{filename}{Path to the output file.}
-
 \item{sp}{A list with static model parameters as described in \code{\link[=set.static.params]{set.static.params()}}.}
+
+\item{filename}{Path to the output file.}
 }
 \description{
 The function prints the R-model parameter lists and input data to textfiles

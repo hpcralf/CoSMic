@@ -4,7 +4,7 @@
 \alias{init.lhc}
 \title{Prepare parameter space}
 \usage{
-init.lhc(pspace, sp)
+init.lhc(pspace, sp, rep.iter = TRUE)
 }
 \arguments{
 \item{pspace}{The parameter list pspace set by repeated calls to \code{\link[=set.pspace]{set.pspace()}}}
