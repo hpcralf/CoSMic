@@ -75,7 +75,9 @@
 #' $export_name
 #' [1] "v12.0-2020-11-07_21:53:00"
 #' ```
-#' @import rlist, stringr
+#' @import rlist
+#' @import stringr
+#' 
 #' @export
 set.exec.params <- function(exec.procedure  = "Basic-Param",
                             parallel.method = "OMP",
@@ -1299,9 +1301,9 @@ checkpoint.check.reload <- function(ep, sp) {
 #' The function maps R0effects on NUTS-1 i.e. German state level to R0effects
 #' on NUTS-2 level.
 #'
-#' @param R0effect.nuts2
-#' @param R0effect.states
-#' @param rows
+#' @param R0effect.nuts2 R0efects to map to
+#' @param R0effect.states R0efects to map from
+#' @param rows How many rows to map
 #' 
 #' @export
 map.R0effects <- function(R0effect.nuts2,R0effect.states,rows=NULL) {

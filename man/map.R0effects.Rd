@@ -7,7 +7,11 @@
 map.R0effects(R0effect.nuts2, R0effect.states, rows = NULL)
 }
 \arguments{
-\item{rows}{}
+\item{R0effect.nuts2}{R0efects to map to}
+
+\item{R0effect.states}{R0efects to map from}
+
+\item{rows}{How many rows to map}
 }
 \description{
 The function maps R0effects on NUTS-1 i.e. German state level to R0effects
