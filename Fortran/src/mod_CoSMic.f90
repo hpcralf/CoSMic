@@ -308,7 +308,7 @@ Contains
     seed_ill%date     = inf_seed_date(temp)
     seed_ill%cases    = inf_seed_cases(temp)
 
-    write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases),size(seed_ill%cases)
+    write(* ,*)"sum(seed_ill%cases):",sum(seed_ill%cases),size(seed_ill%cases)
 
     temp = get_index(inf_seed_date,seed_inf_cont_seq)
 
@@ -475,6 +475,45 @@ Contains
        write(un_lf,'(5(A10,1X))')"county","inf_ncont","inf_cont","inf_ill","inf_dth"
     End if
 
+    !! ----------------------------------------------------------------------
+    !! Convert from Weekly to daily R0_effects ------------------------------
+    R0_daily = R0_force   * R0 / Real(Real(cont_dur)+Real(ill_dur)*less_contagious) + &
+         ( 1 - R0_force ) * R0 / Real(cont_dur+ill_dur)
+    
+    ! this block simplifies the if judgment
+    If (.Not.Allocated(R0matrix))Then
+       Allocate(R0matrix(num_counties,time_n-1))
+    End If
+    R0matrix = R0_daily
+    n_change  = Size(R0change,dim=2)
+    
+    Do i = 1,n_change
+       
+       getchange = R0_effects(i,region_index)
+       
+       gettime = generate_seq(R0change(1,i),R0change(2,i),1)
+       
+       Do j = 1,Size(gettime)
+          R0matrix(:,gettime(j)) = R0matrix(:,gettime(j)) * getchange
+       End Do
+    End Do
+    
+    If (R0delay) Then
+       Do i = 1,Size(R0matrix,dim = 1)
+          R0matrix(i,:) = smoothing_change(R0matrix(i,:),R0delay_days,R0delay_type)
+       End Do
+    End If
+    
+    !! ==============================================================
+    !! Init connectivity matrix
+    connect =  transpose(table_to_real_array(iol%connect_work))
+
+    Do i = 1,Size(connect,dim=2)
+       connect(:,i) = connect(:,i)/Sum(connect(:,i))
+    End Do
+
+    connect = transpose(connect)
+       
 !!!=============================================================================
 !!! Non-Deterministic Iteration
 !!!=============================================================================
@@ -497,7 +536,7 @@ Contains
     !$OMP& private(sim) &
     !$OMP& firstprivate(index,temp_int,i,temp,days,icounty,county,jj,kk,ii,tmp_count) &
     !$OMP& firstprivate(seed_ill,seed_inf_cont,seed_inf_ncont,seed_death,seed_d_seq,temp_date) &
-    !$OMP& firstprivate(R0_daily,R0matrix,n_change,getchange,gettime,tmp_d_new,connect) &
+    !$OMP& firstprivate(tmp_d_new) &
     !$OMP& firstPRIVATE(il_d,inf_ill,inf_c_d,inf_cont,inf_nc_d,inf_ncont,inf_dth) &
     !$OMP& firstPRIVATE(rownumbers_left,rownumbers) &
     !$OMP& firstPRIVATE(rownumbers_ill,rownumbers_cont,rownumbers_ncont,rownumbers_dea) &
@@ -546,8 +585,8 @@ Contains
        tmp_count = sample(sim%d,pop_size)
 
        sim%dist_id=sim%dist_id(tmp_count)
+       sim%sex    =sim%sex    (tmp_count)
        sim%age    =sim%age    (tmp_count)
-
        sim%d  = 1
 
        deallocate(tmp_count)
@@ -675,35 +714,6 @@ Contains
 
        End Do ! do icounty = 1,size(sim_counties)
 
-       !! ----------------------------------------------------------------------
-       !! Convert from Weekly to daily R0_effects ------------------------------
-       R0_daily = R0_force   * R0 / Real(Real(cont_dur)+Real(ill_dur)*less_contagious) + &
-            ( 1 - R0_force ) * R0 / Real(cont_dur+ill_dur)
-
-       ! this block simplifies the if judgment
-       If (.Not.Allocated(R0matrix))Then
-          Allocate(R0matrix(num_counties,time_n-1))
-       End If
-       R0matrix = R0_daily
-       n_change  = Size(R0change,dim=2)
-
-       Do i = 1,n_change
-
-          getchange = R0_effects(i,region_index)
-
-          gettime = generate_seq(R0change(1,i),R0change(2,i),1)
-
-          Do j = 1,Size(gettime)
-             R0matrix(:,gettime(j)) = R0matrix(:,gettime(j)) * getchange
-          End Do
-       End Do
-
-       If (R0delay) Then
-          Do i = 1,Size(R0matrix,dim = 1)
-             R0matrix(i,:) = smoothing_change(R0matrix(i,:),R0delay_days,R0delay_type)
-          End Do
-       End If
-
        sim%t2                 = missing
 
        !** Set up dist_id renumbered cross_reference ---------------------------
@@ -712,14 +722,6 @@ Contains
        If (.Not.Allocated(tmp_d_new))Then
           Allocate(tmp_d_new(Size(sim%d)))
        End If
-
-       connect =  transpose(table_to_real_array(iol%connect_work))
-
-       Do i = 1,Size(connect,dim=2)
-          connect(:,i) = connect(:,i)/Sum(connect(:,i))
-       End Do
-
-       connect = transpose(connect)
 
        ! call end_timer("Init Sim Loop") 
 
@@ -1001,6 +1003,11 @@ Contains
 
     ! call start_timer("+- Prepare data",reset=.FALSE.)
 
+    write(*,*)shape(ill_ICU_cases)
+    write(*,*)lbound(ill_ICU_cases)
+    write(*,*)ubound(ill_ICU_cases)
+!    stop
+    
     !** Allocate and init new counter ----------------------
     Allocate(state_count_pl(min_state:max_state,n_counties))
     state_count_pl = 0
