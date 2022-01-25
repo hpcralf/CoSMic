@@ -173,7 +173,7 @@ Contains
     Integer,Allocatable             :: ill_contag_cases_final(:,:,:)
 
     Integer                         :: timestep
-
+    
     Integer,Allocatable             :: tmp_d_new(:),tmp_count(:)
 
     Character*10                    :: temp_date
@@ -182,7 +182,7 @@ Contains
     character(len=10)               :: l_seed_date
     Real                            :: iter_pass_handle(6)
 
-    Character*8                     :: proc_char
+    Character(len=8)                :: proc_char
     
     Type(tTimer)                    :: timer
 
@@ -213,14 +213,43 @@ Contains
     Character(Len=:), allocatable, Dimension(:)     :: transpr_sex
 
     Integer(kind=ik), pointer    , Dimension(:)     :: connect_work_distid
-   
+
+    Integer(Kind=ik)                                :: time_n, start_time
+    Logical                                         :: cp_write
+    Integer(kind=ik)                                :: cp_time
+    Integer                                         :: cp_unit
+    
+    Logical                                         :: cp_reload
+    Integer(kind=ik)                                :: cp_reload_time
+    Integer                                         :: cp_reload_unit
+    character(len=:), Allocatable                   :: cp_dir
+    
+    character(len=8)                                :: cp_time_char
+    
+    Integer                                         :: std_int
+    Integer                                         :: int_storage_size
+    Integer(kind=1)                                 :: std_int1
+    Integer                                         :: int1_storage_size
     !===========================================================================
     ! Implementation
     !===========================================================================
 
+    !** Init proc character to name files --------
+    write(proc_char,'("_",I7.7)')proc
+
+    !** Init default integer storage size --------
+    int_storage_size  = storage_size(std_int)  / FILE_STORAGE_SIZE
+    int1_storage_size = storage_size(std_int1) / FILE_STORAGE_SIZE
+
     !** Get time_n from R0change -----------------
     time_n = Maxval(R0change) + 1
 
+    !** If Checkpoint should be loaded -----------
+    call pt_get("#cp.reload"      , cp_reload)
+    if (cp_reload) then
+       call pt_get("#cp.reload.time" , cp_reload_time)
+    end if
+    
     !** Shift seed_date --------------------------
     days             = 1
     seed_date_mod        = add_date(seed_date,days)
@@ -275,13 +304,19 @@ Contains
 
     n_iter = iter_e - iter_s + 1
 
-    Allocate(healthy_cases_final(num_counties,time_n,n_iter))
+    if (cp_reload) then
+       start_time = cp_reload_time
+    else
+       start_time = 1
+    end if
+        
+    Allocate(healthy_cases_final   (num_counties,time_n,n_iter))
     Allocate(inf_noncon_cases_final(num_counties,time_n,n_iter))
     Allocate(inf_contag_cases_final(num_counties,time_n,n_iter))
     Allocate(ill_contag_cases_final(num_counties,time_n,n_iter))
-    Allocate(ill_ICU_cases_final(num_counties,time_n,n_iter))
-    Allocate(immune_cases_final(num_counties,time_n,n_iter))
-    Allocate(dead_cases_final(num_counties,time_n,n_iter))
+    Allocate(ill_ICU_cases_final   (num_counties,time_n,n_iter))
+    Allocate(immune_cases_final    (num_counties,time_n,n_iter))
+    Allocate(dead_cases_final      (num_counties,time_n,n_iter))
 
     inf_seed_date = get_char_column(iol%seed,'date')
 
@@ -513,7 +548,33 @@ Contains
     End Do
 
     connect = transpose(connect)
-       
+
+!!!=============================================================================
+!!! Open checkpoint restart file ===============================================
+!!!=============================================================================
+    call pt_get("#cp.write" , cp_write)
+    if ( cp_write ) then
+
+       call pt_get("#cp.time" , cp_time)
+
+       write(cp_time_char,'("_",I7.7)')cp_time
+
+       Open(newunit=cp_unit, action="write", status="replace", access="stream", &
+            file=trim(output_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart")
+      
+    End if
+
+    if ( cp_reload ) then
+
+       call pt_get("#cp.dir"         , cp_dir)
+
+       write(cp_time_char,'("_",I7.7)')cp_reload_time
+
+       Open(newunit=cp_reload_unit, action="read", status="old", access="stream", &
+            file=trim(cp_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart")
+      
+    End if
+    
 !!!=============================================================================
 !!! Non-Deterministic Iteration
 !!!=============================================================================
@@ -582,8 +643,21 @@ Contains
 
        Allocate(tmp_count(pop_size))
 
-       tmp_count = sample(sim%d,pop_size)
+       if ( cp_reload ) then
+          read(cp_reload_unit,pos=int_storage_size*pop_size*OMP_GET_THREAD_NUM()+1)tmp_count
+       Else
+          tmp_count = sample(sim%d,pop_size)
+       End if
 
+!!!=============================================================================
+!!! Write index shuffle for restart since this is non deterministic ============
+!!!=============================================================================
+       if ( cp_write ) then
+          !$OMP critical
+          write(cp_unit,pos=int_storage_size*pop_size*OMP_GET_THREAD_NUM()+1)tmp_count
+          !$OMP end critical 
+       End if
+       
        sim%dist_id=sim%dist_id(tmp_count)
        sim%sex    =sim%sex    (tmp_count)
        sim%age    =sim%age    (tmp_count)
@@ -591,130 +665,143 @@ Contains
 
        deallocate(tmp_count)
 
-       Do icounty = 1,num_counties
+       if ( cp_reload ) then
+          
+          read(cp_reload_unit,  &
+               pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
+                     int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
+          read(cp_reload_unit, &
+               pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
+                     int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
+                     int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%d
+       Else
+          
+          Do icounty = 1,num_counties
 
-          county = counties_index(icounty)
+             county = counties_index(icounty)
 
-          rownumbers = get_index(sim%dist_id,county)
+             rownumbers = get_index(sim%dist_id,county)
 
-          temp   = get_index(seed_ill%dist_id,county)
-          il_d   = rep(seed_ill_dur(temp),seed_ill%cases(temp))
-          inf_ill= Sum(seed_ill%cases(temp))
+             temp   = get_index(seed_ill%dist_id,county)
+             il_d   = rep(seed_ill_dur(temp),seed_ill%cases(temp))
+             inf_ill= Sum(seed_ill%cases(temp))
 
-          temp   = get_index(seed_inf_cont%dist_id,county)
-          inf_c_d= rep(seed_inf_cont_dur(temp),seed_inf_cont%cases(temp))
+             temp   = get_index(seed_inf_cont%dist_id,county)
+             inf_c_d= rep(seed_inf_cont_dur(temp),seed_inf_cont%cases(temp))
 
-          inf_cont = Sum(seed_inf_cont%cases(temp))
+             inf_cont = Sum(seed_inf_cont%cases(temp))
 
-          temp   = get_index(seed_inf_ncont%dist_id,county)
-          inf_nc_d = rep(seed_inf_ncont_dur(temp),seed_inf_ncont%cases(temp))
-          inf_ncont = Sum(seed_inf_ncont%cases(temp))
+             temp   = get_index(seed_inf_ncont%dist_id,county)
+             inf_nc_d = rep(seed_inf_ncont_dur(temp),seed_inf_ncont%cases(temp))
+             inf_ncont = Sum(seed_inf_ncont%cases(temp))
 
-          temp   = get_index(seed_death%dist_id,county)
-          inf_dth = Sum(seed_death%cases(temp))
+             temp   = get_index(seed_death%dist_id,county)
+             inf_dth = Sum(seed_death%cases(temp))
 
-          if (PT_DEBUG) then
-             write(un_lf,'(11(I11))')county,inf_ncont,inf_cont,inf_ill,inf_dth,&
-                  minval(inf_nc_d),maxval(inf_nc_d),minval(inf_c_d),maxval(inf_c_d),&
-                  minval(il_d),maxval(il_d)
-          End if
+             if (PT_DEBUG) then
+                write(un_lf,'(11(I11))')county,inf_ncont,inf_cont,inf_ill,inf_dth,&
+                     minval(inf_nc_d),maxval(inf_nc_d),minval(inf_c_d),maxval(inf_c_d),&
+                     minval(il_d),maxval(il_d)
+             End if
 
-          If(Size(rownumbers)<(inf_ill+inf_cont+inf_ncont+inf_dth)) Then
-             Print *,"Number of infected and dead is larger than population size"
-             Print *,"only ",Size(rownumbers),"number left"
-             Print *,"total cases is",(inf_ill+inf_cont+inf_ncont+inf_dth)
-             Print *,"seperate cases are:" ,inf_ill,inf_cont,inf_ncont,inf_dth
-             Print *,"timestep is",timestep
-             Print *,"it_ss is",it_ss
-             Print *,"county is",county
-             Print *,"counties are",counties_index
-             Print *,"icounty is",icounty
-             Call Exit(status)
-          End If
+             If(Size(rownumbers)<(inf_ill+inf_cont+inf_ncont+inf_dth)) Then
+                Print *,"Number of infected and dead is larger than population size"
+                Print *,"only ",Size(rownumbers),"number left"
+                Print *,"total cases is",(inf_ill+inf_cont+inf_ncont+inf_dth)
+                Print *,"seperate cases are:" ,inf_ill,inf_cont,inf_ncont,inf_dth
+                Print *,"timestep is",timestep
+                Print *,"it_ss is",it_ss
+                Print *,"county is",county
+                Print *,"counties are",counties_index
+                Print *,"icounty is",icounty
+                Call Exit(status)
+             End If
 
-          rownumbers_left = rownumbers
-          If (inf_ill > 0) Then
+             rownumbers_left = rownumbers
+             If (inf_ill > 0) Then
 
-             rownumbers_ill = sample(rownumbers_left,inf_ill)
-             Call QSortC(rownumbers_ill)
+                rownumbers_ill = sample(rownumbers_left,inf_ill)
+                Call QSortC(rownumbers_ill)
 
-             jj = 1
-             kk = 1
-             Do ii = 1, Size(rownumbers_left)
+                jj = 1
+                kk = 1
+                Do ii = 1, Size(rownumbers_left)
 
-                if (rownumbers_left(ii) == rownumbers_ill(jj)) then
-                   if (jj < inf_ill) then
-                      jj = jj + 1
+                   if (rownumbers_left(ii) == rownumbers_ill(jj)) then
+                      if (jj < inf_ill) then
+                         jj = jj + 1
+                      End if
+                   Else
+                      rownumbers_left(kk) = rownumbers_left(ii)
+                      kk = kk + 1
                    End if
-                Else
-                   rownumbers_left(kk) = rownumbers_left(ii)
-                   kk = kk + 1
-                End if
 
-             End Do
+                End Do
 
-             sim%t1(rownumbers_ill) = ill_contag
-             sim%d(rownumbers_ill)  = il_d
-          End If
+                sim%t1(rownumbers_ill) = ill_contag
+                sim%d(rownumbers_ill)  = il_d
+             End If
 
-          If ( inf_cont > 0) Then
-             rownumbers_cont = sample(rownumbers_left(1:(Size(rownumbers)-inf_ill)),inf_cont)
+             If ( inf_cont > 0) Then
+                rownumbers_cont = sample(rownumbers_left(1:(Size(rownumbers)-inf_ill)),inf_cont)
 
-             Call QSortC(rownumbers_cont)             
+                Call QSortC(rownumbers_cont)             
 
-             jj = 1
-             kk = 1
-             Do ii = 1, Size(rownumbers_left)
+                jj = 1
+                kk = 1
+                Do ii = 1, Size(rownumbers_left)
 
-                if (rownumbers_left(ii) == rownumbers_cont(jj)) then
-                   if (jj < inf_cont) then
-                      jj = jj + 1
+                   if (rownumbers_left(ii) == rownumbers_cont(jj)) then
+                      if (jj < inf_cont) then
+                         jj = jj + 1
+                      End if
+                   Else
+                      rownumbers_left(kk) = rownumbers_left(ii)
+                      kk = kk + 1
                    End if
-                Else
-                   rownumbers_left(kk) = rownumbers_left(ii)
-                   kk = kk + 1
-                End if
 
-             End Do
+                End Do
 
-             sim%t1(rownumbers_cont)= inf_contag
-             sim%d(rownumbers_cont) = inf_c_d
-          End If
+                sim%t1(rownumbers_cont)= inf_contag
+                sim%d(rownumbers_cont) = inf_c_d
+             End If
 
-          If (inf_ncont > 0) Then
-             rownumbers_ncont = sample(rownumbers_left(1:(Size(rownumbers)-inf_ill-inf_cont)),inf_ncont)
+             If (inf_ncont > 0) Then
+                rownumbers_ncont = sample(rownumbers_left(1:(Size(rownumbers)-inf_ill-inf_cont)),inf_ncont)
 
-             Call QSortC(rownumbers_ncont)
+                Call QSortC(rownumbers_ncont)
 
 
-             jj = 1
-             kk = 1
-             Do ii = 1, Size(rownumbers_left)
+                jj = 1
+                kk = 1
+                Do ii = 1, Size(rownumbers_left)
 
-                if (rownumbers_left(ii) == rownumbers_ncont(jj)) then
-                   if (jj < inf_ncont) then
-                      jj = jj + 1
+                   if (rownumbers_left(ii) == rownumbers_ncont(jj)) then
+                      if (jj < inf_ncont) then
+                         jj = jj + 1
+                      End if
+                   Else
+                      rownumbers_left(kk) = rownumbers_left(ii)
+                      kk = kk + 1
                    End if
-                Else
-                   rownumbers_left(kk) = rownumbers_left(ii)
-                   kk = kk + 1
-                End if
 
-             End Do
+                End Do
 
-             sim%t1(rownumbers_ncont) = inf_noncon
-             sim%d(rownumbers_ncont)  = inf_nc_d
-          End If
+                sim%t1(rownumbers_ncont) = inf_noncon
+                sim%d(rownumbers_ncont)  = inf_nc_d
+             End If
 
-          If (inf_dth > 0) Then
-             rownumbers_dea = sample(rownumbers_left(1:(Size(rownumbers)-inf_ill-inf_cont-inf_ncont)),inf_dth)
+             If (inf_dth > 0) Then
+                rownumbers_dea = sample(rownumbers_left(1:(Size(rownumbers)-inf_ill-inf_cont-inf_ncont)),inf_dth)
 
-             sim%t1(rownumbers_dea) = dead
-          End If
+                sim%t1(rownumbers_dea) = dead
+             End If
 
-       End Do ! do icounty = 1,size(sim_counties)
+          End Do ! do icounty = 1,size(sim_counties)
 
-       sim%t2                 = missing
+       end if
+
+       sim%t2 = missing
 
        !** Set up dist_id renumbered cross_reference ---------------------------
        sim%dist_id_rn = dist_id_cref(sim%dist_id)
@@ -737,7 +824,8 @@ Contains
             Real(R0matrix,rk), Real(connect,rk), surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim ,&
             healthy_cases_final, inf_noncon_cases_final,inf_contag_cases_final, &
             ill_contag_cases_final, ill_ICU_cases_final,  &
-            immune_cases_final,dead_cases_final,it_ss)
+            immune_cases_final,dead_cases_final, &
+            it_ss, cp_write, cp_time , cp_unit, cp_reload, cp_reload_time)
 
        if (OMP_GET_THREAD_NUM() == 0) then
           call end_timer("Sim Loop")
@@ -756,10 +844,13 @@ Contains
     !$OMP END DO
     !$OMP END PARALLEL
 
+    ! Close restart file -------------------------
+    if ( cp_write ) then
+       close(cp_unit)
+    End if
+       
     call start_timer("+- Writeout",reset=.FALSE.)
     
-    write(proc_char,'("_",I7.7)')proc
-
     call write_data(trim(output_dir)//"healthy_cases_"//trim(export_name)//trim(proc_char)//".dat", &
          healthy_cases_final,R0_effects)                                    
     call write_data(trim(output_dir)//"inf_noncon_cases_"//trim(export_name)//trim(proc_char)//".dat", &
@@ -956,7 +1047,8 @@ Contains
        R0matrix, connect, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, &
        sim, &
        healthy_cases, inf_noncon_cases, inf_contag_cases, ill_contag_cases,&
-       ill_ICU_cases , immune_cases, dead_cases , it_ss)
+       ill_ICU_cases , immune_cases, dead_cases , &
+       it_ss, cp_write, cp_time , cp_unit, cp_reload, cp_reload_time)
     
     Integer(Kind=ik)                       , Intent(In) :: time_n
     Integer(Kind=ik)                       , Intent(In) :: pop_size
@@ -980,11 +1072,18 @@ Contains
     Integer         , Allocatable, Dimension(:,:,:), Intent(inout) :: dead_cases
 
     Integer(Kind=ik)                               , Intent(In)    :: it_ss
+
+    Logical                                        , Intent(In)    :: cp_write
+    Integer(Kind=ik)                               , Intent(In)    :: cp_time
+    Integer(Kind=ik)                               , Intent(In)    :: cp_unit
+    Logical                                        , Intent(In)    :: cp_reload
+    Integer(Kind=ik)                               , Intent(In)    :: cp_reload_time
     
-    !> Counters --------------------------------------------
+    !> Counters -------------------------------------------------
     Integer(Kind=ik)             :: timestep, ii, nn
     
     Integer(Kind=ik)             :: at_risk, new_in_state
+    Integer(Kind=ik)             :: start_time
     
     Integer(Kind=ik), Dimension(min_state:max_state) :: state_count_t1
     Integer(Kind=ik), Dimension(min_state:max_state) :: state_count_t2
@@ -998,15 +1097,19 @@ Contains
     Real(kind=rk)                                    :: w_int
     Integer(kind=ik)                                 :: inf_dur, cont_dur
     Integer(kind=ik)                                 :: ill_dur, icu_dur
+
+    Integer                                          :: std_int
+    Integer                                          :: int_storage_size
+    Integer(kind=1)                                  :: std_int1
+    Integer                                          :: int1_storage_size
     
     !===========================================================================
+    ! Implementation
+    !===========================================================================
 
-    ! call start_timer("+- Prepare data",reset=.FALSE.)
-
-    write(*,*)shape(ill_ICU_cases)
-    write(*,*)lbound(ill_ICU_cases)
-    write(*,*)ubound(ill_ICU_cases)
-!    stop
+    !** init default integer storage size --------
+    int_storage_size  = storage_size(std_int)  / FILE_STORAGE_SIZE
+    int1_storage_size = storage_size(std_int1) / FILE_STORAGE_SIZE
     
     !** Allocate and init new counter ----------------------
     Allocate(state_count_pl(min_state:max_state,n_counties))
@@ -1038,17 +1141,21 @@ Contains
          state_count_pl, min_state, max_state, 1, n_counties)
 
     !** Record initial state -----------------------------------------
-    timestep = 1
+    if (cp_reload) then
+       start_time = cp_reload_time
+    else
+       start_time = 1
+    end if
     
-    healthy_cases(:,timestep,it_ss)    = state_count_pl(healthy   ,:)
-    inf_noncon_cases(:,timestep,it_ss) = state_count_pl(inf_noncon,:)
-    inf_contag_cases(:,timestep,it_ss) = state_count_pl(inf_contag,:)
-    ill_contag_cases(:,timestep,it_ss) = state_count_pl(ill_contag,:)
-    ill_ICU_cases(:,timestep,it_ss)    = state_count_pl(ill_ICU   ,:)
-    dead_cases(:,timestep,it_ss)       = state_count_pl(dead      ,:)
-    immune_cases(:,timestep,it_ss)     = state_count_pl(immune    ,:)
+    healthy_cases(:,start_time,it_ss)    = state_count_pl(healthy   ,:)
+    inf_noncon_cases(:,start_time,it_ss) = state_count_pl(inf_noncon,:)
+    inf_contag_cases(:,start_time,it_ss) = state_count_pl(inf_contag,:)
+    ill_contag_cases(:,start_time,it_ss) = state_count_pl(ill_contag,:)
+    ill_ICU_cases(:,start_time,it_ss)    = state_count_pl(ill_ICU   ,:)
+    dead_cases(:,start_time,it_ss)       = state_count_pl(dead      ,:)
+    immune_cases(:,start_time,it_ss)     = state_count_pl(immune    ,:)
     
-    Do timestep = 2, time_n
+    Do timestep = start_time+1, time_n
 
        !call start_timer("+- From healthy to infected",reset=.FALSE.)
 
@@ -1365,6 +1472,27 @@ Contains
        
        sim%t1 = sim%t2
        sim%d  = d_new
+
+       !!=======================================================================
+       !! Write restart data per thread ========================================
+       !!=======================================================================
+       if ( cp_write .AND. (timestep == cp_time) ) then
+
+          !$OMP critical
+          write(cp_unit,  &
+               pos = int(int_storage_size,8)  * int(pop_size,8) * &
+                     int(OMP_GET_NUM_THREADS(),8) + &
+                     int(int1_storage_size,8) * int(pop_size,8) * &
+                     int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
+          write(cp_unit, &
+               pos = int(int_storage_size,8)  * int(pop_size,8) * &
+                     int(OMP_GET_NUM_THREADS(),8) + &
+                     int(int1_storage_size,8) * int(pop_size,8) * &
+                     int(OMP_GET_NUM_THREADS(),8) + &
+                     int(int_storage_size,8)  * int(pop_size,8) * &
+                     int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%d
+          !$OMP end critical 
+       End if
 
     ENd Do
     
