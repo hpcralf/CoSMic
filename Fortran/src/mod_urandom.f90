@@ -60,7 +60,7 @@ contains
           real(kind=rk),dimension(:),intent(out) :: u
           real(kind=rk),dimension(n)             :: r
           call random_number(r)
-          u = 1 - r
+          u = 1._rk - r
      end subroutine random_stduniform
 
      !! uniform distribution
@@ -70,7 +70,7 @@ contains
           real(kind=rk),dimension(n)            :: x
           real(kind=rk)         ,dimension(n)   :: u
           call random_stduniform(n,u)
-          x = (b-a)*u + a
+          x = (Real(b,rk)-Real(a,rk))*u + Real(a,rk)
      !     print *,size(x)
      end function random_uniform
 

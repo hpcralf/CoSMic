@@ -76,7 +76,7 @@ Module genetic_algorithm
         Real                                          :: opt_ub = 1.0 ! Upper bounds of optimized parameters
         Integer 									  :: opt_pop_size = 8 ! Population size
         Integer    								      :: opt_num_gene = 4 ! Maximal generation
-        Integer                                       :: opt_elitism ! The number of the chosen eltism
+        Integer                                       :: opt_elitism ! The number of the chosen elitism
     end type opt_parameters
 
     !** Observed icu cases by state -------------------------------
@@ -319,10 +319,9 @@ Contains
         fitness(:) = INV ! initialize fitness with "NA"
                 
         !** Core of the genetic algorithm -------------------
-        do gene_ii=1,opt%opt_num_gene ! Iterate over the generations
+         do gene_ii=1,opt%opt_num_gene ! Iterate over the generations
             print *,"gene_ii: ",gene_ii
             do pop_ii = 1,opt%opt_pop_size ! Iterate over all the population
-                print *,"pop_ii: ",pop_ii
                 !** Proceed only when the corresponding fitness is not given (aka. INV) ----
                 if (fitness(pop_ii) .ne. INV) then
                     cycle
@@ -369,9 +368,14 @@ Contains
 
                         do j = 1,time_n
                             do i = 1,num_states
-                                avg_by_county(i,j) = sum(aggreg_sum_by_county(i,j,:))/Real(iter) ! Average over the runing iterates
+                                avg_by_county(i,j) = Real(sum(aggreg_sum_by_county(i,j,:)))/Real(iter) ! Average over the runing iterates
                             enddo
                         enddo
+                        if (PT_DEBUG) then
+                            do j = 1,time_n 
+                                print *,avg_by_county(:,j)
+                            enddo
+                        endif
 
                         !** Calculate the difference between the observed and evaluated/simulated ICU data -----------
                         do i = 1,num_states                  
@@ -387,8 +391,7 @@ Contains
                                 enddo
                                 
                                 avg_by_county(i,(halve_coff_len+1):(size(avg_by_county(i,:))-halve_coff_len)) = tmp_filter
-                                deallocate(tmp_filter)
-                                
+                                deallocate(tmp_filter) 
                             endif
                             diff = seltarget_icu_by_state(i)%icucases(obs_lb(i):obs_ub(i)) - avg_by_county(i,eval_lb(i):eval_ub(i))
                             diff = diff*diff
@@ -405,14 +408,13 @@ Contains
                 deallocate(ill_ICU_cases_final)
             enddo
 
-            do i = 1,opt%opt_pop_size
-                print *,i,": ",fitness(i)
-            enddo
+            print *,fitness
+        
 
             ! ========================================================== !
             ! ============ Check the stop criteria ===================== !
             call SORTRX_REAL(opt%opt_pop_size,fitness,sorted_index) ! Sorted_index indicates a sorted fitness in an ascending order
-            
+       
             run_sum = 0
             max_pos = sorted_index(opt%opt_pop_size)
             min_pos = sorted_index(1)
@@ -454,10 +456,11 @@ Contains
                 j = j - 1
                 pre_fitv = curr_fitv
             enddo
-
-            print *,"elitism:"
-            print *,sorted_fitness
-            print *,sorted_pop
+            if (PT_DEBUG) then
+                print *,"elitism:"
+                print *,sorted_fitness
+                print *,sorted_pop
+            endif
 
             tmp_fitness = fitness
 
@@ -472,26 +475,29 @@ Contains
 
             !** The selected parents(pair) do the mating and bread two children to replace them ---------
             call crossover(ini_pop, fitness, pcrossover)
-            do i = 1,nvals
-                print *,ini_pop(i,:)
-            enddo
-
-            print *,fitness
-
-            !** To randomly mutate a parameter/gene ------------------------------------------------------
-            if(pmutation .ne. 0.0) then
-                call mutation(ini_pop, fitness, pmutation, opt%opt_lb, opt%opt_ub)
-
+            
+            if(PT_DEBUG) then
                 do i = 1,nvals
                     print *,ini_pop(i,:)
                 enddo
                 print *,fitness
             endif
+
+            !** To randomly mutate a parameter/gene ------------------------------------------------------
+            if(pmutation .ne. 0.0) then
+                call mutation(ini_pop, fitness, pmutation, opt%opt_lb, opt%opt_ub)
+            endif
             !** Replace the unfittest populations with the fittest ones, which are stored in sorted_pop ---
             call elitism(fitness, ini_pop, sorted_pop, sorted_fitness)
         enddo
 
+        print *,fitness
+
         deallocate(pos_se)
+        do i = 1,num_states
+            deallocate(seltarget_icu_by_state(i)%icucases)
+            deallocate(seltarget_icu_by_state(i)%icudates)
+        enddo
         deallocate(seltarget_icu_by_state)
         deallocate(obs_ub)
         deallocate(obs_lb)
@@ -508,7 +514,6 @@ Contains
         deallocate(sorted_index)
         deallocate(summary_fitness) 
         deallocate(sel_par)
-        !===== TODO: if we need to deallocate the member seltarget_icu_by_state(i)%icucases ====
     end subroutine ga
 
     !! ------------------------------------------------------------------------------
@@ -550,7 +555,6 @@ Contains
         fmax = maxval(fitness)
         fave = sum(fitness)/size(fitness)
 
-        print *,"comare: ",(sfactor*fave - fmax)/(sfactor - 1)
         if (fmin .gt. (sfactor*fave - fmax)/(sfactor - 1)) then
             delta = fmax - fave
             a = (sfactor - 1.0)*fave/delta 
@@ -561,15 +565,15 @@ Contains
             b = -1*fmin*fave/delta 
         endif
         fscaled = a*fitness(:) + b
-        prob = abs(fscaled)/sum(abs(fscaled))
-        print *,"a: ",a," b: ",b," prob: ",prob
+        prob = abs(fscaled)/sum(abs(fscaled)) ! Get the fitness probability
+        ! Sample the indexes according to the weights indicated in prob
         sel_par = sample_weight(size(fitness), prob)
 
-        print *,sel_par
+        ! print *,sel_par
     end subroutine selection
 
     !! ------------------------------------------------------------------------------
-    !> Subroutine that mate the selected pair and breed two children
+    !> Subroutine that mates the selected pairs and breed two children for each
     !>
     !> The results are stored back to ini_pop and fitness.
     subroutine crossover(ini_pop, fitness, pcrossover) 
@@ -578,49 +582,53 @@ Contains
         Real,intent(in)                                           :: pcrossover
 
         Integer,dimension(:),Allocatable                          :: sample_input, sample_parents
-        Integer                                                   :: start_id, end_id, nmating,i,j
+        Integer                                                   :: start_id, end_id, nmating,i,j,pop_size
         Real(kind=rk)                                             :: ran
-        Real(kind=rk),dimension(size(ini_pop,dim=1))              :: lchild, rchild
+        Real(kind=rk),dimension(:),Allocatable                    :: lchild, rchild
 
-        nmating = size(fitness)/2 !get the floor
+        nmating = floor(size(fitness)/2.0) !get the floor
+        pop_size = size(ini_pop,dim=1)
         allocate(sample_input(nmating*2))
         allocate(sample_parents(nmating*2))
-
-        print *,size(ini_pop,dim=1)
-        do i = 1,size(lchild)
-            print *,ini_pop(i,:)
-        enddo
-        print *,fitness
+        allocate(lchild(pop_size))
+        allocate(rchild(pop_size))
 
         do i = 1, 2*nmating 
             sample_input(i) = i
         enddo
       
-        sample_parents = sample_i4(sample_input,2*nmating)
-        print *,sample_parents
+        sample_parents = sample_i4(sample_input,2*nmating) ! Sample the parent pairs
+        ! print *,sample_parents
         
         do i = 1, nmating 
             call random_number(ran)
-            print *,"crossover ran: ",ran
             end_id = i * 2 
             start_id = end_id - 1 
             start_id = sample_parents(start_id)
             end_id = sample_parents(end_id)
 
+            !** Also skip crossover when the parents are identical
             if((pcrossover > ran) .and.&
              (fitness(start_id) .ne. fitness(end_id))) then
                 call random_number(ran)
-                print *,"ran: ",ran
-                lchild = ran*ini_pop(:,start_id) + (1.0-ran)*ini_pop(:,end_id)
-                rchild = (1.0-ran)*ini_pop(:,start_id) + ran*ini_pop(:,end_id)
+                !** Mating ----------
+                do j=1,pop_size
+                    lchild(j) = ran*ini_pop(j,start_id) + (1._rk-ran)*ini_pop(j,end_id)
+                    rchild(j) = (1._rk-ran)*ini_pop(j,start_id) + ran*ini_pop(j,end_id)
 
-                ini_pop(:,start_id) = lchild
-                ini_pop(:,end_id)   = rchild
+                    ini_pop(j,start_id) = lchild(j)
+                    ini_pop(j,end_id)   = rchild(j)
+                enddo
 
+                !** Invalid the relevant fitness ----
                 fitness(start_id) = INV 
                 fitness(end_id)   = INV 
             endif
         enddo
+        deallocate(sample_input)
+        deallocate(sample_parents)
+        deallocate(lchild)
+        deallocate(rchild)
     end subroutine crossover
 
     !! ------------------------------------------------------------------------------
@@ -642,18 +650,16 @@ Contains
         do i = 1,size(sample_input)
             sample_input(i) = i
         enddo
-        print *,"mutation"
         do i = 1,size(fitness)
             call random_number(ran)
             if (pmutation > ran) then
-                sample_parents = sample_i4(sample_input,size(sample_parents))
+                sample_parents = sample_i4(sample_input,size(sample_parents)) ! Randomly generate the mutated gene/parameter
                 Res = random_uniform(1,lb,ub)
-                ini_pop(sample_parents(1),i) = Res(1)
-                print *,"the number",i," sample_parents: ",sample_parents(1)," res: ", Res(1)
-                fitness(i) = INV
+                ini_pop(sample_parents(1),i) = Res(1)  
+            !    print *,"the number",i," sample_parents: ",sample_parents(1)," res: ", Res(1)
+                fitness(i) = INV ! Invalid the mutated chromosome/population
             endif
         enddo
-
     end subroutine mutation
 
     !! ------------------------------------------------------------------------------
@@ -668,25 +674,26 @@ Contains
         Integer,dimension(size(fitness))                          :: sorted_index
         Integer                                                   :: num
 
-        print *,"elitism"
-
-        call SORTRX_REAL(size(fitness),fitness,sorted_index)
+        call SORTRX_REAL(size(fitness),fitness,sorted_index) ! Fitness in an ascending order
         num = size(sorted_fitness)
+        !** Replace the unfittest individules with the elitism chosen in the first place ---
+        !** The elitism is represented as sorted_fitness and sorted_pop
         fitness(sorted_index(1:num)) = sorted_fitness
         ini_pop(:,sorted_index(1:num)) = sorted_pop
         
-        print *,fitness 
-        do num = 1,size(ini_pop,1)
-           print *,ini_pop(num,:)
-        enddo
-
-
+        if(PT_DEBUG) then
+            print *,fitness 
+            do num = 1,size(ini_pop,1)
+               print *,ini_pop(num,:)
+            enddo
+        endif
     end subroutine elitism
 
     !! ------------------------------------------------------------------------------
     !> Function that return a sample with the weight in mind
     !>
     !> The weights/probabilities are stored in prop.
+    !> The high the weight is, the most possibility it is chosen
     function sample_weight(input, prop)Result(sel_par)
         Integer                  :: input
         Real,dimension(input)    :: prop
@@ -708,45 +715,4 @@ Contains
             sel_par(i) = idx
         end do
     end function
-
-
-    subroutine loadobsdata(iol)
-
-        Type(iols),intent(INOUT)   :: iol
-
-        Integer                    :: i,j,k,it_ss
-        Integer                    :: index, un_in
-       
-
-        !=================================================================
-        !Character(len=:), allocatable :: data_dir
-        Character(len=:), allocatable :: filename
-        !=================================================================
-
-        !call pt_get("#data_dir",data_dir)
-
-        ! Read data from file: observed icu cases by state ------------------
-        !call pt_get("#observ_icu_state",filename)
-
-        filename = "./ICU_cases_Germany_09_11_bundesland_new.csv"
-        call open_and_index(trim(filename),un_in,index)
-
-        ! allocation for the readin variables ------------------
-        Allocate(iol%obsicu_date(index-1))
-        Allocate(iol%obsicu_cases(index-1))
-        Allocate(iol%obsicu_states_shortcut(index-1))
-
-        ! read the first line(character) -----------------------
-        Read(un_in,*) iol%titel
-
-        Do i = 1, index-1
-           Read(un_in,*) iol%obsicu_date(i),iol%obsicu_cases(i),&
-                iol%obsicu_states_shortcut(i)
-        End Do
-        Close(un_in)
-
-    !    write(*,*)"the observed icu cases by state",iol%obsicu_date,iol%obsicu_cases,iol%obsicu_states_shortcut
-
-    end subroutine loadobsdata
-
 End Module genetic_algorithm
