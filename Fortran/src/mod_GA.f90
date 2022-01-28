@@ -60,8 +60,17 @@ Module genetic_algorithm
 
     !** Constants ---------------------------------------
 
-    Real, parameter :: INV = 99.0 ! Corresponds to NA for fitness array 
-    Real, parameter :: EPS = EPSILON(1.0) ! Tolerance precision, a magnitude of e-07
+    Real, parameter     :: INV = 99.0 ! Corresponds to NA for fitness array 
+    Real, parameter     :: EPS = EPSILON(1.0) ! Tolerance precision, a magnitude of e-07
+
+    type ga_summary
+        Real                                          :: max
+        Real                                          :: mean 
+        Real                                          :: upper_hinge
+        Real                                          :: median
+        Real                                          :: lower_hinge
+        Real                                          :: min
+    end type ga_summary
 
     !** Optimization Control Panel ----------------------
     type opt_parameters			
@@ -133,7 +142,8 @@ Contains
         Real(kind=rk),Dimension(:,:), Allocatable     :: ini_pop, tmp_pop, sorted_pop ! ini_pop: store the population, which are the input to be optimized. 
 
         Real, Allocatable, Dimension(:)               :: fitness, tmp_fitness ! fitness: store the calculated fitness
-        Real, Allocatable, Dimension(:)               :: sorted_fitness, summary_fitness
+        Real, Allocatable, Dimension(:)               :: sorted_fitness
+        Type(ga_summary), Allocatable, Dimension(:)   :: summary_fitness
 
         Integer,dimension(:,:,:), Allocatable         :: ill_ICU_cases_final ! Store the evaluated ICU cases
         Integer,dimension(:), Allocatable             :: uniq_distid
@@ -201,7 +211,7 @@ Contains
         allocate(sorted_fitness(opt%opt_elitism))
         allocate(sorted_index(opt%opt_pop_size))
 
-        allocate(summary_fitness(opt%opt_num_gene))  !tempaporily store the maximum of fitness among all the population for each generation
+        allocate(summary_fitness(opt%opt_num_gene))
 
         time_n = maxval(R0change) + 1
 
@@ -270,7 +280,7 @@ Contains
                     obs_lb(i) = 1
                     eval_lb(i) = 1
 
-                    !TODO: move the calculation of inteval_days to support module
+                    !TODO: Move the calculation of inteval_days to support module
                     inteval_days = Date2Unixtime(seltarget_icu_by_state(i)%icudates(1))&
                                         - Date2Unixtime(seed_date_mod)
                     inteval_days = inteval_days/86400
@@ -320,7 +330,6 @@ Contains
                 
         !** Core of the genetic algorithm -------------------
          do gene_ii=1,opt%opt_num_gene ! Iterate over the generations
-            print *,"gene_ii: ",gene_ii
             do pop_ii = 1,opt%opt_pop_size ! Iterate over all the population
                 !** Proceed only when the corresponding fitness is not given (aka. INV) ----
                 if (fitness(pop_ii) .ne. INV) then
@@ -355,7 +364,7 @@ Contains
 
                     !** TODO: The fitness relavant to the death data ----------
 
-                    !** the fitness relavant to the icu data ------------------
+                    !** The fitness relavant to the icu data ------------------
                     if (opt%opt_target_icu) then
                     ! TODO: record the number of the affected states
                         do j = 1,iter
@@ -407,22 +416,28 @@ Contains
                 end if
                 deallocate(ill_ICU_cases_final)
             enddo
-
-            print *,fitness
         
+            print *,"intermediate fitness output:"
+            print *,fitness
+          
+            call SORTRX_REAL(opt%opt_pop_size,fitness,sorted_index) ! Sorted_index indicates a sorted fitness in an ascending order
+       
+            !** Add summary statistics --------------------------------------------------------
+            summary_fitness(gene_ii) = sixnum_summary(fitness, sorted_index)
+            write(*,'(A12,I2)')"generation: ",gene_ii
+            write(*,'(A13,A15,A20,A15,A20,A15)')"max","mean","upper_hinge","median","lower_hinge","min"
+            print *,summary_fitness(gene_ii)
 
             ! ========================================================== !
             ! ============ Check the stop criteria ===================== !
-            call SORTRX_REAL(opt%opt_pop_size,fitness,sorted_index) ! Sorted_index indicates a sorted fitness in an ascending order
-       
             run_sum = 0
             max_pos = sorted_index(opt%opt_pop_size)
             min_pos = sorted_index(1)
-            summary_fitness(gene_ii) = fitness(max_pos)
+            
             if (gene_ii > 1) then
-                tmp_max = maxval(summary_fitness(1:gene_ii))
+                tmp_max = maxval(summary_fitness(1:gene_ii)%max)
                 do i = 1,gene_ii 
-                    if (summary_fitness(i) .ge. (tmp_max - EPS)) then
+                    if (summary_fitness(i)%max .ge. (tmp_max - EPS)) then
                         run_sum = run_sum + 1
                     endif
                 enddo
@@ -490,8 +505,6 @@ Contains
             !** Replace the unfittest populations with the fittest ones, which are stored in sorted_pop ---
             call elitism(fitness, ini_pop, sorted_pop, sorted_fitness)
         enddo
-
-        print *,fitness
 
         deallocate(pos_se)
         do i = 1,num_states
@@ -569,7 +582,7 @@ Contains
         ! Sample the indexes according to the weights indicated in prob
         sel_par = sample_weight(size(fitness), prob)
 
-        ! print *,sel_par
+    !    print *,sel_par
     end subroutine selection
 
     !! ------------------------------------------------------------------------------
@@ -582,23 +595,23 @@ Contains
         Real,intent(in)                                           :: pcrossover
 
         Integer,dimension(:),Allocatable                          :: sample_input, sample_parents
-        Integer                                                   :: start_id, end_id, nmating,i,j,pop_size
+        Integer                                                   :: start_id, end_id, nmating,i,j,len
         Real(kind=rk)                                             :: ran
         Real(kind=rk),dimension(:),Allocatable                    :: lchild, rchild
 
         nmating = floor(size(fitness)/2.0) !get the floor
-        pop_size = size(ini_pop,dim=1)
+        len = size(ini_pop,dim=1)
         allocate(sample_input(nmating*2))
         allocate(sample_parents(nmating*2))
-        allocate(lchild(pop_size))
-        allocate(rchild(pop_size))
+        allocate(lchild(len))
+        allocate(rchild(len))
 
         do i = 1, 2*nmating 
             sample_input(i) = i
         enddo
       
         sample_parents = sample_i4(sample_input,2*nmating) ! Sample the parent pairs
-        ! print *,sample_parents
+    !    print *,sample_parents
         
         do i = 1, nmating 
             call random_number(ran)
@@ -612,7 +625,7 @@ Contains
              (fitness(start_id) .ne. fitness(end_id))) then
                 call random_number(ran)
                 !** Mating ----------
-                do j=1,pop_size
+                do j=1,len
                     lchild(j) = ran*ini_pop(j,start_id) + (1._rk-ran)*ini_pop(j,end_id)
                     rchild(j) = (1._rk-ran)*ini_pop(j,start_id) + ran*ini_pop(j,end_id)
 
@@ -632,7 +645,7 @@ Contains
     end subroutine crossover
 
     !! ------------------------------------------------------------------------------
-    !> Subroutine that randomly mutate certain parameter
+    !> Subroutine that randomly mutates certain parameter
     !>
     !> The results are stored back to ini_pop and fitness.
     subroutine mutation(ini_pop, fitness, pmutation, lb, ub)
@@ -663,7 +676,7 @@ Contains
     end subroutine mutation
 
     !! ------------------------------------------------------------------------------
-    !> Subroutine that replace the unfittest individules with the chosen elitim
+    !> Subroutine that replaces the unfittest individules with the chosen elitim
     !>
     !> The results are stored back to ini_pop and fitness.
     subroutine elitism(fitness, ini_pop, sorted_pop, sorted_fitness)
@@ -690,11 +703,11 @@ Contains
     end subroutine elitism
 
     !! ------------------------------------------------------------------------------
-    !> Function that return a sample with the weight in mind
+    !> Function that returns a sample with the weight in mind
     !>
     !> The weights/probabilities are stored in prop.
     !> The high the weight is, the most possibility it is chosen
-    function sample_weight(input, prop)Result(sel_par)
+    function sample_weight(input, prop) Result(sel_par)
         Integer                  :: input
         Real,dimension(input)    :: prop
         Integer,dimension(input) :: sel_par
@@ -715,4 +728,48 @@ Contains
             sel_par(i) = idx
         end do
     end function
+
+    !! ------------------------------------------------------------------------------
+    !> Function that returns a six number summary statistics
+    !>
+    !> This adds a mean value on top of the existing five number summary
+    function sixnum_summary(fitness, sorted_index) Result(summary)
+        Real,Allocatable,dimension(:),intent(in)    :: fitness
+        Integer,Allocatable,dimension(:),intent(in) :: sorted_index
+
+        type(ga_summary)                            :: summary
+        Integer                                     :: pop_size, half, i, j
+
+        pop_size = size(fitness)
+        summary%max = fitness(sorted_index(pop_size))
+        summary%min = fitness(sorted_index(1))
+        summary%mean = Sum(fitness)/pop_size
+
+        summary%median = get_median(fitness, sorted_index, pop_size)
+        half = pop_size/2.0
+        summary%upper_hinge = get_median(fitness, sorted_index((half+1):pop_size), pop_size-half) ! Get the median of the second half
+        summary%lower_hinge = get_median(fitness, sorted_index(1:half), half) ! Get the median of the first half
+    end function sixnum_summary
+
+    
+    !! ------------------------------------------------------------------------------
+    !> Function that returns the median value of an ordered array
+    !>
+    function get_median(dataset, sorted_index, len) Result(med)
+        Real,Allocatable,dimension(:),intent(in)     :: dataset
+        Integer,intent(in)                           :: len
+        Integer,dimension(len),intent(in)            :: sorted_index
+        Real                                         :: med
+
+        Integer                                      :: length, half
+
+        length = size(sorted_index)
+        half = length/2
+
+        if (mod(length,2) .eq. 0) then
+            med = (dataset(sorted_index(half))+dataset(sorted_index(half+1)))/2.0
+        else
+            med = dataset(sorted_index(half+1))
+        endif
+    end function get_median
 End Module genetic_algorithm
