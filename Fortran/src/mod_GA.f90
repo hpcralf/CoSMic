@@ -63,6 +63,7 @@ Module genetic_algorithm
     Real, parameter     :: INV = 99.0 ! Corresponds to NA for fitness array 
     Real, parameter     :: EPS = EPSILON(1.0) ! Tolerance precision, a magnitude of e-07
 
+    !** Extend the fivenum summary statistic with a mean value -------
     type ga_summary
         Real                                          :: max
         Real                                          :: mean 
@@ -72,7 +73,7 @@ Module genetic_algorithm
         Real                                          :: min
     end type ga_summary
 
-    !** Optimization Control Panel ----------------------
+    !** Optimization Control Panel / setting the optimization --------
     type opt_parameters			
         Logical                                       :: opt_target_icu
         Logical                                       :: opt_target_deaths ! Optimization targets
@@ -84,9 +85,18 @@ Module genetic_algorithm
         Real                        				  :: opt_lb = 0.1 ! Lower bounds of optimized parameters 
         Real                                          :: opt_ub = 1.0 ! Upper bounds of optimized parameters
         Integer 									  :: opt_pop_size = 8 ! Population size
-        Integer    								      :: opt_num_gene = 4 ! Maximal generation
+        Integer    								      :: opt_num_gene = 4 ! Maximal number of generations
         Integer                                       :: opt_elitism ! The number of the chosen elitism
+        Real                                          :: opt_pcrossover = 0.8
+        Real                                          :: opt_pmutation = 0.1
     end type opt_parameters
+ 
+    !** GA results/best solution -------------------------------------
+    type opt_res 
+        Real(kind=rk),dimension(:), Allocatable       :: opt_bestsol
+        Real                                          :: opt_fitnessvalue
+        Integer                                       :: opt_acuiter ! The occured number of generations
+    end type opt_res 
 
     !** Observed icu cases by state -------------------------------
     type target_obsicu
@@ -134,10 +144,9 @@ Contains
         !==========================================================================
         ! General purpose for preprocessing and fitness calculation
         !==========================================================================
-        Real                                          :: pcrossover = 0.8
-        Real                                          :: pmutation  = 0.1
         Integer                                       :: nvals ! The total number of parameters to be optimized
         Type(opt_parameters)                          :: opt
+        Type(opt_res)                                 :: ga_res
 
         Real(kind=rk),Dimension(:,:), Allocatable     :: ini_pop, tmp_pop, sorted_pop ! ini_pop: store the population, which are the input to be optimized. 
 
@@ -329,7 +338,8 @@ Contains
         fitness(:) = INV ! initialize fitness with "NA"
                 
         !** Core of the genetic algorithm -------------------
-         do gene_ii=1,opt%opt_num_gene ! Iterate over the generations
+        do gene_ii=1,opt%opt_num_gene ! Iterate over the generations
+            ga_res%opt_acuiter = gene_ii
             do pop_ii = 1,opt%opt_pop_size ! Iterate over all the population
                 !** Proceed only when the corresponding fitness is not given (aka. INV) ----
                 if (fitness(pop_ii) .ne. INV) then
@@ -428,6 +438,8 @@ Contains
             write(*,'(A13,A15,A20,A15,A20,A15)')"max","mean","upper_hinge","median","lower_hinge","min"
             print *,summary_fitness(gene_ii)
 
+            !! TODO: To record the best fitness value and solution per generation (write them to a output file)
+
             ! ========================================================== !
             ! ============ Check the stop criteria ===================== !
             run_sum = 0
@@ -489,7 +501,7 @@ Contains
             fitness = tmp_fitness
 
             !** The selected parents(pair) do the mating and bread two children to replace them ---------
-            call crossover(ini_pop, fitness, pcrossover)
+            call crossover(ini_pop, fitness, opt%opt_pcrossover)
             
             if(PT_DEBUG) then
                 do i = 1,nvals
@@ -499,12 +511,17 @@ Contains
             endif
 
             !** To randomly mutate a parameter/gene ------------------------------------------------------
-            if(pmutation .ne. 0.0) then
-                call mutation(ini_pop, fitness, pmutation, opt%opt_lb, opt%opt_ub)
+            if(opt%opt_pmutation .ne. 0.0) then
+                call mutation(ini_pop, fitness, opt%opt_pmutation, opt%opt_lb, opt%opt_ub)
             endif
             !** Replace the unfittest populations with the fittest ones, which are stored in sorted_pop ---
             call elitism(fitness, ini_pop, sorted_pop, sorted_fitness)
         enddo
+
+        ga_res%opt_bestsol = ini_pop(:,max_pos)
+        ga_res%opt_fitnessvalue = fitness(max_pos)
+
+        call print_ga_summary(opt, ga_res)
 
         deallocate(pos_se)
         do i = 1,num_states
@@ -527,6 +544,9 @@ Contains
         deallocate(sorted_index)
         deallocate(summary_fitness) 
         deallocate(sel_par)
+        deallocate(opt%opt_names)
+        deallocate(opt%opt_names_dur)
+        deallocate(ga_res%opt_bestsol)
     end subroutine ga
 
     !! ------------------------------------------------------------------------------
@@ -750,8 +770,7 @@ Contains
         summary%upper_hinge = get_median(fitness, sorted_index((half+1):pop_size), pop_size-half) ! Get the median of the second half
         summary%lower_hinge = get_median(fitness, sorted_index(1:half), half) ! Get the median of the first half
     end function sixnum_summary
-
-    
+   
     !! ------------------------------------------------------------------------------
     !> Function that returns the median value of an ordered array
     !>
@@ -772,4 +791,29 @@ Contains
             med = dataset(sorted_index(half+1))
         endif
     end function get_median
+
+    !! ------------------------------------------------------------------------------
+    !> Function that prints the GA settings and results
+    !>
+    !> The formats still lack
+    subroutine print_ga_summary(opt, ga_res)
+        type(opt_parameters),intent(in)             :: opt
+        type(opt_res),intent(in)                    :: ga_res
+
+        write(*,'(A)')"!----------------------- Genetic Algorithm ----------------------------!"
+        write(*,'(A)')"!------ GA settings ------!"
+        print *,"Type: ","real-valued"
+        print *,"Population size: ",opt%opt_pop_size
+        print *,"Number of generations: ",opt%opt_num_gene ! maxiter
+        print *,"Elitism: ",opt%opt_elitism
+        print *,"Crossover probability: ",opt%opt_pcrossover
+        print *,"Mutation probability: ",opt%opt_pmutation
+        write(*,'(A)')"!------ GA results -------!"
+        print *,"Iterations: ",ga_res%opt_acuiter
+        print *,"Fitness function value: ",ga_res%opt_fitnessvalue
+        print *,"Solution:"
+        print *,ga_res%opt_bestsol
+    end subroutine print_ga_summary
+
+  
 End Module genetic_algorithm
