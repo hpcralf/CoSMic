@@ -209,7 +209,7 @@ contains
 
     Integer                                :: io_stat, un, ii, jj, ls
     Integer                                :: no_lines, dim1, dim2, sep_pos
-    character(len=16384)                   :: l_head
+    character(len=65536)                   :: l_head
     character(len=:),allocatable           :: loc_str_chars
 
     character(len=:),Dimension(:),allocatable :: str_arr
