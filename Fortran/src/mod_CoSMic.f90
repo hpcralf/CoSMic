@@ -225,6 +225,7 @@ Contains
     character(len=:), Allocatable                   :: cp_dir
     
     character(len=8)                                :: cp_time_char
+    Logical                                         :: cp_exist
     
     Integer                                         :: std_int
     Integer                                         :: int_storage_size
@@ -559,9 +560,20 @@ Contains
 
        write(cp_time_char,'("_",I7.7)')cp_time
 
-       Open(newunit=cp_unit, action="write", status="replace", access="stream", &
+       ! If we already have a restart file at the given timestep -----
+       inquire(exist=cp_exist, &
             file=trim(output_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart")
-      
+       
+       if (cp_exist) then
+          cp_write = .FALSE.
+          write(un_lf,'(A)')"Warning - Checkpoint already exists."
+          write(un_lf,'(A)')trim(output_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart"
+          write(un_lf,'(A)')"Reset cp_write = .FALSE."
+       else
+          Open(newunit=cp_unit, action="write", status="replace", access="stream", &
+               file=trim(output_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart")
+       end if
+       
     End if
 
     if ( cp_reload ) then
@@ -666,6 +678,8 @@ Contains
        deallocate(tmp_count)
 
        if ( cp_reload ) then
+
+          write(*,*)"Reloading checkpoint"
           
           read(cp_reload_unit,  &
                pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
