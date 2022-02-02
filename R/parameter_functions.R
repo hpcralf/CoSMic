@@ -90,6 +90,7 @@ set.exec.params <- function(exec.procedure  = "Basic-Param",
                             cp.write        = FALSE,
                             cp.time         = 0,
                             cp.reload       = FALSE,
+                            cp.reload.time  = 0,
                             cp.dir          = NULL ) {
     ep <- list()
     
@@ -173,26 +174,34 @@ set.exec.params <- function(exec.procedure  = "Basic-Param",
     ep <- list.append(ep,
                       output.dir=output.dir)
 
-    ## Read checkpoint -----------------------------------------------
+    ## Whether to write a checkpoint ---------------------------------
     if (typeof(cp.write) != "logical") {
         stop("cp.write can only be TRUE or FALSE")
     }
     ep <- list.append(ep,
                       cp.write = cp.write )
 
-    ## Read checkpoint -----------------------------------------------
+    ## At which timestep to write a checkpoint -----------------------
     if (class(cp.time) != "numeric") {
         stop("cp.time can only be a numeric value")
     }
     ep <- list.append(ep,
                       cp.time = cp.time )
     
-    ## Reload checkpoint -----------------------------------------------
+    ## Whether to reload a checkpoint --------------------------------
     if (typeof(cp.reload) != "logical") {
         stop("cp.reload can only be TRUE or FALSE")
     }
     ep <- list.append(ep,
                       cp.reload = cp.reload )
+
+    ## At which timestep to reload a checkpoint ----------------------
+    if (class(cp.reload.time) != "numeric") {
+        stop("cp.reload.time can only be a numeric value")
+    }
+    ep <- list.append(ep,
+                      cp.reload.time = cp.reload.time )
+    
     ## Checkpoint directory ------------------------------------------
     if (is.null(cp.dir) & cp.reload) {
         stop(paste("cp.reload is TRUE but no cp.dir was given.",
@@ -541,7 +550,8 @@ set.static.params <- function(pspace,
                               cplots.states       = FALSE,
                               cplots.nuts2        = FALSE,
                               results             = "Reduced",
-                              sp.states           = NULL) {
+                              sp.states           = NULL,
+                              region              = "states") {
     
     sp <- list()
 
@@ -902,6 +912,15 @@ set.static.params <- function(pspace,
         sp <- list.append(sp, sp.states=sp.states)
         
     } 
+
+    ## Treat regional level ------------------------------------------
+    sp <- list.append(sp, region=region)
+    if ((sp$region != "states") &
+        (sp$region != "nuts2")  ) {
+        
+        stop(paste("sp$region = ",sp$region," but only states and nuts2 are allowed."))
+        
+    }
 
     return(sp)
 }
