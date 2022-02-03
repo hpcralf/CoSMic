@@ -98,7 +98,7 @@ Module genetic_algorithm
         Integer                                       :: opt_acuiter ! The occured number of generations
     end type opt_res 
 
-    !** Observed icu cases by state -------------------------------
+    !** Observed icu cases by state ----------------------------------
     type target_obsicu
         Real,dimension(:), Allocatable                :: icucases
         Character*10,dimension(:), Allocatable        :: icudates
@@ -249,6 +249,8 @@ Contains
         enddo
         pos_se(num_states+1) = size(counties_index) + 1
 
+        seed_date_mod        = add_date(seed_date,1)
+
 
         !** When the optimized target region is "state" -------------------
         if (trim(opt%opt_target_region) == "state") then
@@ -284,40 +286,9 @@ Contains
                     deallocate(state_sc_index)
 
                     !** Calculate the intersection of the evaluated and observed ICU data by date -------------
-                    !** Here we assume that the date is monotonically increased by days -----------------------
-                    seed_date_mod        = add_date(seed_date,1)
-                    obs_lb(i) = 1
-                    eval_lb(i) = 1
+                    call date_intersection(obs_lb(i), eval_lb(i), obs_ub(i), eval_ub(i), seed_date_mod,&
+                                                                         time_n, seltarget_icu_by_state(i)%icudates)
 
-                    !TODO: Move the calculation of inteval_days to support module
-                    inteval_days = Date2Unixtime(seltarget_icu_by_state(i)%icudates(1))&
-                                        - Date2Unixtime(seed_date_mod)
-                    inteval_days = inteval_days/86400
-                    
-                    if (inteval_days .LT. 0) then
-                        obs_lb(i) = obs_lb(i) - inteval_days
-                    elseif (inteval_days .GT. 0) then
-                        eval_lb(i) = eval_lb(i) + inteval_days
-                    endif
-
-                    obs_ub(i) = size(seltarget_icu_by_state(i)%icudates)
-                    eval_ub(i) = time_n
-
-                    inteval_days = (Date2Unixtime(seltarget_icu_by_state(i)%icudates(obs_ub(i)))& 
-                        - (Date2Unixtime(seed_date_mod)+86400*(time_n-1)))/86400
-                    if (inteval_days .LT. 0) then
-                        eval_ub(i) = eval_ub(i) + inteval_days
-                    elseif (inteval_days .GT. 0) then
-                        obs_ub(i) = obs_ub(i) - inteval_days
-                    endif
-
-                    !** Throw an error when the intersection is null ---------------------------
-                    if ((eval_lb(i) .GT. eval_ub(i)) .AND. (obs_lb(i) .GT. obs_ub(i)) .AND.&
-                     ((eval_ub(i) - eval_lb(i)) .NE. (obs_ub(i) - obs_lb(i)))) then
-                        print *, "intersection is null"
-                        print *, "eval_lb: ",eval_lb(i), " eval_ub: ",eval_ub(i)," obs_lb: ",obs_lb(i)," obs_ub: ",obs_ub(i)
-                        Call exit(status)    
-                    endif
                 enddo
             end if 
         end if
@@ -548,6 +519,50 @@ Contains
         deallocate(opt%opt_names_dur)
         deallocate(ga_res%opt_bestsol)
     end subroutine ga
+
+
+    subroutine date_intersection(obs_lb, eval_lb, obs_ub, eval_ub, seed_date_mod, time_n, dateset)
+
+        Integer,intent(inout)                                  :: obs_lb, obs_ub, eval_lb, eval_ub
+        Character*10,dimension(:), Allocatable, intent(in)     :: dateset
+        Integer                                                :: inteval_days, status, time_n
+        Character*10                                           :: seed_date_mod
+
+        !** Calculate the intersection of the evaluated and observed ICU data by date -------------
+        !** Here we assume that the date is monotonically increased by days -----------------------
+        obs_lb = 1
+        eval_lb = 1
+
+        !TODO: Move the calculation of inteval_days to support module
+        inteval_days = Date2Unixtime(dateset(1))&
+                            - Date2Unixtime(seed_date_mod)
+        inteval_days = inteval_days/86400
+
+        if (inteval_days .LT. 0) then
+            obs_lb = obs_lb - inteval_days
+        elseif (inteval_days .GT. 0) then
+            eval_lb = eval_lb + inteval_days
+        endif
+
+        obs_ub = size(dateset)
+        eval_ub = time_n
+
+        inteval_days = (Date2Unixtime(dateset(obs_ub))& 
+            - (Date2Unixtime(seed_date_mod)+86400*(time_n-1)))/86400
+        if (inteval_days .LT. 0) then
+            eval_ub = eval_ub + inteval_days
+        elseif (inteval_days .GT. 0) then
+            obs_ub = obs_ub - inteval_days
+        endif
+
+        !** Throw an error when the intersection is null ---------------------------
+        if ((eval_lb .GT. eval_ub) .AND. (obs_lb .GT. obs_ub) .AND.&
+         ((eval_ub - eval_lb) .NE. (obs_ub - obs_lb))) then
+            print *, "intersection is null"
+            print *, "eval_lb: ",eval_lb, " eval_ub: ",eval_ub," obs_lb: ",obs_lb," obs_ub: ",obs_ub
+            Call exit(status)    
+        endif
+    end subroutine date_intersection
 
     !! ------------------------------------------------------------------------------
     !> Subroutine that generates random population using a uniform range distribution.
