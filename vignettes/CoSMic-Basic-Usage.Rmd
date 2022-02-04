@@ -109,9 +109,9 @@ set.pspace(param  = "icu_dur", values = 14)
 
 ## R0 reduction factor
 ```{r}
-data(R0effect)
+data("R0effect.nuts2")
 set.pspace(param  = "R0effect",
-           values =  list(R0effect.ps1=R0effect))
+           values =  R0effect.nuts2)
 ```
 
 ## Weight of infection dynamic
