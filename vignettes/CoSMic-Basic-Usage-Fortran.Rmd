@@ -1,0 +1,155 @@
+<!--
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%      ___      __         _      
+%%     / __\___ / _\  /\/\ (_) ___ 
+%%    / /  / _ \\ \  /    \| |/ __|
+%%   / /__| (_) |\ \/ /\/\ \ | (__ 
+%%   \____/\___/\__/\/    \/_|\___|
+%%
+%%  COVID-19 Spatial Microsimulation  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Authors:      Christian Dudel
+%%               Matthias Rosenbaum-Feldbruegge
+%%               Sebastian Kluesener
+%%               Ralf Schneider
+%%
+%% Contact:      dudel@demogr.mpg.de
+%%               sebastian.kluesener@bib.bund.de
+%%
+%%==============================================================================
+%%
+%% Copyright (C) 2021 Federal Institute for Population Research (BIB),
+%%                    The Max Planck Institute for Demographic Research (MPIDR),
+%%                    High Performance Computing Center Stuttgart (HLRS)
+%% 
+%% This program is free software: you can redistribute it and/or modify
+%% it under the terms of the GNU General Public License as published by
+%% the Free Software Foundation, either version 3 of the License, or
+%% (at your option) any later version.
+%% 
+%% This program is distributed in the hope that it will be useful,
+%% but WITHOUT ANY WARRANTY; without even the implied warranty of
+%% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%% GNU General Public License for more details.
+%% 
+%% You should have received a copy of the GNU General Public License
+%% along with this program.  If not, see <http://www.gnu.org/licenses/>.
+%%==============================================================================
+-->
+---
+title: "CoSMic - Basic usage of the Fortran model version"
+author: "Ralf Schneider <schneider@hlrs.de>"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{CoSMic - Basic usage of the Fortran model version}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+# Introduction
+In this vignette we demonstrate the usage of the CoSMic Fortran model along with the generation
+of the default set of inout files to execute **CO**VID-19 **S**patial **Mic**rosimulations to
+predict coverage of intensive care units.
+
+At this place we demonstrate the execution of CoSMic with minimal paramter setup efforts
+so keeping basically all default parameters.
+
+In this default setup CoSMic predicts ICU-cases during the first wave of the COVID-19 pandemic
+in the sixteen federal German states of Germany as a kind of regression check.
+
+For an extensive documentation of the model's available parameters please see
+https://github.com/hpcralf/CoSMic/blob/main/aux/CoSMic-Parameter-Setup_and_Usage.html
+
+### Remark
+As already mentioned above, this demonstration executes CoSMic with default parameters so it is **not
+meant to produce quantitatively correct results**. This is due to the default population size of 0.1%
+of the German population. It was  found during CoSMic's development that correct prediction of ICU
+capacitiy coverage during the first and second wave of the  COVID-19 pandemic for a country like
+Germany with ~83 million inhabitants at least requires a 20% population sample. Smaler samples were
+found  to produce siginficantly altered infection dynamics starting in the middle of the second wave. 
+
+# Initialization
+
+To be consistent with the R-version of the model the R function `convert.Rp.to.Fp()` is provided that
+converts the R-version's parameter sets as well as the input-files into parameter- and input-files which
+are compatible with the Fortran-version.
+
+First things first. Since we want to be better save than sorry, first of all  we clean the environment.
+```{r}
+rm(list=ls())
+```
+
+Then we load CoSMic. For CoSMic installation instructions please see https://github.com/hpcralf/CoSMic.
+```{r}
+library(CoSMic)
+```
+
+## Preparation of parameter- and input files
+
+### Setup of Execution Parameters
+
+In this basic usage scenario we set up the default execution parameters.
+```{r}
+exec.params <- set.exec.params()
+```
+
+### Setup of the parameter space
+
+In the pspace parameter list, model parameters are stored that are potentially subject to variations.
+In this basic usage scenario the default list provided by the CoSMic package can be used. To avoid
+naming confilcts the param.space provided by the CoSMic package has to be renamed to `pspace`.
+
+```{r}
+data("param.space")
+pspace <- param.space
+```
+
+### Setup of Static Model Parameters
+
+With `set.static.params()` we initialize a default parameter list.
+```{r}
+static.params <- set.static.params(pspace=pspace)
+```
+
+### Set input data
+As model input we use the datasets provided by the CoSMic package. they can be initalized by a
+call to `load.input()`.
+```{r}
+iol <- load.input()
+```
+
+### Generate spatial structure, its population and connectivity
+The missing steps are to initialize the population with its spatial structure and the connectivity
+betwenn the spatial compartments.
+```{r}
+sim.struc <- init.spatial.population( iol , static.params )
+iol <- init.connectivity( iol , static.params , sim.struc )
+```
+
+### Save parameter files
+To save the initialized parameter sets for later usage we save them in RDS format. The files will
+be stored in the output directory, genearted during the call to `set.exec.params()`.
+```{r eval=FALSE}
+save.exec.params(exec.params)
+save.static.params(exec.params, static.params)
+save.pspace(exec.params, pspace)
+save.input(exec.params, iol)
+save.spatial.population(exec.params, sim.struc)
+```
+
+### Generate parameter- and input-files
+
+```{r eval=FALSE}
+convert.Rp.to.Fp(filename.sp = "static_parameters.dat",
+                 sp          = static.params,
+                 filename.ep = "exec_parameters.dat",
+		 ep          = exec.params,
+                 iol         = iol,
+		 pspace      = pspace,
+                 outpath     = exec.params$output.dir)
+```
