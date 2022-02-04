@@ -25,7 +25,6 @@ Dead cases for seeding during model startup.
 }
 \references{
 Robert Koch-Institute, COVID-19 Dashboard, (2020),\cr
-\href{https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/nCoV_node.html}
-{https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/nCoV_node.html}.
+\href{https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/nCoV_node.html}{https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/nCoV_node.html}.
 }
 \keyword{datasets}

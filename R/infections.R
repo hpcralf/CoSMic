@@ -15,8 +15,7 @@
 #' @keywords datasets
 #'
 #' @references Robert Koch-Institute, COVID-19 Dashboard, (2020),\cr
-#' \href{https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/nCoV_node.html}
-#' {https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/nCoV_node.html}.
+#' \href{https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/nCoV_node.html}{https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/nCoV_node.html}.
 #'
 #' @source \href{https://npgeo-corona-npgeo-de.hub.arcgis.com/datasets/
 #' dd4580c810204019a7b8eb3e0b329dd6_0}{COVID-19 Datenhub}

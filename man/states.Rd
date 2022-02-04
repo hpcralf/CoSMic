@@ -27,7 +27,6 @@ The German federal state structure representing the NUTS-1 level for Germany.
 \references{
 Federal Statistical Office of Germany. Kreisfreie Städte und
 Landkreise nach Fläche, Bevölkerung und Bevölkerungsdichte, (2018),
-\href{https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales}
-{https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales}.
+\href{https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales}{https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales}.
 }
 \keyword{datasets}
