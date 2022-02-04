@@ -153,3 +153,13 @@ convert.Rp.to.Fp(filename.sp = "static_parameters.dat",
 		 pspace      = pspace,
                  outpath     = exec.params$output.dir)
 ```
+
+## Execute Fortran-version
+
+Provided the CoSMic binary is in the execution path of your environment the
+Fortran-version can be executed from within the directory in which the input
+files for the execution and static parameters reside.
+```{bash eval=FALSE}
+export OMP_NUM_THREADS=4
+mpirun -n 1 CoSMic
+```
