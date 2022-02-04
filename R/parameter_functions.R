@@ -6,7 +6,7 @@
 ##   / /__| (_) |\ \/ /\/\ \ | (__ 
 ##   \____/\___/\__/\/    \/_|\___|
 ##
-##  COVID-19 Spatial Microsimulation  ---  For Germany  ########################
+##  COVID-19 Spatial Microsimulation ###########################################
 ################################################################################
 ##
 ## Authors:      Christian Dudel
@@ -1359,7 +1359,7 @@ map.R0effects <- function(R0effect.nuts2,R0effect.states,rows=NULL) {
 #' @export
 convert.Rp.to.Fp <- function(filename.sp, sp,
                              filename.ep, ep,
-                             iol, R0_effects, outpath="./") {
+                             iol, pspace, op=NULL, outpath="./") {
 
     if (!str_ends(outpath,"/")) {
         outpath <- paste0(outpath,"/")
@@ -1500,7 +1500,7 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
     
     ## Convert static parameters -----------------------------------------------
 
-     ## Loop over all names in static parameters list ----------------
+    ## Loop over all names in static parameters list ----------------
     for ( i in names(sp) ) {
 
         ## If the element contains a value ---------------------------
@@ -1515,6 +1515,80 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
             } else {
                 tmp <- sp[[i]]
                 shape <- length(sp[[i]])
+            }
+
+            if (class(tmp) == "character") {
+                ## if we have a parameter of type character ----------
+                cat(paste(paste0("#",i),", c ,",shape,"\n"))
+            } else if  (class(tmp) == "logical") {
+                ## if we have a parameter of type logical ------------
+                cat(paste(paste0("#",i),", l ,",shape,"\n"))
+            } else if  (class(tmp) == "Date") {
+                ## if we have a parameter of type logical ------------
+                cat(paste(paste0("#",i),", c ,",shape,"\n"))
+            } else {
+                if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
+                    ## if we have a parameter of type float ----------
+                    cat(paste(paste0("#",i),",r ,",shape,"\n"))
+                } else {
+                    ## if we have a parameter of type integer --------
+                    cat(paste(paste0("#",i),",i ,",shape,"\n"))
+                }
+            }
+            
+            if ( class(tmp) == "character" ) {
+                sl <- str_length(paste(as.integer(tmp),collapse=","))
+                if ( sl > 80 ) {
+                    s  <- seq(1,length(tmp),by=as.integer(sl/80))
+                    ss <- s[1:(length(s))]
+                    se <- s[2:(length(s))]
+                    se[length(se)+1] <- length(tmp)
+                    a <- apply(data.frame(ss,se),1,
+                               function(x){
+                                   cat(paste0('"',paste(tmp[x[1]:x[2]],collapse='","'),'"','\n'))
+                               })
+                } else {
+                    cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
+                }
+            } else if (class(tmp) == "logical") {
+                cat(paste0('.',paste(tmp,collapse='","'),'.','\n'))
+            } else if (class(tmp) == "Date") {
+                cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
+            } else {
+                if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
+                    cat(paste0(paste(tmp,collapse=","),'\n'))
+                } else {                   
+                    sl <- str_length(paste(as.integer(tmp),collapse=","))
+                    if ( sl > 80 ) {
+                        s  <- seq(1,length(tmp),by=as.integer(sl/80))
+                        ss <- s[1:(length(s))]
+                        se <- s[2:(length(s))]-1
+                        se[length(se)+1] <- length(tmp)
+                        a <- apply(data.frame(ss,se),1,
+                                   function(x){cat(paste0(as.integer(tmp[x[1]:x[2]]),collapse=","),"\n")})
+                    } else {
+                        cat(paste0(paste(as.integer(tmp),collapse=","),'\n'))
+                    }
+                }
+             }
+         }
+    }
+
+    ## Loop over all names in optimization parameter list -----------
+    for ( i in names(op) ) {
+
+        ## If the element contains a value ---------------------------
+        if ( !is.null(op[[i]]) ) {
+
+            ## If the parameter is a list we unlist to a vector ------
+            ## but create a shape string
+            if (class(op[[i]]) == "list") {
+                tmp <- unlist(op[[i]])
+                shape <- paste(length(op[[i]][[1]]),
+                               length(op[[i]]),sep=",")
+            } else {
+                tmp <- op[[i]]
+                shape <- length(op[[i]])
             }
 
             if (class(tmp) == "character") {
@@ -1589,13 +1663,17 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
     }
 
     ## Write R0_effects -------------------------------------
-    if (R0_effects == "LHC") {
+    if (pspace[[which(names(pspace) == "R0effect")]]$param == "LHC") {
         cat(paste(paste0("#","R0_effects"),", c , 1\n"))
         cat(paste0('"LHC"','\n'))
-    } else {
+    } else if ( class(pspace[[which(names(pspace) == "R0effect")]]$param) == "data.frame" ) {
         cat(paste(paste0("#","R0_effects"),", c , 1\n"))
         cat(paste0('"',outpath,'R0_effects.csv"','\n'))
-        write.table(R0_effects, paste0(outpath,"R0_effects.csv"), row.names=TRUE,sep=" ")
+        write.table(pspace[[which(names(pspace) == "R0effect")]]$param,
+                    paste0(outpath,"R0_effects.csv"), row.names=TRUE,sep=" ")
+    } else {
+        warning(paste("R0effect was not written since only character or ",
+                      "data.frame type arguments can be handeled."))
     }
     sink()
 }
