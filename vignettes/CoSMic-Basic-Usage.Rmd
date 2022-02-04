@@ -71,7 +71,8 @@ meant to produce quantitatively correct results**. This is due to the default po
 of the German population. It was  found during CoSMic's development that correct prediction of ICU
 capacitiy coverage during the first and second wave of the  COVID-19 pandemic for a country like
 Germany with ~83 million inhabitants at least requires a 20% population sample. Smaler samples were
-found  to run out of healthy individuals in the middle of the second wave. 
+found  to produce siginficantly altered infection dynamics starting in the middle of the second wave. 
+
 
 # Initialization
 First things first. Since we want to be better save than sorry, first of all  we clean the environment.
