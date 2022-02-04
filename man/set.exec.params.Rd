@@ -16,6 +16,7 @@ set.exec.params(
   cp.write = FALSE,
   cp.time = 0,
   cp.reload = FALSE,
+  cp.reload.time = 0,
   cp.dir = NULL
 )
 }

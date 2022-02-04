@@ -45,7 +45,8 @@ set.static.params(
   cplots.states = FALSE,
   cplots.nuts2 = FALSE,
   results = "Reduced",
-  sp.states = NULL
+  sp.states = NULL,
+  region = "states"
 )
 }
 \description{
