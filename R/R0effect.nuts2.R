@@ -1,4 +1,4 @@
-#' R0effect
+#' R0effect.nuts2
 #'
 #' mu values for the German NUTS-2 regions representing the R0 reduction factor per
 #' week and region as described by \[Klüsener-2020\]. The dataset contains mu values
@@ -7,7 +7,7 @@
 #'
 #' @docType data
 #'
-#' @usage data(R0effect)
+#' @usage data(R0effect.nuts2)
 #'
 #' @format An object of class \code{"data.frame"} with 38 columns, one per NUTS-2
 #' region, and 20 rows, one per week. If the simulation timeframe is to be extended,
@@ -22,4 +22,4 @@
 #' \href{https://www.medrxiv.org/content/10.1101/2020.12.23.20248761v1}{https://
 #' www.medrxiv.org/content/10.1101/2020.12.23.20248761v1} .
 #' 
-"R0effect"
+"R0effect.nuts2"
