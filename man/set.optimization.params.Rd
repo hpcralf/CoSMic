@@ -5,19 +5,19 @@
 \title{Setup of optimization parameters}
 \usage{
 set.optimization.params(
-  opt.target.icu,
-  opt.target.deaths,
-  opt.target.region,
-  opt.names,
-  opt.lb,
-  opt.ub,
-  opt.pop.size,
-  opt.max.iter,
-  use.sug.sol,
+  opt.target.icu = TRUE,
+  opt.target.deaths = FALSE,
+  opt.target.region = "state",
+  opt.names = c("SH07", "SH08", "SH09"),
+  opt.lb = c(0, 0, 0),
+  opt.ub = c(1, 1, 1),
+  opt.pop.size = 20,
+  opt.max.iter = 10,
+  use.sug.sol = FALSE,
+  opt.filter = NULL,
   ep,
   sp,
-  pspc,
-  opt.filter = NULL
+  pspc
 )
 }
 \description{

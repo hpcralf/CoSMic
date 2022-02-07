@@ -31,7 +31,7 @@ plots.by.state(
 }
 \description{
 The function plots timelines accross each state, aggregated once across the
-first column in the latin hypercube, ance across each direct parameter with
+first column in the latin hypercube, once across each direct parameter with
 more than one value and once across the parameter set of the first directv
 parameter.
 }

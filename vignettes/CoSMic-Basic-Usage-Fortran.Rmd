@@ -67,7 +67,7 @@ https://github.com/hpcralf/CoSMic/blob/main/aux/CoSMic-Parameter-Setup_and_Usage
 
 ### Remark
 As already mentioned above, this demonstration executes CoSMic with default parameters so it is **not
-meant to produce quantitatively correct results**. This is due to the default population size of 0.1%
+meant to produce quantitatively correct results**. This is due to the default population size of 10%
 of the German population. It was  found during CoSMic's development that correct prediction of ICU
 capacitiy coverage during the first and second wave of the  COVID-19 pandemic for a country like
 Germany with ~83 million inhabitants at least requires a 20% population sample. Smaler samples were
@@ -75,9 +75,9 @@ found  to produce siginficantly altered infection dynamics starting in the middl
 
 # Initialization
 
-To be consistent with the R-version of the model the R function `convert.Rp.to.Fp()` is provided that
-converts the R-version's parameter sets as well as the input-files into parameter- and input-files which
-are compatible with the Fortran-version.
+To be consistent with the R version of the model the R function `convert.Rp.to.Fp()` is provided that
+converts the R version's parameter sets as well as the input-files into parameter- and input-files which
+are compatible with the Fortran version.
 
 First things first. Since we want to be better save than sorry, first of all  we clean the environment.
 ```{r}
@@ -85,7 +85,7 @@ rm(list=ls())
 ```
 
 Then we load CoSMic. For CoSMic installation instructions please see https://github.com/hpcralf/CoSMic.
-```{r}
+```{r  warning=FALSE}
 library(CoSMic)
 ```
 
@@ -134,7 +134,7 @@ iol <- init.connectivity( iol , static.params , sim.struc )
 ### Save parameter files
 To save the initialized parameter sets for later usage we save them in RDS format. The files will
 be stored in the output directory, genearted during the call to `set.exec.params()`.
-```{r eval=FALSE}
+```{r}
 save.exec.params(exec.params)
 save.static.params(exec.params, static.params)
 save.pspace(exec.params, pspace)
@@ -144,22 +144,31 @@ save.spatial.population(exec.params, sim.struc)
 
 ### Generate parameter- and input-files
 
-```{r eval=FALSE}
+```{r}
 convert.Rp.to.Fp(filename.sp = "static_parameters.dat",
                  sp          = static.params,
                  filename.ep = "exec_parameters.dat",
-		 ep          = exec.params,
+                 ep          = exec.params,
                  iol         = iol,
-		 pspace      = pspace,
+                 pspace      = pspace,
                  outpath     = exec.params$output.dir)
 ```
 
-## Execute Fortran-version
+## Execute the Fortran version
 
 Provided the CoSMic binary is in the execution path of your environment the
-Fortran-version can be executed from within the directory in which the input
-files for the execution and static parameters reside.
-```{bash eval=FALSE}
-export OMP_NUM_THREADS=4
-mpirun -n 1 CoSMic
+Fortran-version can be executed with the following system calls:
+```{r eval=FALSE}
+Sys.setenv(OMP_NUM_THREADS=4)
+system(command = "mpirun -n 1 CoSMic")
+```
+
+## Plot the results of the Fortran version
+
+To plot the results of the Fortran version the function `plot.fortran()` is provided that imports
+the Results of the Fortran version to R, reorganises them to reproduce the data structure returned
+by the R version of the model and plots the results by means of `plots.by.country()` and
+`plots.by.state()`.
+```{r eval=FALSE}
+plots.fortran(sp=static.params,iol=iol,pspace=pspace,input.dir=exec.params$output.dir)
 ```
