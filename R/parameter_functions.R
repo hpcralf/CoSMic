@@ -1189,16 +1189,17 @@ save.input <- function(ep, iol) {
 #'  Setup of optimization parameters
 #'
 #' @export
-set.optimization.params <- function(opt.target.icu    ,  
-                                    opt.target.deaths ,   
-                                    opt.target.region ,  
-                                    opt.names         ,  
-                                    opt.lb            ,  
-                                    opt.ub            ,
-                                    opt.pop.size      ,
-                                    opt.max.iter      ,  
-                                    use.sug.sol       ,
-                                    ep, sp, pspc, opt.filter=NULL ) {
+set.optimization.params <- function(opt.target.icu    = TRUE  ,  
+                                    opt.target.deaths = FALSE ,   
+                                    opt.target.region = "state",  
+                                    opt.names         = c("SH07","SH08","SH09"),  
+                                    opt.lb            = c(0., 0., 0.),  
+                                    opt.ub            = c(1., 1., 1.),
+                                    opt.pop.size      = 20,
+                                    opt.max.iter      = 10,  
+                                    use.sug.sol       = FALSE,
+                                    opt.filter        = NULL,
+                                    ep, sp, pspc ) {
 
     ## In case optimization is requested at least one target has to be selected
     if ( ep$exec.procedure == "Optimization" ) {
@@ -1410,7 +1411,7 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
             }
             
             if ( class(tmp) == "character" ) {
-                sl <- str_length(paste(as.integer(tmp),collapse=","))
+                sl <- str_length(paste(tmp,collapse=","))
                 if ( sl > 80 ) {
                     s  <- seq(1,length(tmp),by=as.integer(sl/80))
                     ss <- s[1:(length(s))]
@@ -1537,7 +1538,7 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
             }
             
             if ( class(tmp) == "character" ) {
-                sl <- str_length(paste(as.integer(tmp),collapse=","))
+                sl <- str_length(paste(tmp,collapse=","))
                 if ( sl > 80 ) {
                     s  <- seq(1,length(tmp),by=as.integer(sl/80))
                     ss <- s[1:(length(s))]
@@ -1611,7 +1612,7 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
             }
             
             if ( class(tmp) == "character" ) {
-                sl <- str_length(paste(as.integer(tmp),collapse=","))
+                sl <- str_length(paste(tmp,collapse=","))
                 if ( sl > 80 ) {
                     s  <- seq(1,length(tmp),by=as.integer(sl/80))
                     ss <- s[1:(length(s))]
@@ -1663,7 +1664,7 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
     }
 
     ## Write R0_effects -------------------------------------
-    if (pspace[[which(names(pspace) == "R0effect")]]$param == "LHC") {
+    if (all(pspace[[which(names(pspace) == "R0effect")]]$param == "LHC")) {
         cat(paste(paste0("#","R0_effects"),", c , 1\n"))
         cat(paste0('"LHC"','\n'))
     } else if ( class(pspace[[which(names(pspace) == "R0effect")]]$param) == "data.frame" ) {
