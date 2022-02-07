@@ -369,7 +369,7 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
 #' Plot timelines accross each state
 #' 
 #' The function plots timelines accross each state, aggregated once across the
-#' first column in the latin hypercube, ance across each direct parameter with
+#' first column in the latin hypercube, once across each direct parameter with
 #' more than one value and once across the parameter set of the first directv
 #' parameter.
 #'
@@ -1054,7 +1054,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
 
 
 ################################################################################
-#' Plot R0effects over R0changes    
+#' Plot R0effects over R0changes
 #' 
 #' The function plots timelines of the R0effects per state or NUTS2 region.
 #'
@@ -1100,7 +1100,62 @@ plot.R0effect <- function(R0effect,sp,outfile=NULL,silent=FALSE) {
     return(plt)
 }
 
-plot.states.combined <- function(outfile, sp, seed_icu, seed_dea, iol,
+
+#' ################################################################################
+#' Plot Results of CoSMic-Fortran   
+#' 
+#' The function is provided for convenience. It loads the results of CoSMic Fortran
+#' version, converts them to R and plots them using `plots.by.country()` and
+#' `plots.by.state()`.
+#'
+#' @export
+plots.fortran <- function(sp, iol, pspace, input.dir) {
+    
+    healthy    <- fres.to.dataframe(input.dir,"healthy_cases_")
+    inf_noncon <- fres.to.dataframe(input.dir,"inf_noncon_cases_")
+    inf_contag <- fres.to.dataframe(input.dir,"inf_contag_cases_")
+    ill_contag <- fres.to.dataframe(input.dir,"ill_contag_cases_")
+    ill_ICU    <- fres.to.dataframe(input.dir,"ill_ICU_cases_")
+    dead       <- fres.to.dataframe(input.dir,"dead_cases_")
+    immune     <- fres.to.dataframe(input.dir,"immune_cases_")
+                                                                
+    rr<-list(healthy=healthy,       inf_noncon=inf_noncon,
+             inf_contag=inf_contag, ill_contag=ill_contag,
+             ill_ICU=ill_ICU,       dead=dead,
+             immune=immune)
+
+    
+    plots.by.country (outfile         = paste(input.dir,"plot.by.country.pdf",sep="/"),
+                      sp              = sp,
+                      seed_icu        = iol$icu.cases.by.country,
+                      seed_dea        = iol$dead.cases.by.country,
+                      iol             = iol,
+                      pspace          = pspace,
+                      rr              = rr,
+                      ind.states      = NULL,
+                      global.plot     = FALSE,
+                      split.in        ="SH1")
+
+    ## Every diagram its own scale ------------------------------
+    plots.by.state(outfile      = paste(input.dir,"plot.by.state.pdf",sep="/"),
+                   sp           = sp,
+                   seed_icu     = iol$icu.cases.by.state,
+                   seed_dea     = iol$dead.cases.by.state,
+                   iol          = iol,
+                   pspace       = pspace,
+                   rr           = rr,
+                   region       = "state",
+                   fix.lim      = FALSE,
+                   filtered     = FALSE,
+                   Sec.Axis     = NULL,
+                   silent       = FALSE,
+                   ind.states   = c(5),
+                   relative     = FALSE,
+                   split.in     = "SH1",
+                   prog         = NULL)
+}
+
+plots.states.combined <- function(outfile, sp, seed_icu, seed_dea, iol,
                                  pspace, rr, region, ind.states) {
        
     plt <- list()
@@ -1174,4 +1229,3 @@ plot.states.combined <- function(outfile, sp, seed_icu, seed_dea, iol,
     dev.off()
     
 }
-
