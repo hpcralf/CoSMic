@@ -75,46 +75,47 @@ found  to produce siginficantly altered infection dynamics starting in the middl
 
 
 # Initialization
+
 First things first. Since we want to be better save than sorry, first of all  we clean the environment.
 ```{r}
 rm(list=ls())
 ```
 
 Then we load CoSMic. For CoSMic installation instructions please see https://github.com/hpcralf/CoSMic.
-```{r}
+```{r  warning=FALSE}
 library(CoSMic)
 ```
 
-## Setup of Execution Parameters
+## Preparation input parameters
 
+### Setup of Execution Parameters
 
-```{r warning=FALSE}
+In this basic usage scenario we set up the default execution parameters.
+```{r}
 exec.params <- set.exec.params()
 ```
 
-## Choose sample size
-```{r}
-set.pspace(param  = "sam_size", values = 83019)
-```
+### Setup of the parameter space
 
-## R0 (basic reproduction number)
-```{r}
-set.pspace(param  = "R0", values = 3.5)
-```
+In the pspace parameter list, model parameters are stored that are potentially subject to variations.
+In this basic usage scenario we use the `set.pspace()` function to initialize the parameter space.
+Alternatively the default list provided by the CoSMic package as a dataset can be used. Please note
+that `pspace` is used as a global variable so this name can not be changed. In case the default parameter
+space is used, it has to be renamed to `pspace`.
 
-## Duration in ICU
+#### Duration in ICU
 ```{r}
 set.pspace(param  = "icu_dur", values = 14)
 ```
 
-## R0 reduction factor
+#### R0 reduction factor
 ```{r}
 data("R0effect.nuts2")
 set.pspace(param  = "R0effect",
            values =  R0effect.nuts2)
 ```
 
-## Weight of infection dynamic
+#### Weight of infection dynamic
 With the following factor the spread of the disease within aregion vs. the
 spread to other regions resulting from the connectivity between regions
 obtained from commuter flow data is controlled. With setting it to 0.9
@@ -123,7 +124,7 @@ obtained from commuter flow data is controlled. With setting it to 0.9
 set.pspace(param = "w_int", values = 0.9)
 ```
 
-## Weight of infected cases relocation
+#### Weight of infected cases relocation
 With this parameter the relocation of infected cases to othher counties
 according to the observerd cases is controlled. With setting it to 0.0
 relocation is turned off.
@@ -131,16 +132,16 @@ relocation is turned off.
 set.pspace(param = "w.obs", values = 0.0)
 ```
 
-## Redistribution method
+#### Redistribution method
 Either redistribution accross the whole country (0) or only within the
 states (1) can be selected.
 ```{r}
 set.pspace(param = "w.obs.by.state", values = 0)
 ```
 
-## Setup of Static Model Parameters
+### Setup of Static Model Parameters
 
-With \code{set.static.params} we initialize a default parameter list but switch on
+With `set.static.params()` we initialize a default parameter list but switch on
 all plotting along with full result output.
 ```{r}
 static.params <- set.static.params(
@@ -152,25 +153,25 @@ static.params <- set.static.params(
               results             = "ALL")
 ```
 
-static.params$results<-"ALL"
-
-## Set input data
+### Set input data
+As model input we use the default datasets provided by the CoSMic package. they can be initalized 
+by a call to `load.input()`.
 ```{r}
 iol <- load.input()
 ```
 
-## Generate spatial structure and its population
+### Generate spatial structure, its population and connectivity
+The missing steps are to initialize the population with its spatial structure and the connectivity
+betwenn the spatial compartments.
 ```{r}
 sim.struc <- init.spatial.population( iol , static.params )
-```
-
-## Initialize connectivity matrix
-```{r}
 iol <- init.connectivity( iol , static.params , sim.struc )
 ```
 
-## Save parameter files
-```{r eval=FALSE}
+### Save parameter files
+To save the initialized parameter sets for later usage we save them in RDS format. The files will
+be stored in the output directory, genearted during the call to `set.exec.params()`.
+```{r}
 save.exec.params(exec.params)
 save.static.params(exec.params, static.params)
 save.pspace(exec.params, pspace)
@@ -178,13 +179,14 @@ save.input(exec.params, iol)
 save.spatial.population(exec.params, sim.struc)
 ```
 
-## Call CoSMic
+## Execute CoSMic
 
 ### Init parallel execution
 ```{r eval=FALSE}
 init.parallel.execution(exec.params, static.params, NULL)
 ```
 
+### Execute Model Function
 ```{r eval=FALSE}
 CoSMic (ep        = exec.params,
         sp        = static.params,
@@ -194,7 +196,7 @@ CoSMic (ep        = exec.params,
 	op = NULL, opt=NULL)
 ```
 
-## Finalize parallel execution
+### Finalize parallel execution
 ```{r eval=FALSE}
 finalize.parallel.execution(exec.params,cl)
 ```

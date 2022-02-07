@@ -117,8 +117,8 @@ static.params <- set.static.params(pspace=pspace)
 ```
 
 ### Set input data
-As model input we use the datasets provided by the CoSMic package. they can be initalized by a
-call to `load.input()`.
+As model input we use the default datasets provided by the CoSMic package. they can be initalized 
+by a call to `load.input()`.
 ```{r}
 iol <- load.input()
 ```
@@ -154,7 +154,7 @@ convert.Rp.to.Fp(filename.sp = "static_parameters.dat",
                  outpath     = exec.params$output.dir)
 ```
 
-## Execute the Fortran version
+## Execute the CoSMic Fortran version
 
 Provided the CoSMic binary is in the execution path of your environment the
 Fortran-version can be executed with the following system calls:
