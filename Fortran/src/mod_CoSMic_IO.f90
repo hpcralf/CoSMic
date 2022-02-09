@@ -467,11 +467,13 @@ contains
     Allocate(iol%counties_name(index-1))
     Allocate(iol%counties_area(index-1))
     Allocate(iol%counties_inhabitants(index-1))
+    Allocate(iol%counties_nuts2(index-1))
     
     Read(un_in,*,iostat= k) iol%state_titel(:)
     Do i = 1,index-1
        Read(un_in,*,iostat=k) iol%counties_dist_id(i),iol%counties_name(i),&
-            iol%counties_area(i),iol%counties_inhabitants(i)
+            iol%counties_area(i),iol%counties_inhabitants(i),&
+            iol%counties_nuts2(i)
     Enddo
     Close(un_in)
 
@@ -491,6 +493,25 @@ contains
        Read(un_in,*,iostat= k) iol%obsicu_date(i),iol%obsicu_cases(i),&
               iol%obsicu_states_shortcut(i)
     End Do
+    Close(un_in)
+
+    call pt_get("#icu_cases_nuts2",filename)
+
+    call open_and_index(Trim(data_dir)//trim(filename),un_in,index)
+
+    ! allocation for the readin variables ------------------
+    Allocate(iol%obsicu_counties(index-1))
+    Allocate(iol%obsicu_nuts2_cases(index-1))
+    Allocate(iol%obsicu_nuts2_date(index-1))
+
+    ! read the first line(character) -----------------------
+    Read(un_in,*,iostat= k) iol%seed_titel
+       
+    Do i = 1, index-1
+       Read(un_in,*,iostat= k) iol%obsicu_counties(i),iol%obsicu_nuts2_cases(i),&
+              iol%obsicu_nuts2_date(i)
+    End Do
+   ! print *,iol%obsicu_nuts2_date
     Close(un_in)
 
 

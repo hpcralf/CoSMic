@@ -110,3 +110,5 @@
 "../../Test-1/R0_effects.csv"
 #icu_cases, c, 1
 "./ICU_cases_Germany_09_11_bundesland_new.csv"
+#icu_cases_nuts2, c, 1
+"./ICU_cases_Germany_Kreis.csv"

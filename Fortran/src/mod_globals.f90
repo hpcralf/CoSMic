@@ -133,10 +133,17 @@ module global_types
      character*50,allocatable,dimension(:) :: counties_name
      real,allocatable,dimension(:)         :: counties_area
      integer,allocatable,dimension(:)      :: counties_inhabitants
+     character*10,allocatable,dimension(:) :: counties_nuts2
      !variable for opt
      character*10,allocatable,dimension(:) :: obsicu_date
      integer,allocatable,dimension(:)      :: obsicu_cases
      character*15,allocatable,dimension(:) :: obsicu_states_shortcut
+
+     integer,allocatable,dimension(:)      :: obsicu_counties
+     integer,allocatable,dimension(:)      :: obsicu_nuts2_cases
+     character*10,allocatable,dimension(:) :: obsicu_nuts2_date
+
+
 
   end type iols
 
