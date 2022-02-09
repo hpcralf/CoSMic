@@ -515,7 +515,7 @@ set.static.params <- function(pspace,
                               country             = "Germany",
                               restrict            = TRUE,
                               sim.regions         = c("Schleswig-Holstein","Hamburg","Niedersachsen","Bremen"),
-                              sam_prop.ps         = c(1.0,1.0,1.0,1.0),
+                              sam_prop.ps         = NULL,
                               sim_pop             = "proportional",
                               ini_infected        = 10,
                               seed_infections     = "data",
@@ -602,6 +602,10 @@ set.static.params <- function(pspace,
                    "This is not possible!","\n",
                    "sam_prop.ps = [",paste(sam_prop.ps,collapse=","),"]"))
     }
+    if ( is.null(sam_prop.ps) ) {
+        sam_prop.ps <- rep(1.,length(sim.regions))
+    }
+    
     if ( length(sam_prop.ps) != length(sim.regions) ) {
         stop(paste("length(sam_prop.ps) != length(sim.regions)","\n",
                    " This is not possible!","\n",
