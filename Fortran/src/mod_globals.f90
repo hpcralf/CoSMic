@@ -113,6 +113,9 @@ module global_types
      Type(TTableData)                       :: connect_work
      Type(TTableData)                       :: states
 
+     Type(TTableData)                       :: obsicu_state
+     Type(TTableData)                       :: obsicu_nuts2
+
   end type iols
 
 end module global_types

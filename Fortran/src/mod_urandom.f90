@@ -11,6 +11,7 @@
 !#
 !# Authors:      Qifeng Pan
 !#               Ralf Schneider
+!#               Huan Zhou
 !#               Christian Dudel
 !#               Matthias Rosenbaum-Feldbruegge
 !#               Sebastian Kluesener
@@ -43,8 +44,33 @@
 !! 
 !!##############################################################################
 module urandom
+use precision
+
+implicit none
+
 
 contains
+   !! --------------------------------------------------
+   !> https://masuday.github.io/fortran_tutorial/random.html
+   !! standard uniform
+  subroutine random_stduniform(u)
+    !  integer,intent(in)     :: n  
+    real(kind=rk),intent(out) :: u
+    real(kind=rk)             :: r
+    call random_number(r)
+    u = 1._rk - r
+  end subroutine random_stduniform
+
+  !! uniform distribution
+  function random_uniform(a,b) Result(x)
+    !  integer,intent(in)   :: n
+    real,intent(in)         :: a,b
+    real(kind=rk)           :: x
+    real(kind=rk)           :: u
+    call random_stduniform(u)
+    x = (Real(b,rk)-Real(a,rk))*u + Real(a,rk)
+    !     print *,size(x)
+  end function random_uniform
 
   !! ---------------------------------------------------------------------------
   !> Function that returns a seed array filled with random values.
