@@ -63,20 +63,22 @@ Module genetic_algorithm
   Real, parameter     :: EPS    = EPSILON(1.0) ! Tolerance precision, a magnitude of e-07
 
   Real, parameter     :: NULVAL = -1.0 ! Corresponds to NA for icu_nuts2_cases
-  Integer,parameter   :: nvals  = 35 ! The total number of parameters to be optimized
+  Integer,parameter   :: nvals  = 24 ! The total number of parameters to be optimized
+  Integer,parameter   :: opt_pop_size = 15! 4 Population size
+  Integer,parameter   :: opt_num_gene = 10! 2 Maximal number of generations
 
   !** Extend the fivenum summary statistic with a mean value -------
   type ga_summary
-    Real,dimension(:),allocatable                 :: maximum
-    Real,dimension(:),allocatable                 :: mean 
-    Real,dimension(:),allocatable                 :: upper_hinge
-    Real,dimension(:),allocatable                 :: median
-    Real,dimension(:),allocatable                 :: lower_hinge
-    Real,dimension(:),allocatable                 :: minimum
+    Real,dimension(opt_num_gene)                 :: maximum
+    Real,dimension(opt_num_gene)                 :: mean
+    Real,dimension(opt_num_gene)                 :: upper_hinge
+    Real,dimension(opt_num_gene)                 :: median
+    Real,dimension(opt_num_gene)                 :: lower_hinge
+    Real,dimension(opt_num_gene)                 :: minimum
   end type ga_summary
 
   !** Optimization Control Panel / setting the optimization --------
-!  type opt_parameters     
+!  type opt_parameters
 !    Logical                                       :: opt_target_icu
 !    Logical                                       :: opt_target_deaths ! Optimization targets
 !    Logical                                       :: opt_filter ! .TRUE.
@@ -109,7 +111,7 @@ Contains
     less_contagious, R0_force, immune_stop, &
     R0change, R0delay ,R0delay_days, R0delay_type, &
     control_age_sex, seed_date, seed_before, sam_size, R0, &
-     R0_effects, full_region_index, region_index, output_dir, export_name, rank_mpi) !type opt_parameters
+    R0_effects, full_region_index, region_index, output_dir, export_name, rank_mpi) !type opt_parameters
 
     !===========================================================================
     ! Declaration
@@ -144,9 +146,12 @@ Contains
     !==========================================================================
     ! General purpose for preprocessing and fitness calculation
     !==========================================================================     
-    Real(kind=rk),Allocatable                     :: ini_pop(:,:), tmp_pop(:,:), sorted_pop(:,:) ! ini_pop: store the population, which are the input to be optimized. 
+    Real(kind=rk), Dimension(nvals,opt_pop_size)  :: ini_pop, tmp_pop ! ini_pop: store the population, which are the input to be optimized.
+    Real(kind=rk), Dimension(:,:),Allocatable     :: sorted_pop
+  !  Real(kind=rk),Allocatable                     :: ini_pop(:,:), tmp_pop(:,:), sorted_pop(:,:)  
 
-    Real, Allocatable                             :: test_fitness(:), fitness(:), tmp_fitness(:) ! fitness: store the calculated fitness
+    Real, Dimension(opt_pop_size)                 :: fitness, tmp_fitness ! fitness: store the calculated fitness
+  !  Real, Allocatable                            :: fitness(:), tmp_fitness(:) 
     Real, Allocatable, Dimension(:)               :: sorted_fitness
     Type(ga_summary)                              :: summary_fitness
 
@@ -155,21 +160,20 @@ Contains
     Integer                                       :: startid, endid, max_pos, min_pos
     Real                                          :: tmp_max, run_sum
     Integer                                       :: time_n
-      
-    Real,dimension(:), Allocatable                :: diff
+    
     Real                                          :: diff_sum, diff_loc_sum, diff_tmp_power
     integer                                       :: diff_len, diff_loc_len
     integer                                       :: half
     Integer,dimension(:,:,:), Allocatable         :: aggreg_sum_by_county
     Real,dimension(:,:), Allocatable              :: avg_by_county ! Record the simulated ICU cases by state/nuts2
 
-    Character(Len=:), allocatable, Dimension(:)   :: obsicu_nuts2_date
+    Character(Len=10), allocatable, Dimension(:)  :: obsicu_nuts2_date
     Integer(kind=ik), Allocatable, Dimension(:)   :: obsicu_nuts2_cases
     Integer(kind=ik), Allocatable, Dimension(:)   :: obsicu_counties
 
-    Character(Len=:), allocatable, Dimension(:)   :: obsicu_date
+    Character(Len=10), allocatable, Dimension(:)  :: obsicu_date
     Integer(kind=ik), allocatable, Dimension(:)   :: obsicu_cases
-    Character(Len=:), allocatable, Dimension(:)   :: obsicu_sc   
+    Character(Len=15), allocatable, Dimension(:)  :: obsicu_sc   
 
     Integer                                       :: elapsed_days, num_actudays
     Integer(kind=ik)                              :: iter
@@ -180,14 +184,13 @@ Contains
     ! Optimization target "state"
     !=================================================
     Integer                                       :: num_states
-    Integer, Allocatable                          :: state_sc_index(:),pos_se(:),uniq_distid(:)
-    Character*15,Dimension(1)                     :: given_sc
-    !  Type(target_obsicu),Allocatable,dimension(:)  :: seltarget_icu_by_state 
-    Character*10, allocatable, Dimension(:)       :: states_shortcut
+    Integer, Allocatable                          :: pos_se(:),uniq_distid(:)
+    Character(len=10),Dimension(1)                :: given_sc
+    Character(len=15), allocatable, Dimension(:)  :: states_shortcut
 
     ! Record the observed ICU cases by state
     Real,dimension(:,:), Allocatable              :: seltarget_icu_by_state_icucases
-    Character*15,dimension(:,:), Allocatable      :: seltarget_icu_by_state_icudates
+    Character(len=15),dimension(:,:), Allocatable :: seltarget_icu_by_state_icudates
 
     !=================================================
     ! Optimization target "nuts2":
@@ -201,13 +204,13 @@ Contains
     Integer(kind=ik), Allocatable, Dimension(:)        :: counties_dist_id
     ! Record the observed ICU cases by nuts2
     Real,dimension(:,:), Allocatable                   :: seltarget_icu_by_nuts2_icucases
-    Character*15,dimension(:,:), Allocatable           :: seltarget_icu_by_nuts2_icudates
+    Character(len=15),dimension(:,:), Allocatable      :: seltarget_icu_by_nuts2_icudates
 
     !====================================================================================================
     ! Convulution filter and intersection of the observed and evaluation data according to date
     !====================================================================================================
     Real, Allocatable,dimension(:)                :: tmp_filter
-    Character*10                                  :: seed_date_mod
+    Character(len=10)                             :: seed_date_mod
     Integer                                       :: halve_coff_len, coff_len ! 7
     Integer, Allocatable                          :: obs_lb(:), obs_ub(:), eval_lb(:), eval_ub(:)
     Integer                                       :: inteval_days, status
@@ -216,13 +219,13 @@ Contains
     !=================================================
     ! GA
     !=================================================
-    Integer, Allocatable,dimension(:)             :: sel_par ! The selected parents
+    Integer, dimension(opt_pop_size)              :: sel_par ! The selected parents
     Type(opt_res)                                 :: ga_res
 
     !=================================================
     ! Sorting
     !=================================================
-    integer,Allocatable, dimension(:)             :: sorted_index
+    integer, dimension(opt_pop_size)              :: sorted_index
     integer                                       :: idx
     real                                          :: pre_fitv, curr_fitv
 
@@ -234,36 +237,37 @@ Contains
     Logical                                       :: opt_filter ! .TRUE.
     character(len=mcl)                            :: use_sug_sol ! "NULL"
   !  character(Len=:),allocatable                  :: opt_region ! "state". Optimized region. Valid values: "state" and "nuts2"
-    Integer(kind=ik)                              :: opt_pop_size ! 4 Population size
-    Integer(kind=ik)                              :: opt_num_gene ! 2 Maximal number of generations
+  !  Integer(kind=ik)                              :: opt_pop_size ! 4 Population size
+  !  Integer(kind=ik)                              :: opt_num_gene ! 2 Maximal number of generations
     Integer                                       :: opt_elitism ! The number of the chosen elitism
     Real                                          :: opt_pcrossover ! 0.8
     Real                                          :: opt_pmutation ! 0.1
     Integer                                       :: tail_pos
 
-    Character*10, dimension(nvals)                :: opt_names
+    Character(len=10), dimension(nvals)           :: opt_names
     Real                                          :: opt_lb, opt_ub
-    Character*10                                  :: opt_target_region
+    Character(len=10)                             :: opt_target_region
     Integer, dimension(nvals)                     :: opt_index
 
     !** Temporarily static initialization of opt ----- TODO: should be written as input data
     call pt_get("#opt_target_icu",opt_target_icu)
     call pt_get("#opt_target_deaths",opt_target_deaths)
-    call pt_get("#opt_pop_size",opt_pop_size)
-    call pt_get("#opt_max_iter",opt_num_gene)
+    call pt_get("#opt_filter",opt_filter)
+    !call pt_get("#opt_pop_size",opt_pop_size)
+    !call pt_get("#opt_max_iter",opt_num_gene)
     !call pt_get("#opt_target_region",opt_region)
 
     opt_pcrossover    = 0.8
     opt_pmutation     = 0.1
-    opt_target_region = "nuts2"
+    opt_target_region = "state"
 
-  !  opt_names = (/"SH1","SH2","SH3","SH4","SH5","SH6","HH1","HH2","HH3","HH4","HH5","HH6","NI1","NI2",&
-  !    "NI3","NI4","NI5","NI6","HB1","HB2","HB3","HB4","HB5","HB6"/)
+    opt_names = (/"SH1","SH2","SH3","SH4","SH5","SH6","HH1","HH2","HH3","HH4","HH5","HH6","NI1","NI2",&
+      "NI3","NI4","NI5","NI6","HB1","HB2","HB3","HB4","HB5","HB6"/)
 
-    opt_names = (/"def01","def02","def03","def04","def05","de601","de602","de603","de604","de605",&
-        "de911","de912","de913","de914","de915","de921","de922",&
-        "de923","de924","de925","de931","de932","de933","de934","de935",&
-        "de941","de942","de943","de944","de945","de501","de502","de503","de504","de505"/)
+  !  opt_names = (/"def01","def02","def03","def04","def05","de601","de602","de603","de604","de605",&
+  !      "de911","de912","de913","de914","de915","de921","de922",&
+  !      "de923","de924","de925","de931","de932","de933","de934","de935",&
+  !      "de941","de942","de943","de944","de945","de501","de502","de503","de504","de505"/)
     opt_lb = 0.1
     opt_ub = 1.0
    
@@ -298,8 +302,8 @@ Contains
       !    enddo
       !   pos_nuts2(num_nuts2+1) = size(region_index) + 1
       
-        ! unique_nuts2s: set of affected nuts2; pos_nuts2: see the function "get_unique_nuts2"
-        unique_nuts2s = get_unique_nuts2(region_index,pos_nuts2)
+        ! unique_nuts2s: set of affected nuts2; pos_nuts2: see the function "get_unique_nuts2_state"
+        unique_nuts2s = get_unique_nuts2_state(region_index,pos_nuts2)
         num_nuts2 = size(unique_nuts2s) ! Get the number of affected nuts2
 
         ! Get the position of the given nuts2 in the full nuts2 list
@@ -309,6 +313,7 @@ Contains
             if (unique_nuts2s(i) .eq. full_region_index(j)) then
               unique_nuts2s(i) = j
               exit
+
             endif
           enddo
         enddo
@@ -387,22 +392,25 @@ Contains
            
       !** When the optimized target region is "state" ------------------- 
       case("state")
-        uniq_distid = get_unique(region_index) ! Get the affected states
+
+        ! uniq_distid: the affected states; pos_se: collect the beginning index from which a different state starts
+        uniq_distid = get_unique_nuts2_state(region_index, pos_se) 
         num_states = size(uniq_distid) ! Get the number of the affected states
-        !** Collect the beginning index from which a different state starts ---------------------
-        Allocate(pos_se(num_states+1))
-        pos_se = 0
-        j = 1
-        pos_se(j) = 1
-        startid = region_index(1)
-        do i = 2,size(region_index)
-            if(region_index(i) .NE. startid) then
-                j = j + 1
-                pos_se(j) = i
-                startid = region_index(i)
-            endif
-        enddo
-        pos_se(num_states+1) = size(region_index) + 1
+
+      !  uniq_distid = get_unique(region_index) ! Get the affected states
+      !  Allocate(pos_se(num_states+1))
+      !  pos_se = 0
+      !  j = 1
+      !  pos_se(j) = 1
+      !  startid = region_index(1)
+      !  do i = 2,size(region_index)
+      !      if(region_index(i) .NE. startid) then
+      !          j = j + 1
+      !          pos_se(j) = i
+      !          startid = region_index(i)
+      !      endif
+      !  enddo
+      !  pos_se(num_states+1) = size(region_index) + 1
 
         Allocate(obs_lb(num_states))
         Allocate(obs_ub(num_states))
@@ -432,10 +440,10 @@ Contains
           !** Presume seltarget_icu_by_state is arranged in an ascending order ----------
           !** Preprocess the observed ICU data according to the affected states --------------
           do i = 1,num_states
-            given_sc(1) = states_shortcut(uniq_distid(i))
+          !  given_sc(1) = states_shortcut(uniq_distid(i))
             k = 1
             do j = 1, size(obsicu_sc)
-              if (trim(given_sc(1)) .eq. trim(obsicu_sc(j))) then
+              if (trim(states_shortcut(uniq_distid(i))) .eq. trim(obsicu_sc(j))) then
                 ! When the first matched state is hit
                 if (k .eq. 1) then
                   seltarget_icu_by_state_icudates(k,i) = trim(obsicu_date(j))
@@ -497,15 +505,13 @@ Contains
       endif
     enddo
      
-    Allocate(fitness(opt_pop_size))
-    fitness = 0
+  !  Allocate(fitness(opt_pop_size))
     do i = 1,opt_pop_size
       fitness(i) = INV
     enddo
   
     !** Generate beginning population by using a uniform range distribution -----
-    Allocate(ini_pop(nvals, opt_pop_size))
-    ini_pop = 0
+  !  Allocate(ini_pop(nvals, opt_pop_size))
     do j = 1, opt_pop_size
       do i = 1, nvals
         ini_pop(i,j) = random_uniform(opt_lb,opt_ub)
@@ -685,26 +691,24 @@ Contains
       enddo
 
 
-      if ( .Not.Allocated(tmp_pop) ) then                
-        Allocate(tmp_pop(nvals, opt_pop_size))
+      if ( .Not.Allocated(sorted_pop) ) then                
+      !  Allocate(tmp_pop(nvals, opt_pop_size))
         Allocate(sorted_pop(nvals, opt_elitism))
 
-        Allocate(tmp_fitness(opt_pop_size))
+      !  Allocate(tmp_fitness(opt_pop_size))
         Allocate(sorted_fitness(opt_elitism))
 
-        Allocate(sel_par(opt_pop_size))
+      !  Allocate(sel_par(opt_pop_size))
 
 
-        Allocate(sorted_index(opt_pop_size))
+      !  Allocate(sorted_index(opt_pop_size))
 
-        Allocate(summary_fitness%maximum(opt_num_gene))
-        Allocate(summary_fitness%mean(opt_num_gene))
-        Allocate(summary_fitness%upper_hinge(opt_num_gene))
-        Allocate(summary_fitness%median(opt_num_gene))
-        Allocate(summary_fitness%lower_hinge(opt_num_gene))
-        Allocate(summary_fitness%minimum(opt_num_gene))
-
-        print *,"allocated"
+      !  Allocate(summary_fitness%maximum(opt_num_gene))
+      !  Allocate(summary_fitness%mean(opt_num_gene))
+      !  Allocate(summary_fitness%upper_hinge(opt_num_gene))
+      !  Allocate(summary_fitness%median(opt_num_gene))
+      !  Allocate(summary_fitness%lower_hinge(opt_num_gene))
+      !  Allocate(summary_fitness%minimum(opt_num_gene))
       endif
 
       print *,"intermediate fitness output:"
@@ -825,7 +829,7 @@ Contains
 
     call print_ga_summary(opt_pop_size, opt_num_gene, opt_elitism, opt_pcrossover, opt_pmutation, &
               opt_target_region, opt_names, ga_res)
-      
+     
     select case (trim(opt_target_region))
       case("nuts2")
         deallocate(seltarget_icu_by_nuts2_icucases)
@@ -857,22 +861,23 @@ Contains
     deallocate(obs_lb)
     deallocate(eval_lb)
     deallocate(eval_ub)
-    deallocate(ini_pop)
-    deallocate(fitness)
+  !  deallocate(ini_pop)
+  !  deallocate(fitness)
   
-    deallocate(tmp_pop)
-    deallocate(tmp_fitness)
+  !  deallocate(tmp_pop)
+  !  deallocate(tmp_fitness)
     deallocate(sorted_pop)
     deallocate(sorted_fitness)
-    deallocate(sorted_index)
-    deallocate(sel_par)
+  !  deallocate(sorted_index)
+  !  deallocate(sel_par)
 
-    deallocate(summary_fitness%maximum)
-    deallocate(summary_fitness%mean)
-    deallocate(summary_fitness%upper_hinge)
-    deallocate(summary_fitness%median)
-    deallocate(summary_fitness%lower_hinge)
-    deallocate(summary_fitness%minimum)
+  !  deallocate(summary_fitness%maximum)
+  !  deallocate(summary_fitness%mean)
+  !  deallocate(summary_fitness%upper_hinge)
+  !  deallocate(summary_fitness%median)
+  !  deallocate(summary_fitness%lower_hinge)
+  !  deallocate(summary_fitness%minimum)
+ 
   end subroutine ga
 
   !! ------------------------------------------------------------------------------
@@ -907,11 +912,11 @@ Contains
 
 
   !! --------------------------------------------------------------------------------------------------------------
-  !> Subroutine that get a subset of the input array_in (with repeated nuts2) storing the unique nuts2.
+  !> Subroutine that get a subset of the input array_in (with repeated nuts2/state) storing the unique nuts2/state.
   !> 
   !> The returned arrays are array_pos and array_out.
-  !> array_out: store the unique nuts2; array_pos: store the position from which a different nuts2 starts in array_in
-  function get_unique_nuts2(array_in, array_pos) result(array_out)
+  !> array_out: store the unique nuts2/state; array_pos: store the position from which a different nuts2/state starts in array_in
+  function get_unique_nuts2_state(array_in, array_pos) result(array_out)
     integer                                               :: size_in,j,index
     Integer,Allocatable,dimension(:),intent(inout)        :: array_pos
     Integer(kind=ik),allocatable,dimension(:),intent(in)  :: array_in
@@ -945,7 +950,7 @@ Contains
     enddo
     array_pos(index+1) = size_in+1
   
-  end function get_unique_nuts2
+  end function get_unique_nuts2_state
 
   !! -------------------------------------------------------------------------------------------
   !> Subroutine that Calculate the intersection of the evaluated and observed ICU data by date.
@@ -956,7 +961,7 @@ Contains
     Integer,intent(in)                                     :: length
     Character(len=*)                                       :: s_date, e_date
     Integer                                                :: inteval_days, status, time_n
-    Character*10                                           :: seed_date_mod
+    Character*10                                       :: seed_date_mod
 
     !** Here we assume that the date is monotonically increased by days -----------------------
     obs_lb = 1
@@ -1003,7 +1008,7 @@ Contains
   !>
   !> The random number is between lb and ub.
   subroutine population(ini_pop, lb, ub, popsize, nvals)
-    Real(kind=rk),dimension(:,:),Allocatable,intent(inout) :: ini_pop
+    Real(kind=rk),dimension(nvals,5),intent(inout) :: ini_pop
     Real,intent(in)                               :: lb 
     Real,intent(in)                               :: ub 
     Integer,intent(in)                                     :: popsize 
@@ -1024,7 +1029,7 @@ Contains
   !>
   !> Return the result indexes to sel_par.
   subroutine selection(fitness, sel_par)
-    Real, Allocatable, Dimension(:),intent(inout)         :: fitness
+    Real, Dimension(opt_pop_size),intent(inout)           :: fitness
     Integer, Dimension(size(fitness)),intent(inout)       :: sel_par
 
     Real, Dimension(size(fitness))                        :: fscaled, prob
@@ -1066,8 +1071,8 @@ Contains
   !>
   !> The results are stored back to ini_pop and fitness.
   subroutine crossover(ini_pop, fitness, pcrossover) 
-    Real(kind=rk),dimension(:,:),Allocatable,intent(inout)    :: ini_pop
-    Real,dimension(:),Allocatable,intent(inout)               :: fitness
+    Real(kind=rk),dimension(nvals,opt_pop_size),intent(inout) :: ini_pop
+    Real,dimension(opt_pop_size),intent(inout)                :: fitness
     Real,intent(in)                                           :: pcrossover
 
     Integer,dimension(:),Allocatable                          :: sample_input, sample_parents
@@ -1129,10 +1134,10 @@ Contains
   !>
   !> The results are stored back to ini_pop and fitness.
   subroutine mutation(ini_pop, fitness, pmutation, lb, ub)
-    Real(kind=rk),dimension(:,:),Allocatable,intent(inout)    :: ini_pop
-    Real,dimension(:),Allocatable,intent(inout)               :: fitness
+    Real(kind=rk),dimension(nvals,opt_pop_size),intent(inout) :: ini_pop
+    Real,dimension(opt_pop_size),intent(inout)                :: fitness
     Real,intent(in)                                           :: pmutation
-    Real, intent(in)        :: lb, ub
+    Real, intent(in)                                          :: lb, ub
 
     Integer,dimension(size(ini_pop,dim=1))                    :: sample_input
     Integer,dimension(1)                                      :: sample_parents
@@ -1160,8 +1165,8 @@ Contains
   !>
   !> The results are stored back to ini_pop and fitness.
   subroutine elitism(fitness, ini_pop, sorted_pop, sorted_fitness)
-    Real(kind=rk),dimension(:,:),Allocatable,intent(inout)    :: ini_pop
-    Real,dimension(:),Allocatable,intent(inout)               :: fitness
+    Real(kind=rk),dimension(nvals,opt_pop_size),intent(inout) :: ini_pop
+    Real,dimension(opt_pop_size),intent(inout)                :: fitness
     Real(kind=rk),dimension(:,:),Allocatable,intent(in)       :: sorted_pop                                   
     Real,dimension(:),Allocatable,intent(in)                  :: sorted_fitness
     Integer,dimension(size(fitness))                          :: sorted_index
@@ -1214,8 +1219,8 @@ Contains
   !>
   !> This adds a mean value on top of the existing five number summary
   subroutine sixnum_summary(fitness, sorted_index, max, min, mean, median, upper_hinge, lower_hinge)
-    Real,Allocatable,dimension(:),intent(in)    :: fitness
-    Integer,Allocatable,dimension(:),intent(in) :: sorted_index
+    Real,dimension(opt_pop_size),intent(in)     :: fitness
+    Integer,dimension(opt_pop_size),intent(in)  :: sorted_index
 
     Real, intent(out)                           :: max, min, mean, median, upper_hinge, lower_hinge
     Integer                                     :: pop_size, half, i, j
@@ -1235,7 +1240,7 @@ Contains
   !> Function that returns the median value of an ordered array
   !>
   function get_median(dataset, sorted_index, len) Result(med)
-    Real,Allocatable,dimension(:),intent(in)     :: dataset
+    Real,dimension(opt_pop_size),intent(in)      :: dataset
     Integer,intent(in)                           :: len
     Integer,dimension(len),intent(in)            :: sorted_index
     Real                                         :: med
