@@ -296,7 +296,6 @@ Contains
 
     coff_len = 7
     R0_effects_dim1size = size(R0_effects,dim=1)
-    print *,R0_effects_dim1size
   
     select case (trim(opt_target_region))
       !** When the optimized target region is "Nuts2" ------------------
