@@ -56,15 +56,17 @@ Module genetic_algorithm
 
   Use cosmic_io
 
+  use mpi
+
   implicit none
 
   !** Constants ---------------------------------------
   Real, parameter     :: INV    = 99.0 ! Corresponds to NA for fitness array
   Real, parameter     :: EPS    = EPSILON(1.0) ! Tolerance precision, a magnitude of e-07
-
   Real, parameter     :: NULVAL = -1.0 ! Corresponds to NA for icu_nuts2_cases
+  Integer,parameter   :: ROOT   = 0
   Integer,parameter   :: nvals  = 24 ! The total number of parameters to be optimized
-  Integer,parameter   :: opt_pop_size = 15! 4 Population size
+  Integer,parameter   :: opt_pop_size = 80! 4 Total population size
   Integer,parameter   :: opt_num_gene = 10! 2 Maximal number of generations
 
   !** Extend the fivenum summary statistic with a mean value -------
@@ -111,7 +113,7 @@ Contains
     less_contagious, R0_force, immune_stop, &
     R0change, R0delay ,R0delay_days, R0delay_type, &
     control_age_sex, seed_date, seed_before, sam_size, R0, &
-    R0_effects, full_region_index, region_index, output_dir, export_name, rank_mpi) !type opt_parameters
+    R0_effects, full_region_index, region_index, output_dir, export_name, rank_mpi, size_mpi) !type opt_parameters
 
     !===========================================================================
     ! Declaration
@@ -136,8 +138,9 @@ Contains
     Integer(kind=ik)                             , intent(in) :: seed_before    
     Integer(kind=ik)                             , intent(in) :: sam_size
     Real(kind=rk)                                , intent(in) :: R0
-    Real(kind=rk),    Allocatable, Dimension(:,:)             :: R0_effects
+    Real(kind=rk),    Allocatable, Dimension(:,:)             :: R0_effects ! As output
     Integer(kind=mpi_ik)                         , intent(in) :: rank_mpi
+    Integer(kind=mpi_ik)                         , intent(in) :: size_mpi
     integer(kind=ik), Allocatable, Dimension(:)  , intent(in) :: full_region_index
     integer(kind=ik), Allocatable, Dimension(:)  , intent(in) :: region_index
     character(len=:), Allocatable                , intent(in) :: output_dir
@@ -146,10 +149,12 @@ Contains
     !==========================================================================
     ! General purpose for preprocessing and fitness calculation
     !==========================================================================     
-    Real(kind=rk), Dimension(nvals,opt_pop_size)  :: ini_pop, tmp_pop ! ini_pop: store the population, which are the input to be optimized.
-    Real(kind=rk), Dimension(:,:),Allocatable     :: sorted_pop
+    Real(kind=rk), Dimension(nvals,opt_pop_size/size_mpi)  :: local_ini_pop ! Store the local population for each rank
+    Real(kind=rk), Dimension(nvals,opt_pop_size)           :: ini_pop, tmp_pop ! ini_pop: store the global population, which are the input to be optimized.
+    Real(kind=rk), Dimension(:,:),Allocatable              :: sorted_pop
   !  Real(kind=rk),Allocatable                     :: ini_pop(:,:), tmp_pop(:,:), sorted_pop(:,:)  
 
+    Real, Dimension(opt_pop_size/size_mpi)        :: local_fitness ! Store the local fitness for each rank
     Real, Dimension(opt_pop_size)                 :: fitness, tmp_fitness ! fitness: store the calculated fitness
   !  Real, Allocatable                            :: fitness(:), tmp_fitness(:) 
     Real, Allocatable, Dimension(:)               :: sorted_fitness
@@ -249,6 +254,13 @@ Contains
     Character(len=10)                             :: opt_target_region
     Integer, dimension(nvals)                     :: opt_index
 
+    Integer                                       :: opt_local_size ! The number of local population when there are more than two MPI ranks
+
+    !=======================================================
+    ! MPI-related
+    !=======================================================
+    Integer(kind=mpi_ik)                          :: ierr
+
     !** Temporarily static initialization of opt ----- TODO: should be written as input data
     call pt_get("#opt_target_icu",opt_target_icu)
     call pt_get("#opt_target_deaths",opt_target_deaths)
@@ -271,6 +283,12 @@ Contains
     opt_lb = 0.1
     opt_ub = 1.0
    
+    opt_local_size = opt_pop_size/size_mpi
+    if ((opt_local_size .eq. 0) .and. (mod(opt_pop_size,size_mpi) .ne. 0)) then
+      print *,"Error: too many ranks or the population is not divisable by rank size!"
+      Call exit(status)
+    endif
+
     opt_elitism = max(1,NINT(opt_pop_size*0.05))
 
     time_n = maxval(R0change) + 1       
@@ -279,7 +297,7 @@ Contains
 
     coff_len = 7
     R0_effects_dim1size = size(R0_effects,dim=1)
-    
+  
     select case (trim(opt_target_region))
       !** When the optimized target region is "Nuts2" ------------------
       case("nuts2") 
@@ -385,7 +403,10 @@ Contains
             call date_intersection(obs_lb(i), eval_lb(i), obs_ub(i), eval_ub(i), seed_date_mod, &
                                       time_n, num_actudays, seltarget_icu_by_nuts2_icudates(1,1), &
                                       seltarget_icu_by_nuts2_icudates(num_actudays,1))
-            print *, "nuts2: ", obs_lb(i),eval_lb(i),obs_ub(i),eval_ub(i)
+            if(PT_DEBUG) then
+              print *,"Intersection is: "
+              print *, "myrank: ",rank_mpi, " nuts2: ", obs_lb(i),eval_lb(i),obs_ub(i),eval_ub(i)
+            endif
            
           enddo
         endif
@@ -477,7 +498,7 @@ Contains
                                     seltarget_icu_by_state_icudates(num_actudays,1))
             if (PT_DEBUG) then
               print *, "Intersection is: "
-              print *, "state: ", obs_lb(i),eval_lb(i),obs_ub(i),eval_ub(i)
+              print *, "myrank: ",rank_mpi," state: ", obs_lb(i),eval_lb(i),obs_ub(i),eval_ub(i)
             endif
           enddo
             
@@ -506,42 +527,47 @@ Contains
     enddo
      
   !  Allocate(fitness(opt_pop_size))
-    do i = 1,opt_pop_size
-      fitness(i) = INV
+    do i = 1,opt_local_size
+      local_fitness(i) = INV
     enddo
   
     !** Generate beginning population by using a uniform range distribution -----
   !  Allocate(ini_pop(nvals, opt_pop_size))
-    do j = 1, opt_pop_size
+    do j = 1, opt_local_size
       do i = 1, nvals
-        ini_pop(i,j) = random_uniform(opt_lb,opt_ub)
+        local_ini_pop(i,j) = random_uniform(opt_lb,opt_ub)
       enddo
     enddo
+
+    !** Gather all the local population from all ranks to the root rank 0 before iteration
+    call MPI_GATHER(local_ini_pop, opt_local_size*nvals, MPI_REAL8, ini_pop, opt_local_size*nvals, MPI_REAL8, ROOT, &
+              MPI_COMM_WORLD, ierr)
    
     !** Core of the genetic algorithm -------------------
     do gene_ii=1,opt_num_gene ! Iterate over the generations
       ga_res%opt_acuiter = gene_ii
   
-      do pop_ii = 1,opt_pop_size ! Iterate over all the population
+      do pop_ii = 1,opt_local_size ! Iterate over all the population
         !** Proceed only when the corresponding fitness is not given (aka. INV) ----
-        if (fitness(pop_ii) .ne. INV) then
+        if (local_fitness(pop_ii) .ne. INV) then
           cycle
         endif
         !** Preprocess the R0 effect data according to the generated population ----
         tail_pos = len(trim(opt_names(1)))
         startid = 1
         do i = 1,nvals
+          !! TODO: move it outside of the loop
           READ(opt_names(i)(tail_pos:tail_pos), "(I4)") j
           ! Parameter checking
           if (j .gt. R0_effects_dim1size) then
             print *,"Error: the given optimized target is beyond the expected range of R0_effects!"
             Call exit(status)
           endif
-          R0_effects(j,opt_index(i)) = ini_pop(startid,pop_ii)
+          R0_effects(j,opt_index(i)) = local_ini_pop(startid,pop_ii)
           startid = startid + 1
         enddo
            
-        !** Call the COVID19 spatial simuation and store the simulated ICU data to ill_ICU_cases_final -----          
+        !** Call the COVID19 spatial simuation and store the simulated ICU data to ill_ICU_cases_final -----         
         ill_ICU_cases_final = COVID19_Spatial_Microsimulation_for_Germany(iol,&
             iter_s, iter_e , &
             inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
@@ -584,11 +610,11 @@ Contains
                 enddo
               enddo
 
-            !  if (PT_DEBUG) then
+              if (PT_DEBUG) then
                   do j = 1,time_n 
                     print *,avg_by_county(:,j)
                   enddo
-            !  endif
+              endif
                 !** Calculate the difference between the observed and evaluated/simulated ICU data -----------
               do i = 1,num_nuts2                  
                 if (opt_filter) then
@@ -618,7 +644,7 @@ Contains
               !  diff_len = diff_len + obs_ub(i) - obs_lb(i) + 1
               !  deallocate(diff)   
               enddo    
-              fitness(pop_ii) = -1*sqrt(diff_sum/diff_len)
+              local_fitness(pop_ii) = -1*sqrt(diff_sum/diff_len)
             end if
           case("state")
             !** All the data are represented by state --------
@@ -646,11 +672,11 @@ Contains
                 avg_by_county(i,j) = Real(sum(aggreg_sum_by_county(i,j,:)))/Real(iter) ! Average over the running iterates
               enddo
             enddo
-          !  if (PT_DEBUG) then
+            if (PT_DEBUG) then
                 do j = 1,time_n 
                     print *,avg_by_county(:,j)
                 enddo
-          !  endif
+            endif
 
             !** Calculate the difference between the observed and evaluated/simulated ICU data -----------
             do i = 1,num_states                  
@@ -682,7 +708,7 @@ Contains
           !    diff_len = diff_len + obs_ub(i) - obs_lb(i) + 1
           !    deallocate(diff)      
             enddo    
-            fitness(pop_ii) = -1*sqrt(diff_sum/diff_len)
+            local_fitness(pop_ii) = -1*sqrt(diff_sum/diff_len)
           case default
             write(*,*)  "Otherwise, the given target is not supported yet"
             call exit(status)
@@ -690,32 +716,19 @@ Contains
         deallocate(ill_ICU_cases_final)
       enddo
 
+      !** All ranks perform allgather operation on local_fitness for the upcoming stop criteria check
+      !** This also works as a barrier
+      call MPI_ALLGATHER(local_fitness, opt_local_size, MPI_REAL, fitness, opt_local_size, MPI_REAL,&
+              MPI_COMM_WORLD, ierr)
 
-      if ( .Not.Allocated(sorted_pop) ) then                
-      !  Allocate(tmp_pop(nvals, opt_pop_size))
-        Allocate(sorted_pop(nvals, opt_elitism))
-
-      !  Allocate(tmp_fitness(opt_pop_size))
-        Allocate(sorted_fitness(opt_elitism))
-
-      !  Allocate(sel_par(opt_pop_size))
-
-
-      !  Allocate(sorted_index(opt_pop_size))
-
-      !  Allocate(summary_fitness%maximum(opt_num_gene))
-      !  Allocate(summary_fitness%mean(opt_num_gene))
-      !  Allocate(summary_fitness%upper_hinge(opt_num_gene))
-      !  Allocate(summary_fitness%median(opt_num_gene))
-      !  Allocate(summary_fitness%lower_hinge(opt_num_gene))
-      !  Allocate(summary_fitness%minimum(opt_num_gene))
-      endif
-
-      print *,"intermediate fitness output:"
-      print *,fitness
       sorted_index = 0
     
       call SORTRX_REAL(opt_pop_size,fitness,sorted_index) ! Sorted_index indicates a sorted fitness in an ascending order
+
+      if(PT_DEBUG) then
+        print *,"the sorted_index is: "
+        print *,sorted_index
+      endif
 
       !** Add summary statistics --------------------------------------------------------
       call sixnum_summary(fitness, sorted_index, summary_fitness%maximum(gene_ii), & 
@@ -724,16 +737,20 @@ Contains
                                    summary_fitness%median(gene_ii), &
                                    summary_fitness%upper_hinge(gene_ii), &
                                    summary_fitness%lower_hinge(gene_ii))
-      print *,"generation: ",gene_ii
-      print *,"  max                ","mean               ",&
-                "upper_hinge         ","median       ",&
-                "lower_hinge           ","min"
-      print *,summary_fitness%maximum(gene_ii)," ",summary_fitness%mean(gene_ii),&
-                        " ",summary_fitness%upper_hinge(gene_ii),&
-                        " ", summary_fitness%median(gene_ii), " ", &
-                        summary_fitness%lower_hinge(gene_ii), " ", summary_fitness%minimum(gene_ii) 
+      if (rank_mpi .eq. ROOT) then
+        print *,"intermediate fitness output:"
+        print *,fitness
+        print *,"generation: ",gene_ii
+        print *,"  max                ","mean               ",&
+                  "upper_hinge         ","median       ",&
+                  "lower_hinge           ","min"
+        print *,summary_fitness%maximum(gene_ii)," ",summary_fitness%mean(gene_ii),&
+                          " ",summary_fitness%upper_hinge(gene_ii),&
+                          " ", summary_fitness%median(gene_ii), " ", &
+                          summary_fitness%lower_hinge(gene_ii), " ", &
+                          summary_fitness%minimum(gene_ii)
+      endif
 
-        
       !! TODO: To record the best fitness value and solution per generation (write them to a output file)
 
       ! ========================================================== !
@@ -764,71 +781,106 @@ Contains
         exit
       endif
 
-      i = 1
-      j = opt_pop_size
-      pre_fitv = INV
-      sorted_fitness = 0.0
-      sorted_pop     = 0._rk
-      !** Store the best fitness and population of opt_elitism to the array sorted_fitness and sorted_pop --
-      !** Note that the repeated fitness and population is excluded ----------------------------------------
-      do while(i .le. opt_elitism)
-        if (j .eq. 0) then
-          print *,"too many duplicates lead to insufficient elitism"
-          call exit(status)
-        endif
-        idx = sorted_index(j)
-        curr_fitv = fitness(idx)
-        if (curr_fitv .ne. pre_fitv) then
-          sorted_fitness(i) = curr_fitv
-          sorted_pop(:,i) = ini_pop(:,idx)
-          i = i + 1
-        endif
-        j = j - 1
-        pre_fitv = curr_fitv
-      enddo
-      if (PT_DEBUG) then
-        print *,"elitism:"
-        print *,sorted_fitness
-        print *,sorted_pop
-      endif
+      !** Only root rank 0 does the selection/crossover/mutation/elitism on the total population--------
+      if(rank_mpi .eq. ROOT) then 
+        if ( .Not.Allocated(sorted_pop) ) then                
+      !  Allocate(tmp_pop(nvals, opt_pop_size))
+          Allocate(sorted_pop(nvals, opt_elitism))
 
-      tmp_fitness = fitness
+      !  Allocate(tmp_fitness(opt_pop_size))
+          Allocate(sorted_fitness(opt_elitism))
 
-      !** Select the individual population/chromosome having the highest fitness probability ------
-      call selection(tmp_fitness, sel_par)
-      print *,sel_par
-      do i = 1,opt_pop_size
-        tmp_pop(:,i) = ini_pop(:,sel_par(i))
-        tmp_fitness(i) = fitness(sel_par(i))
-      enddo   
-      ini_pop = tmp_pop
-      fitness = tmp_fitness
+      !  Allocate(sel_par(opt_pop_size))
 
-      !** The selected parents(pair) do the mating and bread two children to replace them ---------
-      call crossover(ini_pop, fitness, opt_pcrossover)
-      
-      if(PT_DEBUG) then    
-        print *,"After crossover: "
-        do i = 1,nvals
-          print *,ini_pop(i,:)
+
+      !  Allocate(sorted_index(opt_pop_size))
+
+      !  Allocate(summary_fitness%maximum(opt_num_gene))
+      !  Allocate(summary_fitness%mean(opt_num_gene))
+      !  Allocate(summary_fitness%upper_hinge(opt_num_gene))
+      !  Allocate(summary_fitness%median(opt_num_gene))
+      !  Allocate(summary_fitness%lower_hinge(opt_num_gene))
+      !  Allocate(summary_fitness%minimum(opt_num_gene))
+        endif   
+        i = 1
+        j = opt_pop_size
+        pre_fitv = INV
+        sorted_fitness = 0.0
+        sorted_pop     = 0._rk
+        !** Store the best fitness and population of opt_elitism to the array sorted_fitness and sorted_pop --
+        !** Note that the repeated fitness and population is excluded ----------------------------------------
+        do while(i .le. opt_elitism)
+          if (j .eq. 0) then
+            print *,"too many duplicates lead to insufficient elitism"
+            call exit(status)
+          endif
+          idx = sorted_index(j)
+          curr_fitv = fitness(idx)
+          if (curr_fitv .ne. pre_fitv) then
+            sorted_fitness(i) = curr_fitv
+            sorted_pop(:,i) = ini_pop(:,idx)
+            i = i + 1
+          endif
+          j = j - 1
+          pre_fitv = curr_fitv
         enddo
-        print *,fitness
-      endif
+        if (PT_DEBUG) then
+          print *,"elitism:"
+          print *,sorted_fitness
+          print *,sorted_pop
+        endif
 
-      !** To randomly mutate a parameter/gene ------------------------------------------------------
-      if(opt_pmutation .ne. 0.0) then
-        call mutation(ini_pop, fitness, opt_pmutation, opt_lb, opt_ub)
+        tmp_fitness = fitness
+
+        !** Select the individual population/chromosome having the highest fitness probability ------
+        call selection(tmp_fitness, sel_par)
+        
+        do i = 1,opt_pop_size
+          tmp_pop(:,i) = ini_pop(:,sel_par(i))
+          tmp_fitness(i) = fitness(sel_par(i))
+        enddo   
+        ini_pop = tmp_pop
+        fitness = tmp_fitness
+        if (PT_DEBUG) then
+          print *,"Before crossover: "
+          do i = 1,nvals
+            print *,ini_pop(i,:)
+          enddo
+        endif
+
+        !** The selected parents(pair) do the mating and bread two children to replace them ---------
+        call crossover(ini_pop, fitness, opt_pcrossover)
+        
+        if(PT_DEBUG) then    
+          print *,"After crossover: "
+          do i = 1,nvals
+            print *,ini_pop(i,:)
+          enddo
+          print *,fitness
+        endif
+
+        !** To randomly mutate a parameter/gene ------------------------------------------------------
+        if(opt_pmutation .ne. 0.0) then
+          call mutation(ini_pop, fitness, opt_pmutation, opt_lb, opt_ub)
+        endif
+        !** Replace the unfittest populations with the fittest ones, which are stored in sorted_pop ---
+        call elitism(fitness, ini_pop, sorted_pop, sorted_fitness)
       endif
-      !** Replace the unfittest populations with the fittest ones, which are stored in sorted_pop ---
-      call elitism(fitness, ini_pop, sorted_pop, sorted_fitness)
+      !** Perfrom scatter operation before getting into the next generation ------
+      call MPI_Scatter(fitness, opt_local_size, MPI_REAL, local_fitness, opt_local_size, MPI_REAL,&
+                    ROOT, MPI_COMM_WORLD, ierr ) ! Root scatters the updated fitness to all ranks
+      call MPI_Scatter(ini_pop, opt_local_size*nvals, MPI_REAL8, local_ini_pop, opt_local_size*nvals, MPI_REAL8,&
+                    ROOT, MPI_COMM_WORLD, ierr) ! Root scatters the updated population to all ranks
     enddo
 
+    if (rank_mpi .eq. ROOT) then
     ! Store the best solution to "ga_res"
-    ga_res%opt_bestsol      = ini_pop(:,max_pos)
-    ga_res%opt_fitnessvalue = fitness(max_pos)
+      ga_res%opt_bestsol      = ini_pop(:,max_pos)
+      ga_res%opt_fitnessvalue = fitness(max_pos)
 
-    call print_ga_summary(opt_pop_size, opt_num_gene, opt_elitism, opt_pcrossover, opt_pmutation, &
-              opt_target_region, opt_names, ga_res)
+      call print_ga_summary(opt_pop_size, opt_num_gene, opt_elitism, opt_pcrossover, opt_pmutation, &
+                opt_target_region, opt_names, ga_res)
+    endif
      
     select case (trim(opt_target_region))
       case("nuts2")
@@ -864,10 +916,12 @@ Contains
   !  deallocate(ini_pop)
   !  deallocate(fitness)
   
-  !  deallocate(tmp_pop)
+  !  deallocate(tmp_pop)if(rank_mpi .eq. 0) then
   !  deallocate(tmp_fitness)
-    deallocate(sorted_pop)
-    deallocate(sorted_fitness)
+    if(rank_mpi .eq. ROOT) then
+      deallocate(sorted_pop)
+      deallocate(sorted_fitness)
+    endif
   !  deallocate(sorted_index)
   !  deallocate(sel_par)
 
@@ -961,14 +1015,14 @@ Contains
     Integer,intent(in)                                     :: length
     Character(len=*)                                       :: s_date, e_date
     Integer                                                :: inteval_days, status, time_n
-    Character*10                                       :: seed_date_mod
+    Character*10                                           :: seed_date_mod
 
     !** Here we assume that the date is monotonically increased by days -----------------------
     obs_lb = 1
     eval_lb = 1
 
-    print *,s_date 
-    print *,e_date
+  !  print *,s_date 
+  !  print *,e_date
 
     !TODO: Move the calculation of inteval_days to support module
     inteval_days = Date2Unixtime(trim(s_date))&
@@ -992,8 +1046,6 @@ Contains
       obs_ub = obs_ub - inteval_days
     endif
 
-    print *,eval_lb," ",eval_ub, " ",obs_lb, " ",obs_ub
-
     !** Throw an error when the intersection is null ---------------------------
     if ((eval_lb .GT. eval_ub) .AND. (obs_lb .GT. obs_ub) .AND.&
      ((eval_ub - eval_lb) .NE. (obs_ub - obs_lb))) then
@@ -1008,9 +1060,9 @@ Contains
   !>
   !> The random number is between lb and ub.
   subroutine population(ini_pop, lb, ub, popsize, nvals)
-    Real(kind=rk),dimension(nvals,5),intent(inout) :: ini_pop
-    Real,intent(in)                               :: lb 
-    Real,intent(in)                               :: ub 
+    Real(kind=rk),dimension(nvals,opt_pop_size),intent(inout) :: ini_pop
+    Real,intent(in)                                           :: lb 
+    Real,intent(in)                                           :: ub 
     Integer,intent(in)                                     :: popsize 
     Integer,intent(in)                                     :: nvals
 
@@ -1029,13 +1081,13 @@ Contains
   !>
   !> Return the result indexes to sel_par.
   subroutine selection(fitness, sel_par)
-    Real, Dimension(opt_pop_size),intent(inout)           :: fitness
-    Integer, Dimension(size(fitness)),intent(inout)       :: sel_par
+    Real, Dimension(opt_pop_size),intent(inout)          :: fitness
+    Integer, Dimension(opt_pop_size),intent(inout)       :: sel_par
 
-    Real, Dimension(size(fitness))                        :: fscaled, prob
-    Real                                                  :: fmin, fave, fmax
-    Real                                                  :: delta, a, b
-    Integer                                               :: sfactor ! 2
+    Real, Dimension(opt_pop_size)                        :: fscaled, prob
+    Real                                                 :: fmin, fave, fmax
+    Real                                                 :: delta, a, b
+    Integer                                              :: sfactor ! 2
 
     sfactor = 2
     fmin = minval(fitness)
@@ -1071,14 +1123,15 @@ Contains
   !>
   !> The results are stored back to ini_pop and fitness.
   subroutine crossover(ini_pop, fitness, pcrossover) 
-    Real(kind=rk),dimension(nvals,opt_pop_size),intent(inout) :: ini_pop
-    Real,dimension(opt_pop_size),intent(inout)                :: fitness
-    Real,intent(in)                                           :: pcrossover
+    Real,dimension(opt_pop_size),intent(inout)                   :: fitness
+    Real(kind=rk),dimension(nvals,opt_pop_size),intent(inout)    :: ini_pop
+    
+    Real,intent(in)                                            :: pcrossover
 
-    Integer,dimension(:),Allocatable                          :: sample_input, sample_parents
-    Integer                                                   :: start_id, end_id, nmating,i,j,len
-    Real(kind=rk)                                             :: ran
-    Real(kind=rk),dimension(:),Allocatable                    :: lchild, rchild
+    Integer,dimension(:),Allocatable                           :: sample_input, sample_parents
+    Integer                                                    :: start_id, end_id, nmating,i,j,len
+    Real(kind=rk)                                              :: ran
+    Real(kind=rk),dimension(:),Allocatable                     :: lchild, rchild
 
     nmating = floor(size(fitness)/2.0) !get the floor
     len = size(ini_pop,dim=1)
@@ -1096,7 +1149,6 @@ Contains
       print *,"The crossovered pairs: "
       print *,sample_parents
     endif
-    
     
     do i = 1, nmating 
       call random_number(ran)
@@ -1134,16 +1186,17 @@ Contains
   !>
   !> The results are stored back to ini_pop and fitness.
   subroutine mutation(ini_pop, fitness, pmutation, lb, ub)
-    Real(kind=rk),dimension(nvals,opt_pop_size),intent(inout) :: ini_pop
     Real,dimension(opt_pop_size),intent(inout)                :: fitness
-    Real,intent(in)                                           :: pmutation
-    Real, intent(in)                                          :: lb, ub
+    Real(kind=rk),dimension(nvals,opt_pop_size),intent(inout) :: ini_pop
+    
+    Real,intent(in)                                         :: pmutation
+    Real, intent(in)                                        :: lb, ub
 
-    Integer,dimension(size(ini_pop,dim=1))                    :: sample_input
-    Integer,dimension(1)                                      :: sample_parents
-    Integer                                                   :: i
-    Real                                                      :: ran
-    Real(kind=rk)                                             :: Res
+    Integer,dimension(size(ini_pop,dim=1))                  :: sample_input
+    Integer,dimension(1)                                    :: sample_parents
+    Integer                                                 :: i
+    Real                                                    :: ran
+    Real(kind=rk)                                           :: Res
 
     do i = 1,size(sample_input)
       sample_input(i) = i
@@ -1154,7 +1207,7 @@ Contains
         sample_parents = sample_i4(sample_input,size(sample_parents)) ! Randomly generate the mutated gene/parameter
         Res = random_uniform(lb,ub)
         ini_pop(sample_parents(1),i) = Res  
-        print *,"Mutation: chromosome ",i,",gene: ",sample_parents(1),",res: ", Res
+      !  print *,"Mutation: chromosome ",i,",gene: ",sample_parents(1),",res: ", Res
         fitness(i) = INV ! Invalidate the mutated chromosome/population
       endif
     enddo
@@ -1165,12 +1218,12 @@ Contains
   !>
   !> The results are stored back to ini_pop and fitness.
   subroutine elitism(fitness, ini_pop, sorted_pop, sorted_fitness)
-    Real(kind=rk),dimension(nvals,opt_pop_size),intent(inout) :: ini_pop
-    Real,dimension(opt_pop_size),intent(inout)                :: fitness
-    Real(kind=rk),dimension(:,:),Allocatable,intent(in)       :: sorted_pop                                   
-    Real,dimension(:),Allocatable,intent(in)                  :: sorted_fitness
-    Integer,dimension(size(fitness))                          :: sorted_index
-    Integer                                                   :: num
+    Real(kind=rk),dimension(nvals,opt_pop_size),intent(inout)     :: ini_pop
+    Real,dimension(opt_pop_size),intent(inout)                    :: fitness
+    Real(kind=rk),dimension(:,:),Allocatable,intent(in)           :: sorted_pop                                   
+    Real,dimension(:),Allocatable,intent(in)                      :: sorted_fitness
+    Integer,dimension(size(fitness))                              :: sorted_index
+    Integer                                                       :: num
 
     call SORTRX_REAL(size(fitness),fitness,sorted_index) ! Fitness in an ascending order
     num = size(sorted_fitness)
@@ -1181,7 +1234,7 @@ Contains
     
     if(PT_DEBUG) then
       print *,fitness 
-      do num = 1,size(ini_pop,1)
+      do num = 1,size(ini_pop,dim=1)
         print *,ini_pop(num,:)
       enddo
     endif
@@ -1219,20 +1272,19 @@ Contains
   !>
   !> This adds a mean value on top of the existing five number summary
   subroutine sixnum_summary(fitness, sorted_index, max, min, mean, median, upper_hinge, lower_hinge)
-    Real,dimension(opt_pop_size),intent(in)     :: fitness
-    Integer,dimension(opt_pop_size),intent(in)  :: sorted_index
+    Real,dimension(opt_pop_size),intent(in)         :: fitness
+    Integer,dimension(opt_pop_size),intent(in)      :: sorted_index
 
     Real, intent(out)                           :: max, min, mean, median, upper_hinge, lower_hinge
-    Integer                                     :: pop_size, half, i, j
+    Integer                                     :: half, i, j
 
-    pop_size = size(fitness)
-    max = fitness(sorted_index(pop_size))
+    max = fitness(sorted_index(opt_pop_size))
     min = fitness(sorted_index(1))
-    mean = Sum(fitness)/pop_size
+    mean = Sum(fitness)/opt_pop_size
 
-    median = get_median(fitness, sorted_index, pop_size)
-    half = pop_size/2.0
-    upper_hinge = get_median(fitness, sorted_index((half+1):pop_size), pop_size-half) ! Get the median of the second half
+    median = get_median(fitness, sorted_index, opt_pop_size)
+    half = opt_pop_size/2.0
+    upper_hinge = get_median(fitness, sorted_index((half+1):opt_pop_size), opt_pop_size-half) ! Get the median of the second half
     lower_hinge = get_median(fitness, sorted_index(1:half), half) ! Get the median of the first half
   end subroutine sixnum_summary
  
@@ -1240,11 +1292,12 @@ Contains
   !> Function that returns the median value of an ordered array
   !>
   function get_median(dataset, sorted_index, len) Result(med)
-    Real,dimension(opt_pop_size),intent(in)      :: dataset
-    Integer,intent(in)                           :: len
-    Integer,dimension(len),intent(in)            :: sorted_index
-    Real                                         :: med
-    Integer                                      :: length, half
+    Real,dimension(opt_pop_size),intent(in)        :: dataset
+    Integer,intent(in)                             :: len
+    Integer,dimension(len),intent(in)              :: sorted_index
+    Real                                           :: med
+
+    Integer                                        :: length, half
 
     length = size(sorted_index)
     half = length/2
