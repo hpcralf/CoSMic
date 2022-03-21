@@ -182,7 +182,6 @@ Contains
 
     Integer                                       :: elapsed_days, num_actudays
     Integer(kind=ik)                              :: iter
-
     Integer                                       :: R0_effects_dim1size
 
     !=================================================
@@ -252,7 +251,7 @@ Contains
     Character(len=10), dimension(nvals)           :: opt_names
     Real                                          :: opt_lb, opt_ub
     Character(len=10)                             :: opt_target_region
-    Integer, dimension(nvals)                     :: opt_index
+    Integer, dimension(nvals)                     :: opt_index, opt_week_index
 
     Integer                                       :: opt_local_size ! The number of local population when there are more than two MPI ranks
 
@@ -284,7 +283,7 @@ Contains
     opt_ub = 1.0
    
     opt_local_size = opt_pop_size/size_mpi
-    if ((opt_local_size .eq. 0) .and. (mod(opt_pop_size,size_mpi) .ne. 0)) then
+    if ((opt_local_size .eq. 0) .or. (mod(opt_pop_size,size_mpi) .ne. 0)) then
       print *,"Error: too many ranks or the population is not divisable by rank size!"
       Call exit(status)
     endif
@@ -297,6 +296,7 @@ Contains
 
     coff_len = 7
     R0_effects_dim1size = size(R0_effects,dim=1)
+    print *,R0_effects_dim1size
   
     select case (trim(opt_target_region))
       !** When the optimized target region is "Nuts2" ------------------
@@ -512,7 +512,6 @@ Contains
     !** Preparation for preprocessing the parameters subject to optimization -----------------------------------------------
     !** Collect the indexes where the R0 effect data should be replaced with the input that is subject to optimization -----
     opt_index = 0
-   
     do j=1,nvals
       do i=1,size(iol%R0_effect%head)
           if (index(trim(opt_names(j)), trim(iol%R0_effect%head(i))) .ne. 0) then
@@ -524,6 +523,18 @@ Contains
         print *,"Error: the optimized target region is not expected!"
         Call exit(status)
       endif
+    enddo
+
+    opt_week_index = 0
+    tail_pos = len(trim(opt_names(1)))
+    do i = 1,nvals
+      READ(opt_names(i)(tail_pos:tail_pos), "(I4)") j
+      ! Parameter checking
+      if (j .gt. R0_effects_dim1size) then
+        print *,"Error: the given optimized target is beyond the expected range of R0_effects!"
+        Call exit(status)
+      endif
+      opt_week_index(i) = j
     enddo
      
   !  Allocate(fitness(opt_pop_size))
@@ -553,17 +564,9 @@ Contains
           cycle
         endif
         !** Preprocess the R0 effect data according to the generated population ----
-        tail_pos = len(trim(opt_names(1)))
         startid = 1
         do i = 1,nvals
-          !! TODO: move it outside of the loop
-          READ(opt_names(i)(tail_pos:tail_pos), "(I4)") j
-          ! Parameter checking
-          if (j .gt. R0_effects_dim1size) then
-            print *,"Error: the given optimized target is beyond the expected range of R0_effects!"
-            Call exit(status)
-          endif
-          R0_effects(j,opt_index(i)) = local_ini_pop(startid,pop_ii)
+          R0_effects(opt_week_index(i),opt_index(i)) = local_ini_pop(startid,pop_ii)
           startid = startid + 1
         enddo
            

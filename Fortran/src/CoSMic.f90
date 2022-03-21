@@ -47,7 +47,8 @@ Program CoSMic
 
   Use global_constants
   Use global_types
-  Use global_vars  
+  Use global_vars
+  Use genetic_algorithm   
 
   !! Legacy Modules --------------------------------------------------
   Use cosmic_io
@@ -111,6 +112,10 @@ Program CoSMic
   Integer(kind=ik)                               :: num_counties
   Integer(kind=ik)                               :: num_regions
   !=============================================================================
+
+  Character(len=:), allocatable                  :: exec_type
+  Integer(kind=ik),dimension(:), Allocatable     :: full_region_index ! Required by "optimization"
+  Integer,dimension(:,:,:), Allocatable          :: ill_ICU_cases_final ! Store the evaluated ICU cases
   Call mpi_init(ierr)
 
   Call MPI_COMM_RANK(MPI_COMM_WORLD, rank_mpi, ierr)
@@ -195,6 +200,7 @@ Program CoSMic
    
   End If
 
+  Call pt_get("#exec.procedure",exec_type)
   Call start_Timer("Broadcast input data")
 
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%counties)
@@ -203,6 +209,13 @@ Program CoSMic
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%death)
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%pop)
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%connect_work)
+
+  !** Specifically for "optimization" execution procedure 
+  If (trim(exec_type) .EQ. "Optimization") Then
+     Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%states)
+     Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%obsicu_state)
+     Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%obsicu_nuts2)
+  End If
 
   call pt_get("#R0_effects",R0_effects_fn)
 
@@ -326,7 +339,7 @@ Program CoSMic
 
         R0_effects = reshape(R0_effects_lhc(ii,1:num_regions*(cur_week+1)),(/cur_week+1,num_regions/))
 
-        Call COVID19_Spatial_Microsimulation_for_Germany(iol, &
+       ill_ICU_cases_final = COVID19_Spatial_Microsimulation_for_Germany(iol, &
              iter_s, iter_e , &
              inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
              less_contagious, R0_force, immune_stop, &
@@ -344,17 +357,6 @@ Program CoSMic
      ! Execute single model instance ===========================================
      Call start_Timer("Exec. Simulation")
      
-     if ( mod(iter,size_mpi) .NE. 0 ) then
-        n_iter = Int(iter / size_mpi ) + 1
-     else
-        n_iter = Int(iter / size_mpi )
-     End if
-     
-     iter_s = rank_mpi * n_iter + 1
-     iter_e = min((rank_mpi + 1 ) * n_iter , iter)
-     
-     write(*,*)rank_mpi,iter_s,iter_e,n_iter,iter
-
      if (trim(region) == "states") then
 
         write(*,*)"Found head iol%R0_effect%head: ",iol%R0_effect%head
@@ -380,13 +382,39 @@ Program CoSMic
      end if
 
      write(*,*)region_index
-     Call COVID19_Spatial_Microsimulation_for_Germany(iol, &
-          iter_s, iter_e , &
-          inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
-          less_contagious, R0_force, immune_stop, &
-          R0change, R0delay ,R0delay_days, R0delay_type, &
-          control_age_sex, seed_date, seed_before, sam_size, R0, &
-          R0_effects, region_index, output_dir, export_name, rank_mpi)
+
+     if (trim(exec_type) .EQ. "Optimization") then ! Optimization
+       full_region_index = region_index
+       iter_s = 1
+       iter_e = iter
+       call ga(&
+        iol, &
+        iter_s, iter_e, &
+        inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
+        less_contagious, R0_force, immune_stop, &
+        R0change, R0delay, R0delay_days, R0delay_type, &
+        control_age_sex, seed_date, seed_before, sam_size, R0, &
+        R0_effects, full_region_index, region_index, output_dir, export_name, rank_mpi, size_mpi)
+
+     Else ! Basic-Param
+       if ( mod(iter,size_mpi) .NE. 0 ) then
+          n_iter = Int(iter / size_mpi ) + 1
+       else
+          n_iter = Int(iter / size_mpi )
+       End if
+       
+       iter_s = rank_mpi * n_iter + 1
+       iter_e = min((rank_mpi + 1 ) * n_iter , iter)
+       
+       write(*,*)rank_mpi,iter_s,iter_e,n_iter,iter
+       ill_ICU_cases_final = COVID19_Spatial_Microsimulation_for_Germany(iol, &
+            iter_s, iter_e , &
+            inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
+            less_contagious, R0_force, immune_stop, &
+            R0change, R0delay ,R0delay_days, R0delay_type, &
+            control_age_sex, seed_date, seed_before, sam_size, R0, &
+            R0_effects, region_index, output_dir, export_name, rank_mpi)
+     endif
      
      Call end_Timer("Exec. Simulation")
 
