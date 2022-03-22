@@ -49,6 +49,7 @@ module CoSMic_IO
   
   Use global_constants
   Use global_types
+  Use global_vars
   Use support_fun, Only: get_file_N
 
   use mpi
@@ -134,8 +135,6 @@ contains
          data=iol%counties &
          )
 
-    call open_and_index(trim(filename),un_in,index)
-
     !Read R0_effects -------------------------------------------------
     call pt_get("#R0_effects",filename)
 
@@ -164,6 +163,19 @@ contains
     write(*,'(A)')"!#  COVID-19 Spatial Microsimulation  ---  For Germany  ########################"
     write(*,'(A)')"!###############################################################################"
     write(*,*)
+
+    write(un_lf,*)
+    write(un_lf,'(A)')"!###############################################################################"
+    write(un_lf,'(A)')"!###############################################################################"
+    write(un_lf,'(A)')"!#      ___      __         _      "
+    write(un_lf,'(A)')"!#     / __\___ / _\  /\/\ (_) ___ "
+    write(un_lf,'(A)')"!#    / /  / _ \\ \  /    \| |/ __|"
+    write(un_lf,'(A)')"!#   / /__| (_) |\ \/ /\/\ \ | (__ "
+    write(un_lf,'(A)')"!#   \____/\___/\__/\/    \/_|\___|"
+    write(un_lf,'(A)')"!#"
+    write(un_lf,'(A)')"!#  COVID-19 Spatial Microsimulation  ---  For Germany  ########################"
+    write(un_lf,'(A)')"!###############################################################################"
+    write(un_lf,*)
 
   end subroutine print_cosmic_head
   
@@ -255,8 +267,8 @@ contains
        stop
     end if
 
-    write(*,'(80("-"))')
-    write(*,'(A,1X,A)')"Read report for file",trim(filename)
+    write(un_lf,'(80("-"))')
+    write(un_lf,'(A,1X,A)')"Read report for file",trim(filename)
     
     !! -------------------------------------------------------------------------
     !! Determine dimension of table --------------------------------------------
@@ -276,7 +288,7 @@ contains
 
     !! Warning in case maximum line length is almost used up ------
     if (len_trim(l_head) >= (len(l_head)*0.9)) then
-       write(*,'("WW read_TableData:",A,I0)') &
+       write(un_lf,'("WW read_TableData:",A,I0)') &
             "Length of header line reaches limit of ",len(l_head)
     end if
 
@@ -315,8 +327,8 @@ contains
 
     End if
 
-    write(*,'(A,1X,I0,1X,A)',ADVANCE="NO")"Head with size",size(data%head),"is set to      "
-    write(*,'(*("|",A))')data%head
+    write(un_lf,'(A,1X,I0,1X,A)',ADVANCE="NO")"Head with size",size(data%head),"is set to      "
+    write(un_lf,'(*("|",A))')data%head
     
     !! -------------------------------------------------------------------------
     !! Determine type and in case of character the length of the columns -------
@@ -333,7 +345,7 @@ contains
 
     !! size(data%col_lengths) has to be equal dim2+1.
     if ( size(data%col_lengths) .NE. dim2 ) then
-       write(*,'("WW read_TableData: ",A,/,A,L,2(/,A,I0))') &
+       write(un_lf,'("WW read_TableData: ",A,/,A,L,2(/,A,I0))') &
             "Wrong number of data columns in first data line", &
             "Rownames                            :",loc_rownames, &
             "Number of columns in first data line:",size(data%col_lengths), &
@@ -351,18 +363,18 @@ contains
 
        !! Warning in case maximum line length is almost used up ------
        if (len_trim(l_head) >= (len(l_head)*0.9)) then
-          write(*,'("WW read_TableData:",A,I0)') &
+          write(un_lf,'("WW read_TableData:",A,I0)') &
                "Length of header line reaches limit of ",len(l_head)
        end if
     
        !! In case a different number of columns than before was found ---
        if ( (       loc_rownames .AND. (size(data%col_lengths) .NE. size(tmp_col_lengths)-1) ) .OR. &
             ( .NOT. loc_rownames .AND. (size(data%col_lengths) .NE. size(tmp_col_lengths)  ) ) ) then
-          write(*,'("WW read_TableData:",A,1X,I0)') &
+          write(un_lf,'("WW read_TableData:",A,1X,I0)') &
                "Different number of columns in data line", ii
-          write(*,'("WW read_TableData:",A,1X,I0)') &
+          write(un_lf,'("WW read_TableData:",A,1X,I0)') &
                "size(data%col_lengths) =",size(data%col_lengths)
-          write(*,'("WW read_TableData:",A,1X,I0)') &
+          write(un_lf,'("WW read_TableData:",A,1X,I0)') &
                "size(tmp_col_lengths) =",size(tmp_col_lengths)
        End if
 
@@ -385,10 +397,10 @@ contains
 
     rewind(un)
 
-!    if (PT_DEBUG) then
-       write(*,PTF_M_A)"Column types  :",data%col_types
-       write(*,PTF_M_AI0)"Column lengths:",data%col_lengths
-!    End if
+    !! if (PT_DEBUG) then
+       write(un_lf,PTF_M_A)"Column types  :",data%col_types
+       write(un_lf,PTF_M_AI0)"Column lengths:",data%col_lengths
+    !! End if
 
     !! If rownmaes are included allocate the rowname field ---
     if (loc_rownames) then
@@ -510,7 +522,7 @@ contains
     End Do
     
     If (nc == 0) then
-       Write(*,*)"WW table_to_real_array: Found no real columns !"
+       Write(un_lf,PTF_W_A)"table_to_real_array: Found no real columns !"
     End If
     
     Allocate(array(table%data_size(1),nc))
@@ -546,7 +558,7 @@ contains
     End Do
     
     if (.not. allocated(col)) then
-       write(*,*)"WW get_int_column:",trim(col_name)," could not be found."
+       write(un_lf,PTF_W_A)"get_int_column:",trim(col_name)," could not be found."
     End if
     
   End Function get_int_table_column
@@ -572,7 +584,7 @@ contains
     End Do
     
     if (.not. allocated(col)) then
-       write(*,*)"WW get_real_column:",trim(col_name)," could not be found."
+       write(un_lf,PTF_W_A)"get_real_column:",trim(col_name)," could not be found."
     End if
     
   End Function get_real_table_column
@@ -599,7 +611,7 @@ contains
     End Do
     
     if (.not. allocated(col)) then
-       write(*,*)"WW get_char_column:",trim(col_name)," could not be found."
+       write(un_lf,PTF_W_A)"get_char_column:",trim(col_name)," could not be found."
     End if
     
   End Function get_char_column
@@ -626,7 +638,7 @@ contains
     End Do
 
     if (.not. associated(col)) then
-       write(*,*)"WW get_int_column_pointer:",trim(col_name)," could not be found."
+       write(un_lf,PTF_W_A)"get_int_column_pointer:",trim(col_name)," could not be found."
     End if
     
   End Function get_int_column_pointer
@@ -653,7 +665,7 @@ contains
     End Do
     
     if (.not. associated(col)) then
-       write(*,*)"WW get_real_column_pointer:",trim(col_name)," could not be found."
+       write(un_lf,PTF_W_A)"get_real_column_pointer:",trim(col_name)," could not be found."
     End if
     
   End Function get_real_column_pointer
