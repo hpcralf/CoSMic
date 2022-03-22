@@ -96,20 +96,20 @@ Module kernel
   
 Contains
   
-  Subroutine COVID19_Spatial_Microsimulation_for_Germany( &
+  function COVID19_Spatial_Microsimulation_for_Germany( &
        iol, &
        iter_s, iter_e, &
        inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
        less_contagious, R0_force, immune_stop, &
        R0change, R0delay ,R0delay_days, R0delay_type, &
        control_age_sex, seed_date, seed_before, sam_size, R0, &
-       R0_effects, region_index, output_dir, export_name, proc)
+       R0_effects, region_index, output_dir, export_name, proc ) Result(ill_ICU_cases_final)
 
     !===========================================================================
     ! Declaration
     !===========================================================================
 
-    Type(iols), Target                                        :: iol
+    Type(iols), Target                           , intent(in) :: iol
     Integer(kind=ik)                             , intent(in) :: iter_s, iter_e
     Integer(kind=ik)                             , intent(in) :: inf_dur
     Integer(kind=ik)                             , intent(in) :: cont_dur
@@ -129,10 +129,10 @@ Contains
     Integer(kind=ik)                             , intent(in) :: sam_size
     Real(kind=rk)                                , intent(in) :: R0
     Real(kind=rk),    Allocatable, Dimension(:,:),intent(in)  :: R0_effects
-    Integer(kind=ik)                             , intent(in) :: proc
     integer(kind=ik), allocatable, dimension(:)  , intent(in) :: region_index
     character(len=:), Allocatable                , intent(in) :: output_dir
     character(len=:), Allocatable                , intent(in) :: export_name
+    Integer(kind=mpi_ik)                         , intent(in) :: proc
     
     !--------------------------------------------------------------------------
 
@@ -312,7 +312,7 @@ Contains
     else
        start_time = 1
     end if
-        
+      
     Allocate(healthy_cases_final   (num_counties,time_n,n_iter))
     Allocate(inf_noncon_cases_final(num_counties,time_n,n_iter))
     Allocate(inf_contag_cases_final(num_counties,time_n,n_iter))
@@ -876,7 +876,7 @@ Contains
        write(*,PTF_M_AI0)"Entering CoSMic_TimeLoop on proc",proc
        
        Call CoSMic_TimeLoop(time_n, pop_size, size(counties_index), counties_index, &
-            Real(R0matrix,rk), Real(connect,rk), surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim ,&
+            Real(R0matrix,rk), connect, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim ,&
             healthy_cases_final, inf_noncon_cases_final,inf_contag_cases_final, &
             ill_contag_cases_final, ill_ICU_cases_final,  &
             immune_cases_final,dead_cases_final, &
@@ -894,7 +894,6 @@ Contains
        days             = +1
 
        l_seed_date        = add_date(l_seed_date,days)
-
     End Do     ! end do it_ss
     !$OMP END DO
     !$OMP END PARALLEL
@@ -927,7 +926,7 @@ Contains
     
     call end_timer("+- Writeout")
 
-  End Subroutine COVID19_Spatial_Microsimulation_for_Germany
+  End Function COVID19_Spatial_Microsimulation_for_Germany
 
   Subroutine write_data(filename, data, R0_effects)
 
@@ -1103,7 +1102,7 @@ Contains
   !> Model Timeloop
   Subroutine CoSMic_TimeLoop(&
        time_n, pop_size, n_counties, counties, &
-       R0matrix, connect, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, &
+       R0matrix, tmp_connect, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, &
        sim, &
        healthy_cases, inf_noncon_cases, inf_contag_cases, ill_contag_cases,&
        ill_ICU_cases , immune_cases, dead_cases , &
@@ -1115,7 +1114,8 @@ Contains
     Integer(Kind=ik), Dimension(n_counties), Intent(In) :: counties
     
     Real(Kind=rk)   , Dimension(n_counties,2:time_n)  , Intent(In) ::  R0matrix
-    Real(Kind=rk)   , Dimension(n_counties,n_counties), Intent(In) ::  connect
+    Real            , Allocatable, Dimension(:,:)     , Intent(In) ::  tmp_connect
+  !  Real(Kind=rk)   , Dimension(n_counties,n_counties), Intent(In) ::  connect
     Real(Kind=rk)   , Allocatable, Dimension(:,:)     , Intent(In) ::  surv_ill_pas
     Real(Kind=rk)   , Allocatable, Dimension(:,:,:)   , Intent(In) ::  ICU_risk_pasd
     Real(Kind=rk)   , Allocatable, Dimension(:,:)     , Intent(In) ::  surv_icu_pas
@@ -1161,10 +1161,21 @@ Contains
     Integer                                          :: int_storage_size
     Integer(kind=1)                                  :: std_int1
     Integer                                          :: int1_storage_size
+
+    Real(Kind=rk)   , Dimension(n_counties,n_counties) ::  connect
+    Integer                                            :: len
     
     !===========================================================================
     ! Implementation
     !===========================================================================
+
+    len = size(tmp_connect,dim=1)
+    connect = 0_rk
+    do ii = 1,len
+      do nn = 1,len
+        connect(ii,nn) = Real(tmp_connect(ii,nn),rk)
+      enddo
+    enddo
 
     !** init default integer storage size --------
     int_storage_size  = storage_size(std_int)  / FILE_STORAGE_SIZE
@@ -1260,11 +1271,15 @@ Contains
        !** Number of people who are at risk in population ---
        at_risk = state_count_t1(healthy)
 
-       risk_pl = state_count_pl(inf_contag,:) +  state_count_pl(ill_contag,:) * less_contagious
+       Do ii = 1, n_counties
+          risk_pl(ii) = Real(state_count_pl(inf_contag,ii),rk) +  Real(state_count_pl(ill_contag,ii),rk) * less_contagious
+       End Do
+    !   risk_pl = state_count_pl(inf_contag,:) +  state_count_pl(ill_contag,:) * less_contagious
 
        risk_pl = risk_pl * R0matrix(:,timestep)
 
        risk_pl = w_int * risk_pl + (1._rk - w_int) * Matmul(risk_pl, connect)
+
 
        Do ii = 1, n_counties
           risk_pl(ii) = risk_pl(ii) / sum(state_count_pl([healthy,immune, &

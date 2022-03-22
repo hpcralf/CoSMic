@@ -106,7 +106,7 @@ am_CoSMic_OBJECTS = mod_precision.$(OBJEXT) mod_globals.$(OBJEXT) \
 	mod_pt.$(OBJEXT) mod_list_variable.$(OBJEXT) \
 	quicksort_non_recur.$(OBJEXT) mod_qsort_c_module.$(OBJEXT) \
 	mod_support_fun.$(OBJEXT) mod_CoSMic_IO.$(OBJEXT) \
-	mod_CoSMic.$(OBJEXT) CoSMic.$(OBJEXT)
+	mod_CoSMic.$(OBJEXT) mod_GA.$(OBJEXT) CoSMic.$(OBJEXT)
 CoSMic_OBJECTS = $(am_CoSMic_OBJECTS)
 CoSMic_LDADD = $(LDADD)
 AM_V_P = $(am__v_P_@AM_V@)
@@ -252,7 +252,7 @@ CoSMic_SOURCES = mod_precision.f90 mod_globals.f90  \
                  mod_urandom.f90 \
 		 mod_pt_precision.f90 mod_pt_constants.f90 mod_pt_types.f90 mod_pt.f90 \
                  mod_list_variable.f90  quicksort_non_recur.f90 mod_qsort_c_module.f90 \
-                 mod_support_fun.f90 mod_CoSMic_IO.f90 mod_CoSMic.f90  \
+                 mod_support_fun.f90 mod_CoSMic_IO.f90 mod_CoSMic.f90 mod_GA.f90 \
                  CoSMic.f90
 
 all: all-am

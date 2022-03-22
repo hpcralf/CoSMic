@@ -69,6 +69,7 @@ contains
 
     !=================================================================
     Character(len=:), allocatable :: filename
+    Character(len=:), allocatable :: exec_type
     !=================================================================
 
     ! Read data from file: Transition probabilities ------------------
@@ -134,6 +135,27 @@ contains
          trim(filename),sep=",",head=.TRUE., &
          data=iol%counties &
          )
+
+    !read data from file to obsicu_state
+    call pt_get("#exec.procedure",exec_type)
+
+    if (trim(exec_type) .eq. "Optimization") then
+      call pt_get("#icu_cases",filename)
+
+      call read_TableData( &
+           trim(filename),sep=",",head=.TRUE., &
+           data=iol%obsicu_state &
+           )
+
+      call pt_get("#icu_cases_nuts2",filename)
+
+      call read_TableData( &
+           trim(filename),sep=",",head=.TRUE., &
+           data=iol%obsicu_nuts2 &
+           )
+    endif
+
+!    call open_and_index(trim(filename),un_in,index)
 
     !Read R0_effects -------------------------------------------------
     call pt_get("#R0_effects",filename)
@@ -354,6 +376,7 @@ contains
 
     !! Determine column type and maximum data length --------------
     !! First data line was already analysed so start at 2. --------
+
     Do ii = 2, dim1
 
        Read(un,'(A)')l_head

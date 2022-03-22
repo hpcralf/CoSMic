@@ -1208,10 +1208,15 @@ Integer     :: year,month,day
 Integer     :: iy,im,a
 real        :: JD
 
-Cyear  = Date(1:4)
-Cmonth = Date(6:7)
-Cday   = Date(9:10)
-
+if (index(Date,"-") .ne. 0) then
+  Cyear  = Date(1:4)
+  Cmonth = Date(6:7)
+  Cday   = Date(9:10)
+elseif (index(Date,"/") .ne. 0) then
+  Cday   = Date(1:2)
+  Cmonth = Date(4:5)
+  Cyear  = Date(7:10)
+endif
 !print*,year,month,day
 ! read(Cyear,*)year
 read(Cyear,'(I4)')year
