@@ -1543,7 +1543,7 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
             
             if ( class(tmp) == "character" ) {
                 sl <- str_length(paste(tmp,collapse=","))
-                if ( sl > 80 ) {
+                if ( (sl > 80) & (length(tmp) > 1) ) {
                     s  <- seq(1,length(tmp),by=as.integer(sl/80))
                     ss <- s[1:(length(s))]
                     se <- s[2:(length(s))]
@@ -1564,7 +1564,7 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
                     cat(paste0(paste(tmp,collapse=","),'\n'))
                 } else {                   
                     sl <- str_length(paste(as.integer(tmp),collapse=","))
-                    if ( sl > 80 ) {
+                    if ( (sl > 80) & (length(tmp) > 1) ) {
                         s  <- seq(1,length(tmp),by=as.integer(sl/80))
                         ss <- s[1:(length(s))]
                         se <- s[2:(length(s))]-1
@@ -1676,9 +1676,15 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
         cat(paste0('"',outpath,'R0_effects.csv"','\n'))
         write.table(pspace[[which(names(pspace) == "R0effect")]]$param,
                     paste0(outpath,"R0_effects.csv"), row.names=TRUE,sep=" ")
+    } else if ( class(pspace[[which(names(pspace) == "R0effect")]]$param) == "list" ) {
+        cat(paste(paste0("#","R0_effects"),", c , 1\n"))
+        cat(paste0('"',outpath,'R0_effects.csv"','\n'))
+        write.table(pspace[[which(names(pspace) == "R0effect")]]$param[[1]],
+                    paste0(outpath,"R0_effects.csv"), row.names=TRUE,sep=" ")
+        warning(paste("Only first Element of R0effect was written since more is not implemented right now."))
     } else {
-        warning(paste("R0effect was not written since only character or ",
-                      "data.frame type arguments can be handeled."))
+        warning(paste("R0effect was not written since only character. data.frame or ",
+                      "partially list type arguments can be handeled."))
     }
     sink()
 }
