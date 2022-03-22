@@ -158,7 +158,7 @@ Contains
     Integer,Allocatable             :: il_d(:),inf_c_d(:),inf_nc_d(:)
     Integer,Allocatable             :: rownumbers_ill(:),rownumbers_cont(:),rownumbers_ncont(:)
     Integer,Allocatable             :: rownumbers_left(:),rownumbers_dea(:)
-    Integer,Allocatable             :: gettime(:)
+    Integer,Allocatable             :: gettime(:),ur(:)
     Real,Allocatable                :: getchange(:)
     Integer                         :: inf_ill,inf_cont,inf_ncont,inf_dth
 
@@ -225,12 +225,14 @@ Contains
     character(len=:), Allocatable                   :: cp_dir
     
     character(len=8)                                :: cp_time_char
-    Logical                                         :: cp_exist
+    Logical                                         :: cp_exist, cp_unit_open 
     
     Integer                                         :: std_int
     Integer                                         :: int_storage_size
     Integer(kind=1)                                 :: std_int1
     Integer                                         :: int1_storage_size
+
+    Integer(kind=8)                                 :: wpos
     !===========================================================================
     ! Implementation
     !===========================================================================
@@ -344,7 +346,9 @@ Contains
     seed_ill%date     = inf_seed_date(temp)
     seed_ill%cases    = inf_seed_cases(temp)
 
-    write(* ,*)"sum(seed_ill%cases):",sum(seed_ill%cases),size(seed_ill%cases)
+    if (PT_DEBUG) then
+       write(un_lf,*)"sum(seed_ill%cases):",sum(seed_ill%cases),size(seed_ill%cases)       
+    End if
 
     temp = get_index(inf_seed_date,seed_inf_cont_seq)
 
@@ -352,15 +356,19 @@ Contains
     seed_inf_cont%date     = inf_seed_date(temp)
     seed_inf_cont%cases    = inf_seed_cases(temp)
 
-    write(*,*)"sum(seed_inf_cont%cases):",sum(seed_inf_cont%cases)
-
+    if (PT_DEBUG) then
+       write(un_lf,*)"sum(seed_inf_cont%cases):",sum(seed_inf_cont%cases)
+    end if
+    
     temp = get_index(inf_seed_date,seed_inf_ncont_seq)
     seed_inf_ncont%dist_id  = inf_seed_distid(temp)
     seed_inf_ncont%date     = inf_seed_date(temp)
     seed_inf_ncont%cases    = inf_seed_cases(temp)
 
-    write(*,*)"sum(seed_inf_ncont%cases):",sum(seed_inf_ncont%cases)
-
+    if (PT_DEBUG) then
+       write(un_lf,*)"sum(seed_inf_ncont%cases):",sum(seed_inf_ncont%cases)
+    end if
+    
     dea_seed_date   =  get_char_column(iol%death,'date')
     dea_seed_distid => get_int_column_pointer(iol%death,"distid")
     dea_seed_cases  => get_int_column_pointer(iol%death,'deaths')
@@ -398,8 +406,10 @@ Contains
     seed_ill%cases    = seed_ill%cases(temp)
     seed_ill_dur      = seed_ill_dur(temp)
 
-    write(*,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
-
+    if (PT_DEBUG) then
+       write(un_lf,*)"sum(seed_ill%cases):",sum(seed_ill%cases)
+    end if
+    
     if (PT_DEBUG) then
        write(un_lf,PTF_SEP)
        write(un_lf,PTF_M_A)"First 20 and last 20 seeds for ill cases."
@@ -563,6 +573,8 @@ Contains
        ! If we already have a restart file at the given timestep -----
        inquire(exist=cp_exist, &
             file=trim(output_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart")
+
+       cp_unit_open = .FALSE.
        
        if (cp_exist) then
           cp_write = .FALSE.
@@ -572,6 +584,7 @@ Contains
        else
           Open(newunit=cp_unit, action="write", status="replace", access="stream", &
                file=trim(output_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart")
+          cp_unit_open =.TRUE.
        end if
        
     End if
@@ -584,8 +597,10 @@ Contains
 
        Open(newunit=cp_reload_unit, action="read", status="old", access="stream", &
             file=trim(cp_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart")
-      
-    End if
+
+       Write(un_lf,PTF_M_A)"Opend checkpoint file:",&
+            trim(cp_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart"
+    End if      
     
 !!!=============================================================================
 !!! Non-Deterministic Iteration
@@ -601,13 +616,16 @@ Contains
     pop_total = Nint(Real(pop_total)/Real(Sum(pop_total)) * sam_size)
     pop_size      = Sum(pop_total)
 
-    call random_seed(size=ii)               ! Get size of seed array.
-    ii = max(ii,OMP_GET_MAX_THREADS())
-    call random_seed(put=urandom_seed(ii))  ! Put seed array into PRNG.
+    !call random_seed(size=ii)               ! Get size of seed array.
+    !ii = max(ii,OMP_GET_MAX_THREADS())
+    !ur = urandom_seed(ii)
+    !write(un_lf,*)ii,proc,ur
+    !    call random_seed(put=ur)  ! Put seed array into PRNG.
+    !    call random_seed(put=(/1,2,3,4,5,6,7,8/))  ! Put seed array into PRNG.
 
     !$OMP PARALLEL default(shared) &
-    !$OMP& private(sim) &
-    !$OMP& firstprivate(index,temp_int,i,temp,days,icounty,county,jj,kk,ii,tmp_count) &
+    !$OMP& private(sim,tmp_count,ii) &
+    !$OMP& firstprivate(index,temp_int,i,temp,days,icounty,county,jj,kk) &
     !$OMP& firstprivate(seed_ill,seed_inf_cont,seed_inf_ncont,seed_death,seed_d_seq,temp_date) &
     !$OMP& firstprivate(tmp_d_new) &
     !$OMP& firstPRIVATE(il_d,inf_ill,inf_c_d,inf_cont,inf_nc_d,inf_ncont,inf_dth) &
@@ -619,7 +637,13 @@ Contains
     Do it_ss = 1, (iter_e-iter_s+1)
 
        !call start_timer("Init Sim Loop",reset=.FALSE.)
-
+       !call random_seed(put=(/1,2,3,4,5,6,7,8/))  ! Put seed array into PRNG.
+       call random_seed(size=ii)               ! Get size of seed array.
+       ii = max(ii,OMP_GET_MAX_THREADS())
+       ur = urandom_seed(ii)
+       !write(un_lf,*)ii,proc,ur
+       call random_seed(put=ur)  ! Put seed array into PRNG.
+       
        If (.Not.Allocated(sim%dist_id))Then
           Allocate(sim%dist_id(pop_size))
           Allocate(sim%sex(pop_size))
@@ -648,7 +672,7 @@ Contains
 
        !** Reshuffle population since ordering according to dist id leads to ***
        !** lower infections in older age groups                              ***
-       !** To do so we use 
+       !** To do so we use sim$d
        do ii = 1, pop_size
           sim%d(ii) = ii
        End do
@@ -656,7 +680,9 @@ Contains
        Allocate(tmp_count(pop_size))
 
        if ( cp_reload ) then
-          read(cp_reload_unit,pos=int_storage_size*pop_size*OMP_GET_THREAD_NUM()+1)tmp_count
+          wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
+          !write(un_lf,PTF_M_AI0)"Reading index shuffle at position:",wpos,OMP_GET_THREAD_NUM()
+          read(cp_reload_unit,pos=wpos)tmp_count
        Else
           tmp_count = sample(sim%d,pop_size)
        End if
@@ -666,7 +692,9 @@ Contains
 !!!=============================================================================
        if ( cp_write ) then
           !$OMP critical
-          write(cp_unit,pos=int_storage_size*pop_size*OMP_GET_THREAD_NUM()+1)tmp_count
+          wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
+          !write(un_lf,PTF_M_AI0)"Writing index shuffle at position:",wpos
+          write(cp_unit,pos=wpos)tmp_count
           !$OMP end critical 
        End if
        
@@ -679,11 +707,22 @@ Contains
 
        if ( cp_reload ) then
 
-          write(*,*)"Reloading checkpoint"
-          
+          !write(un_lf,*)"Reloading checkpoint at time:",cp_reload_time
+          !write(un_lf,PTF_M_AI0)"Reading sim%t1 at position:",&
+          !     int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
+          !     int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8,&
+          !     OMP_GET_THREAD_NUM()
+                    
           read(cp_reload_unit,  &
                pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
                      int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
+
+          !write(un_lf,PTF_M_AI0)"Reading sim%d at position:",&
+          !     int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
+          !     int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
+          !     int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8,&
+          !     OMP_GET_THREAD_NUM()
+          
           read(cp_reload_unit, &
                pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
                      int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
@@ -834,6 +873,8 @@ Contains
           call start_timer("Sim Loop",reset=.FALSE.)
        End if
 
+       write(*,PTF_M_AI0)"Entering CoSMic_TimeLoop on proc",proc
+       
        Call CoSMic_TimeLoop(time_n, pop_size, size(counties_index), counties_index, &
             Real(R0matrix,rk), Real(connect,rk), surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim ,&
             healthy_cases_final, inf_noncon_cases_final,inf_contag_cases_final, &
@@ -846,7 +887,7 @@ Contains
 
           timer = get_timer("Sim Loop")
 
-          write(*,'(A)',ADVANCE="NO")"Time per day:"
+          write(un_lf,'(A)',ADVANCE="NO")"Time per day:"
           call write_realtime(frac_realtime(diff_realtimes(timer%rt_end,timer%rt_start),time_n))
        End if
 
@@ -858,8 +899,12 @@ Contains
     !$OMP END DO
     !$OMP END PARALLEL
 
-    ! Close restart file -------------------------
-    if ( cp_write ) then
+    ! Close restart files ------------------------
+    if ( cp_reload ) then
+       close(cp_reload_unit)
+    End if
+    
+    if ( cp_write .AND. cp_unit_open ) then
        close(cp_unit)
     End if
        
@@ -1094,7 +1139,7 @@ Contains
     Integer(Kind=ik)                               , Intent(In)    :: cp_reload_time
     
     !> Counters -------------------------------------------------
-    Integer(Kind=ik)             :: timestep, ii, nn
+    Integer(Kind=ik)             :: timestep, prng_ii, ii, nn
     
     Integer(Kind=ik)             :: at_risk, new_in_state
     Integer(Kind=ik)             :: start_time
@@ -1105,7 +1150,7 @@ Contains
     Integer(Kind=ik), Allocatable, Dimension(:,:)    :: state_count_pl
     Real(Kind=rk)   , Allocatable, Dimension(:)      :: risk_pl, risk_pi
 
-    Integer(Kind=ik), Allocatable, Dimension(:)      :: d_new
+    Integer(Kind=ik), Allocatable, Dimension(:)      :: d_new, ur
 
     Real(kind=rk)                                    :: less_contagious
     Real(kind=rk)                                    :: w_int
@@ -1168,11 +1213,23 @@ Contains
     ill_ICU_cases(:,start_time,it_ss)    = state_count_pl(ill_ICU   ,:)
     dead_cases(:,start_time,it_ss)       = state_count_pl(dead      ,:)
     immune_cases(:,start_time,it_ss)     = state_count_pl(immune    ,:)
+
+    !write(un_lf,PTF_M_AI0)"sum(state_count_pl) =",sum(state_count_pl)
     
     Do timestep = start_time+1, time_n
 
        !call start_timer("+- From healthy to infected",reset=.FALSE.)
 
+!!$       if ( mod(timestep,7) == 0 ) then
+!!$          write(*,*)"timestep =",timestep," re-init PRNG"
+!!$          call random_seed(size=prng_ii)               ! Get size of seed array.
+!!$          prng_ii = max(prng_ii,OMP_GET_MAX_THREADS())
+!!$          ur = urandom_seed(prng_ii)
+!!$          write(un_lf,*)omp_get_thread_num(),ur
+!!$          call random_seed(put=ur)  ! Put seed array into PRNG.
+!!$       end if
+
+       
        !** Population summary --------------------------------------------------
        Call summary_1_int(sim%t1, pop_size, state_count_t1, min_state, max_state)
       
@@ -1220,8 +1277,12 @@ Contains
        !** DEBUG --- Risk per location --------------------------------------
        if (PT_DEBUG) then
           write(un_lf,PTF_SEP)
+          write(un_lf,PTF_M_AI0)"Number of people at risk :",at_risk
           write(un_lf,PTF_M_AI0)"Risk per location @ timestep:",timestep
-          write(un_lf,'(f10.6)')risk_pl
+          write(un_lf,'(*(f0.9,1X))')risk_pl
+          write(un_lf,PTF_M_AI0)"size(risk_pi) = ",size(risk_pi)
+          write(un_lf,PTF_M_AI0)"at_risk       = ",at_risk
+          write(un_lf,PTF_M_AI0)"pop_size      = ",pop_size
        End if
        !** DEBUG ------------------------------------------------------------
 
@@ -1493,11 +1554,26 @@ Contains
        if ( cp_write .AND. (timestep == cp_time) ) then
 
           !$OMP critical
+          !write(un_lf,PTF_M_AI0)"Writing sim%t1 at position:",&
+          !     int(int_storage_size,8)  * int(pop_size,8) * &
+          !     int(OMP_GET_NUM_THREADS(),8) + &
+          !    int(int1_storage_size,8) * int(pop_size,8) * &
+          !     int(OMP_GET_THREAD_NUM() ,8) + 1_8
+          
           write(cp_unit,  &
                pos = int(int_storage_size,8)  * int(pop_size,8) * &
                      int(OMP_GET_NUM_THREADS(),8) + &
                      int(int1_storage_size,8) * int(pop_size,8) * &
                      int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
+
+          !write(un_lf,PTF_M_AI0)"Writing sim%d at position:",&
+          !     int(int_storage_size,8)  * int(pop_size,8) * &
+          !    int(OMP_GET_NUM_THREADS(),8) + &
+          !     int(int1_storage_size,8) * int(pop_size,8) * &
+          !     int(OMP_GET_NUM_THREADS(),8) + &
+          !     int(int_storage_size,8)  * int(pop_size,8) * &
+          !     int(OMP_GET_THREAD_NUM() ,8) + 1_8
+          
           write(cp_unit, &
                pos = int(int_storage_size,8)  * int(pop_size,8) * &
                      int(OMP_GET_NUM_THREADS(),8) + &
