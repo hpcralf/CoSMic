@@ -34,7 +34,7 @@ Module pt_constants
   Character(Len=*), Parameter :: PTF_E_STOP = &
        "('EE PROGRAM STOPPED ..... ',/,'<',78('='),'>')"
 
-  Character(Len=*), Parameter :: PTF_W_A    = "('WW ',A)"
+  Character(Len=*), Parameter :: PTF_W_A    = "('WW ',*(A,1X))"
   Character(Len=*), Parameter :: PTF_W_AI0  = "('WW ',*(A,1X,I0))"
 
   Character(Len=*), Parameter :: PTF_M_A    = "('MM ',*(A,1X))"
