@@ -204,17 +204,18 @@ Program CoSMic
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%pop)
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%connect_work)
 
+  Call end_Timer("Broadcast input data")
+
   call pt_get("#R0_effects",R0_effects_fn)
 
+  If (rank_mpi==0) Then
+     write(un_lf,PTF_M_A)"Got R0_effects :",trim(R0_effects_fn)
+  End If
+  
   If (trim(R0_effects_fn) .NE. "LHC") then
      Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%R0_effect)
   End If
-  
-  !Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%connect_total)
-  !Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%connect_states)
-  
-  Call end_Timer("Broadcast input data")
-  
+   
   !=============================================================================
   ! Load input data from param tree ============================================
   Call start_Timer("Load pt variables")
@@ -291,13 +292,13 @@ Program CoSMic
           )
  
      R0_effects_lhc = table_to_real_array(iol%R0_effect)
-
+    
      if (trim(region) == "states") then
 
         !write(*,*)"Found head iol%R0_effect%head: ",iol%R0_effect%head
         region_index   = int(get_int_table_column(iol%counties,"dist_id")/1000)
         num_regions    = 16
-        
+
      Else
 
         write(*,*)"Not yet implemented"
@@ -379,7 +380,8 @@ Program CoSMic
         
      end if
 
-     write(*,*)region_index
+     write(un_lf,PTF_M_AI0)"size(region_index) =",size(region_index)
+     
      Call COVID19_Spatial_Microsimulation_for_Germany(iol, &
           iter_s, iter_e , &
           inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
@@ -390,7 +392,7 @@ Program CoSMic
      
      Call end_Timer("Exec. Simulation")
 
-  ENd If
+  End If
   
 1001 Continue
   
