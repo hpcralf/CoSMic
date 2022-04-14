@@ -61,6 +61,7 @@ end interface
 interface get_index
    module procedure get_index_single_char
    module procedure get_index_single_integer
+   module procedure get_index_single_integer2
    module procedure get_index_mul_char
 !    module procedure get_index_mul_char_and
    module procedure get_index_mul_integer
@@ -189,6 +190,31 @@ do i=1,size_in
     endif
 enddo
 end function get_index_single_integer
+
+function get_index_single_integer2(array_in,tar) result(array_index)
+implicit none
+integer size_in,index,i
+integer(kind=2), dimension(:)                :: array_in
+integer                                      :: tar
+integer,allocatable,dimension(:)             :: array_index
+!detemine dimension of array_out
+index=0
+size_in = size(array_in)
+do i=1,size_in
+    if (tar == array_in(i)) then
+        index = index + 1
+    endif
+enddo
+allocate(array_index(index))
+!allocate array and reset index number
+index=0
+do i=1,size_in
+    if (tar == array_in(i)) then
+        index = index + 1
+        array_index(index) = i
+    endif
+enddo
+end function get_index_single_integer2
 
 ! function get_index_single_integer(array_in,tar) result(array_index)
 !     use omp_lib

@@ -72,8 +72,8 @@ Module kernel
   End Type icu_risk_lists
 
   Type sims
-     Integer,Allocatable             :: dist_id(:)
-     Integer,Allocatable             :: dist_id_rn(:)
+     Integer(kind=2),Allocatable     :: dist_id(:)
+     Integer(kind=2),Allocatable     :: dist_id_rn(:)
      Character,Allocatable           :: sex(:)
      Integer(kind=1),Allocatable     :: age(:)
      Integer(kind=1),Allocatable     :: t1(:)
@@ -320,13 +320,14 @@ Contains
     Allocate(ill_ICU_cases_final   (num_counties,time_n,n_iter))
     Allocate(immune_cases_final    (num_counties,time_n,n_iter))
     Allocate(dead_cases_final      (num_counties,time_n,n_iter))
-
+         
     inf_seed_date = get_char_column(iol%seed,'date')
 
     max_date = find_max_date(inf_seed_date)
 
     !** Allocate and setup dist_id cross reference -----------------------------
     allocate(dist_id_cref(minval(counties_index):maxval(counties_index)))
+    
     dist_id_cref = -1
 
     Do ii = 1, num_counties
@@ -657,7 +658,7 @@ Contains
 
        Do i = 1, Size(pop_total)
           temp_int = pop_total(i)
-          sim%dist_id(index+1: index+temp_int) = pop_distid(i)
+          sim%dist_id(index+1: index+temp_int) = Int(pop_distid(i),2)
           sim%sex(index+1: index+temp_int)     = pop_sex(i)
           sim%age( index+1: index+temp_int)    = pop_age(i)
           index                                = index + temp_int
@@ -680,9 +681,11 @@ Contains
        Allocate(tmp_count(pop_size))
 
        if ( cp_reload ) then
+          call start_timer("cp_reload tmp_count",reset=.FALSE.)
           wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
           !write(un_lf,PTF_M_AI0)"Reading index shuffle at position:",wpos,OMP_GET_THREAD_NUM()
           read(cp_reload_unit,pos=wpos)tmp_count
+          call end_timer("cp_reload tmp_count")
        Else
           tmp_count = sample(sim%d,pop_size)
        End if
@@ -692,9 +695,11 @@ Contains
 !!!=============================================================================
        if ( cp_write ) then
           !$OMP critical
+          call start_timer("cp_write",reset=.FALSE.)
           wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
           !write(un_lf,PTF_M_AI0)"Writing index shuffle at position:",wpos
           write(cp_unit,pos=wpos)tmp_count
+          call end_timer("cp_write")
           !$OMP end critical 
        End if
        
@@ -712,7 +717,7 @@ Contains
           !     int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
           !     int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8,&
           !     OMP_GET_THREAD_NUM()
-                    
+          call start_timer("cp_reload sim",reset=.FALSE.) 
           read(cp_reload_unit,  &
                pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
                      int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
@@ -727,6 +732,7 @@ Contains
                pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
                      int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
                      int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%d
+          call end_timer("cp_reload sim")
        Else
           
           Do icounty = 1,num_counties
@@ -857,7 +863,7 @@ Contains
        sim%t2 = missing
 
        !** Set up dist_id renumbered cross_reference ---------------------------
-       sim%dist_id_rn = dist_id_cref(sim%dist_id)
+       sim%dist_id_rn = Int(dist_id_cref(sim%dist_id),2)
 
        If (.Not.Allocated(tmp_d_new))Then
           Allocate(tmp_d_new(Size(sim%d)))
@@ -873,7 +879,7 @@ Contains
           call start_timer("Sim Loop",reset=.FALSE.)
        End if
 
-       write(*,PTF_M_AI0)"Entering CoSMic_TimeLoop on proc",proc
+       ! write(*,PTF_M_AI0)"Entering CoSMic_TimeLoop on proc",proc
        
        Call CoSMic_TimeLoop(time_n, pop_size, size(counties_index), counties_index, &
             Real(R0matrix,rk), connect, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim ,&
@@ -888,7 +894,7 @@ Contains
           timer = get_timer("Sim Loop")
 
           write(un_lf,'(A)',ADVANCE="NO")"Time per day:"
-          call write_realtime(frac_realtime(diff_realtimes(timer%rt_end,timer%rt_start),time_n))
+          call write_realtime(frac_realtime(diff_realtimes(timer%rt_end,timer%rt_start),time_n),un_lf)
        End if
 
        days             = +1
@@ -1574,7 +1580,7 @@ Contains
           !     int(OMP_GET_NUM_THREADS(),8) + &
           !    int(int1_storage_size,8) * int(pop_size,8) * &
           !     int(OMP_GET_THREAD_NUM() ,8) + 1_8
-          
+          call start_timer("cp_write",reset=.FALSE.)
           write(cp_unit,  &
                pos = int(int_storage_size,8)  * int(pop_size,8) * &
                      int(OMP_GET_NUM_THREADS(),8) + &
@@ -1596,6 +1602,7 @@ Contains
                      int(OMP_GET_NUM_THREADS(),8) + &
                      int(int_storage_size,8)  * int(pop_size,8) * &
                      int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%d
+          call end_timer("cp_write")
           !$OMP end critical 
        End if
 
@@ -1623,7 +1630,7 @@ Contains
   Subroutine summary_2_int(arr1,arr2,nn, cnt,lb1,ub1,lb2,ub2)
 
     Integer(kind=1) , Dimension(nn)    , Intent(in)  :: arr1
-    Integer(kind=ik), Dimension(nn)    , Intent(in)  :: arr2
+    Integer(kind=2) , Dimension(nn)    , Intent(in)  :: arr2
     Integer(kind=ik)                   , Intent(in)  :: nn,lb1,ub1,lb2,ub2
     
     Integer(kind=ik), Dimension(lb1:ub1,lb2:ub2) , Intent(Out) :: cnt
