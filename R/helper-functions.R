@@ -228,12 +228,13 @@ ftrain.to.dataframe <- function(data.dir,basename,iol,split.col="SH1") {
     files <- dir(data.dir, pattern=basename,full.names=TRUE)
 
     ldf   <- list()
-    cnt   <- 1
+
+    dat.files <- files[grep(pattern=".dat$",files)]
     
-     ldf <-  foreach (f = files[grep(pattern=".dat$",files)])  %dopar% {
-        print(f)
-        head    <- read.table(paste0(f,".head"),head=TRUE,sep=",")
-        to.read <- file(f,"rb")
+    ldf <-  foreach (i = seq(length(dat.files)))  %dopar% {
+
+        head    <- read.table(paste0(dat.files[i],".head"),head=TRUE,sep=",")
+        to.read <- file(dat.files[i],"rb")
         
         vec <- readBin(to.read, integer(), size=4, n=prod(head[1,2:4])*dim(head)[1], endian = "little")
 
@@ -257,9 +258,8 @@ ftrain.to.dataframe <- function(data.dir,basename,iol,split.col="SH1") {
         ldf$iter       <- rep(rep(seq(1,head[1,4]),
                                        each=head[1,2]),
                                    dim(head)[1])
-        ldf[split.col] <- rep(seq(dim(head)[1]*(cnt-1)+1,dim(head)[1]*cnt),
+        ldf[split.col] <- rep(seq(dim(head)[1]*(i-1)+1,dim(head)[1]*i),
                                    each=head[1,2]*head[1,4])
-        cnt <- cnt + 1
 
         return(ldf)
 
