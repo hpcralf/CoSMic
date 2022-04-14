@@ -64,9 +64,6 @@ contains
 
     Type(iols), Intent(InOut)  :: iol
     
-    Integer                    :: i,j,k,it_ss
-    Integer                    :: index, un_in
-
     !=================================================================
     Character(len=:), allocatable :: filename
     Character(len=:), allocatable :: exec_type
@@ -241,7 +238,7 @@ contains
     Character                              :: loc_sep
     Logical                                :: loc_head, loc_rownames
 
-    Integer                                :: io_stat, un, ii, jj, ls
+    Integer                                :: io_stat, un, ii, jj
     Integer                                :: no_lines, dim1, dim2, sep_pos
     character(len=65536)                   :: l_head
     character(len=:),allocatable           :: loc_str_chars
