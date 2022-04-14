@@ -673,7 +673,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                                                           paste0(iol[["states"]][
                                                               as.character(as.integer(as.integer(
                                                                   getcounties)/1000)),"Shortcut"],
-                                                              sprintf("%02d",change))]))
+                                                              sprintf("%03d",change))]))
                         }
 
                         ## If R0effect changes per Nuts2 region per change -----
@@ -687,7 +687,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                        
                     } else if ( pspace$R0effect$type == "directv" ) {
                         ## Per change ------------------------------------------
-                        getchange <- lhc[it.ss,paste0("R0effect",sprintf("%02d",change))]
+                        getchange <- lhc[it.ss,paste0("R0effect",sprintf("%03d",change))]
                         
                     } else {
                         ## Globally constant -----------------------------------
@@ -2276,14 +2276,14 @@ init.lhc <-  function(pspace,sp,rep.iter=TRUE) {
             names(lhc) <- apply(
                 data.frame(
                     substring(names(lhc),1,4),
-                    sprintf("%02d", as.numeric(substring(names(lhc),5)))
+                    sprintf("%03d", as.numeric(substring(names(lhc),5)))
                 ),1,paste,collapse="")
         } else {
             ## Add 0 to week ids less than 10 in case of states --
             names(lhc) <- apply(
                 data.frame(
                     substring(names(lhc),1,2),
-                    sprintf("%02d", as.numeric(substring(names(lhc),3)))
+                    sprintf("%03d", as.numeric(substring(names(lhc),3)))
                 ),1,paste,collapse="")
         }
         
@@ -2363,7 +2363,7 @@ init.lhc <-  function(pspace,sp,rep.iter=TRUE) {
 
             colnames(lhc.dat) <- paste0(rep(names(i$param[[1]]),
                                             each=dim(i$param[[1]])[1]),
-                                        sprintf("%02d",rep(seq(1,dim(i$param[[1]])[1]),
+                                        sprintf("%03d",rep(seq(1,dim(i$param[[1]])[1]),
                                                            dim(i$param[[1]])[2])))
             
             lhc <- data.frame(lhc %>% slice(rep(row_number(), each=dim(lhc.dat)[1])),
