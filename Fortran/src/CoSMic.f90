@@ -54,7 +54,6 @@ Program CoSMic
   Use cosmic_io
   Use kernel
 
-  use OMP_LIB
   use mpi
 
   Implicit None
@@ -318,8 +317,8 @@ Program CoSMic
         write(*,*)"Program halted"
         goto 1001
         
-        region_ids     = get_char_column(iol%counties,'Nuts2')
-        region_ids_R0e = iol%R0_effect%head(1:38*(cur_week+1):cur_week+1)(1:4)
+        !region_ids     = get_char_column(iol%counties,'Nuts2')
+        !region_ids_R0e = iol%R0_effect%head(1:38*(cur_week+1):cur_week+1)(1:4)
         
         num_counties = size(region_ids)
         allocate(region_index(num_counties))
@@ -365,20 +364,20 @@ Program CoSMic
         
      Else
 
-        region_ids     = get_char_column(iol%counties,'Nuts2')
-        write(*,*)"Found head iol%R0_effect%head: ",iol%R0_effect%head
-        write(*,*) region_ids
+        !region_ids     = get_char_column(iol%counties,'Nuts2')
+        !write(*,*)"Found head iol%R0_effect%head: ",iol%R0_effect%head
+        !write(*,*) region_ids
 
-        num_counties = size(region_ids)
-        allocate(region_index(num_counties))
+        !num_counties = size(region_ids)
+        !allocate(region_index(num_counties))
         
-        do ii = 1, num_counties
-           do jj = 1, size(iol%R0_effect%head)
-              if (trim(region_ids(ii)) == trim(iol%R0_effect%head(jj)))then
-                 region_index(ii) = jj
-              endif
-           end do
-        end do
+        !do ii = 1, num_counties
+        !   do jj = 1, size(iol%R0_effect%head)
+        !      if (trim(region_ids(ii)) == trim(iol%R0_effect%head(jj)))then
+        !         region_index(ii) = jj
+        !      endif
+        !   end do
+        !end do
         
      end if
 
