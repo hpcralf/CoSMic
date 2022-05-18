@@ -52,7 +52,7 @@ implicit none
 contains
    !! --------------------------------------------------
    !> https://masuday.github.io/fortran_tutorial/random.html
-   !! standard uniform
+   !> standard uniform
   subroutine random_stduniform(u)
     !  integer,intent(in)     :: n  
     real(kind=rk),intent(out) :: u

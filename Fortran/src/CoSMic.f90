@@ -116,6 +116,8 @@ Program CoSMic
   Character(len=:), allocatable                  :: exec_type
   Integer(kind=ik),dimension(:), Allocatable     :: full_region_index ! Required by "optimization"
   Integer,dimension(:,:,:), Allocatable          :: ill_ICU_cases_final ! Store the evaluated ICU cases
+  Type(sims)                                     :: sim
+  Type(opt_sim_switchs)                          :: sim_switch
   Call mpi_init(ierr)
 
   Call MPI_COMM_RANK(MPI_COMM_WORLD, rank_mpi, ierr)
@@ -264,6 +266,10 @@ Program CoSMic
 
   call pt_get("#output.dir" , output_dir)
   call pt_get("#export_name", export_name)
+
+  sim_switch%sim_reuse  = .false.
+  sim_switch%sim_reload = .false.
+  sim_switch%sim_write  = .false.
   
   If (trim(R0_effects_fn) .NE. "LHC") then
      R0_effects = table_to_real_array(iol%R0_effect)
@@ -345,7 +351,7 @@ Program CoSMic
              less_contagious, R0_force, immune_stop, &
              R0change, R0delay ,R0delay_days, R0delay_type, &
              control_age_sex, seed_date, seed_before, sam_size, R0, &
-             R0_effects, region_index, &
+             R0_effects, region_index, sim, sim_switch, &
              output_dir, export_name, rank_mpi)
         
      End Do
@@ -413,7 +419,7 @@ Program CoSMic
             less_contagious, R0_force, immune_stop, &
             R0change, R0delay ,R0delay_days, R0delay_type, &
             control_age_sex, seed_date, seed_before, sam_size, R0, &
-            R0_effects, region_index, output_dir, export_name, rank_mpi)
+            R0_effects, region_index, sim, sim_switch, output_dir, export_name, rank_mpi)
      endif
      
      Call end_Timer("Exec. Simulation")
