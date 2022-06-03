@@ -468,12 +468,11 @@ Contains
     !** The checkpoint reloading and wirte are performed in weeks
     if (.not. sim_reload) then
       start_week = 1 ! Start from scratch
-      refer_date = seed_date
     else 
       call pt_get("#start_week",start_week)
       sim_switch%read_week = start_week ! Reload the checkpoint of start_week
-      refer_date = add_date(seed_date,(start_week-1)*WEEKLEN)
     endif
+    refer_date = add_date(seed_date,(start_week-1)*WEEKLEN)
     refer_date_mod  = add_date(refer_date,1) ! Used for the calculation of the below data intersection
 
     if (auto_calibrate) then
@@ -503,7 +502,6 @@ Contains
           end_window = current_week
         endif
       endif
-      print *,start_window," ",end_window
 
       !** diff_weeks indicates the initial window size (the number of calibrated weeks) -----
       diff_weeks = end_window - start_window + 1
@@ -512,7 +510,6 @@ Contains
         !** the specific cor_R0change, otherwise R0change applies
         Allocate(cor_R0change(size(R0change,dim=1),diff_weeks))
         call ini_R0change(cor_R0change)
-        print *,cor_R0change
         time_n = maxval(cor_R0change)+1
       else
         time_n = maxval(R0change) + 1
@@ -593,9 +590,6 @@ Contains
 
       allocate(tmp_R0_effects(R0change_dim2size,R0_effects_dim2size))
     endif
-    print *,refer_date_mod
-    print *,opt_week_index
-    print *,opt_index
 
     Allocate(local_fitness(opt_local_size))
     !** Each rank initializes the local fitness
@@ -633,16 +627,14 @@ Contains
                                   seltarget_icu_by_state_icudates(num_actudays,i))
           enddo
       end select
-    !  if (PT_DEBUG) then
+      if (PT_DEBUG) then
         print *, "Intersection is: "
         print *, "myrank: ",rank_mpi, obs_lb(1),eval_lb(1),obs_ub(1),eval_ub(1)
-    !  endif
+      endif
      
       !** Gather all the local population from all ranks to the root rank 0 before iteration
       call MPI_GATHER(local_ini_pop, opt_local_size*nvals, MPI_REAL8, ini_pop, opt_local_size*nvals, MPI_REAL8, ROOT, &
                 MPI_COMM_WORLD, ierr)
-      
-      print *,"nvals: ",nvals
       
       !!! ==============================================
       !!! Core of the genetic algorithm ================
@@ -668,7 +660,6 @@ Contains
           if (auto_calibrate) then
             tmp_R0_effects(1:(end_window-start_window+1),:) = R0_effects(start_window:end_window,:)
           else
-            print *,"start_week: ",start_week
             tmp_R0_effects = R0_effects(start_week:end_week,:)
           endif
           !** Call the COVID19 spatial simuation and store the simulated ICU data to ill_ICU_cases_final -----
@@ -890,7 +881,6 @@ Contains
 
         !** Call the COVID19 spatial simuation once again, its resulting sim data serves as the --
         !** input to the next-round calibration -------------------------------------------------- 
-        print *,"start_window: ",start_window," end_window: ",end_window
         if (size(sim_R0change,dim=2) .ne. 0) then        
           ill_ICU_cases_final = COVID19_Spatial_Microsimulation_for_Germany(iol,&
               1, 1 , &
@@ -903,42 +893,6 @@ Contains
           sim_backup%d            = sim%d
           sim_switch%sim_reuse    = .true.
           sim_switch%sim_reload   = .false.
-
-          time_n = maxval(sim_R0change) + 1
-        if (.not.allocated(aggreg_sum_by_county)) then
-                  Allocate(aggreg_sum_by_county(num_nuts2,time_n,1))
-                  Allocate(avg_by_county(num_nuts2,time_n))
-                endif
-                aggreg_sum_by_county = 0
-                avg_by_county = 0.0
-
-                !** TODO: The fitness relevant to the death data ----------
-                !** The fitness relavant to the icu data ------------------
-              
-                ! TODO: record the number of the affected states
-                do j = 1,1
-                  do i = 1,time_n 
-                    do k = 1,num_nuts2
-                      aggreg_sum_by_county(k,i,j) = sum(ill_ICU_cases_final(pos_nuts2(k):pos_nuts2(k+1)-1,i,j)) ! Sum over all the counties within one state
-                    enddo
-                  enddo
-                enddo
-          
-                do j = 1,time_n
-                  do i = 1,num_nuts2
-                    avg_by_county(i,j) = Real(sum(aggreg_sum_by_county(i,j,:)))/Real(1) ! Average over the running iterates
-                  enddo
-                enddo
-              !  if (PT_DEBUG) then
-                 if (rank_mpi .eq. 1) then
-                    do j = 1,time_n 
-                      print *,avg_by_county(:,j)
-                    enddo
-                 endif
-              !  endif
-              deallocate(aggreg_sum_by_county)
-              deallocate(avg_by_county)
-              deallocate(ill_ICU_cases_final)
         endif
       endif
              
@@ -1004,7 +958,6 @@ Contains
         enddo
       enddo
       refer_date_mod = add_date(refer_date,1)
-      print *,refer_date_mod
 
       end_window   = end_window + opt_shift_size
       start_window = end_window - opt_window_size + 1
@@ -1040,6 +993,7 @@ Contains
     
     !** Write the updated R0 value to the resulting file ---------------------
     if(rank_mpi .eq. ROOT) then
+      write(*,'(A)')"Write the calibrated R0effects to a restart file..."
       call writeback_R0effects(auto_calibrate, opt_target_region, &
                                   opt_names, ga_res, &
                                   R0_effects, iol%R0_effect%head, start_week)
@@ -1303,13 +1257,11 @@ Contains
             enddo
           enddo
 
-        !  if (PT_DEBUG) then
-           if (rank_mpi .eq. 1) then
+          if (PT_DEBUG) then
             do j = 1,time_n 
               print *,avg_by_county(:,j)
             enddo
-           endif
-        !  endif
+          endif
             !** Calculate the difference between the observed and evaluated/simulated ICU data -----------
           do i = 1,num_nuts2                  
             if (opt_filter) then
@@ -1330,14 +1282,7 @@ Contains
               k = k + 1
             end do
             diff_sum = diff_sum + diff_loc_sum
-            diff_len = diff_len + diff_loc_len
-          !  allocate(diff(obs_ub(i)-obs_lb(i)+1))
-          !  diff = seltarget_icu_by_nuts2_icucases(obs_lb(i):obs_ub(i),i)&
-          !   - avg_by_county(i,eval_lb(i):eval_ub(i))
-          !  diff = diff*diff
-          !  diff_sum = diff_sum + sum(diff)
-          !  diff_len = diff_len + obs_ub(i) - obs_lb(i) + 1
-          !  deallocate(diff)   
+            diff_len = diff_len + diff_loc_len  
           enddo   
           val_localfitness = -1*sqrt(diff_sum/diff_len)
         end if
@@ -1367,13 +1312,11 @@ Contains
             avg_by_county(i,j) = Real(sum(aggreg_sum_by_county(i,j,:)))/Real(iter) ! Average over the running iterates
           enddo
         enddo
-      !  if (PT_DEBUG) then
-         if (rank_mpi .eq. 1) then
+        if (PT_DEBUG) then
           do j = 1,time_n 
             print *,avg_by_county(:,j)
           enddo
-         endif
-      !  endif
+        endif
 
         !** Calculate the difference between the observed and evaluated/simulated ICU data -----------
         do i = 1,num_states                  
@@ -1396,14 +1339,7 @@ Contains
             k = k + 1
           end do
           diff_sum = diff_sum + diff_loc_sum
-          diff_len = diff_len + diff_loc_len
-
-      !    diff = seltarget_icu_by_state_icucases(obs_lb(i):obs_ub(i),i)&
-      !     - avg_by_county(i,eval_lb(i):eval_ub(i))
-      !    diff = diff*diff
-      !    diff_sum = diff_sum + sum(diff)
-      !    diff_len = diff_len + obs_ub(i) - obs_lb(i) + 1
-      !    deallocate(diff)      
+          diff_len = diff_len + diff_loc_len    
         enddo     
         val_localfitness = -1*sqrt(diff_sum/diff_len)
       case default
@@ -1625,14 +1561,14 @@ Contains
     upper_hinge = get_median(fitness, sorted_index((half+1):length), length-half) ! Get the median of the second half
     lower_hinge = get_median(fitness, sorted_index(1:half), half) ! Get the median of the first half
 
-     if (rank_mpi .eq. ROOT) then
-          !** Output summary statistics --------------------------------------------------------
-          print *,"intermediate fitness output:"
-          print *,fitness
-          print *,"generation: ",gene_ii
-          write (*, '(A9,A18,A20,A15,A20,A12)')"max","mean","upper_hinge","median","lower_hinge","min"
-          print *,max,mean,upper_hinge,median,lower_hinge,min
-        endif
+    if (rank_mpi .eq. ROOT) then
+      !** Output summary statistics --------------------------------------------------------
+      print *,"intermediate fitness output:"
+      print *,fitness
+      print *,"generation: ",gene_ii
+      write (*, '(A9,A18,A20,A15,A20,A12)')"max","mean","upper_hinge","median","lower_hinge","min"
+      print *,max,mean,upper_hinge,median,lower_hinge,min
+    endif
   end subroutine sixnum_summary_and_print
  
   !! ------------------------------------------------------------------------------
