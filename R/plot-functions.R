@@ -55,7 +55,7 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
                              rr,  ind.states=NULL, global.plot,
                              x.min=NULL,x.max=NULL, relative=FALSE,
                              silent=FALSE, split.in = NULL, y.max=NULL,
-                             prog=NULL) {
+                             prog=NULL, overlay=NULL) {
 
     if (is.null(x.max) & is.null(sp$time_n)) {
         warning(paste("is.null(x.max) & is.null(sp$time_n) holds TRUE.",
@@ -288,6 +288,14 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
             geom_text(data=data.frame(date=week.marks,event=seq(1,length(week.marks))),
                       mapping=aes(x=date, y=0, label=event),
                       size=4, angle=90, vjust=-0.4, hjust=0)
+
+        ## Overlay line -----------------------------------------------
+        if ( !is.null(overlay) ) {
+            plt[[ii]] <- plt[[ii]] +
+                geom_line(data=data.frame(overlay,data="last.pub"),
+                          aes(x=get(names(overlay)[1]),y=get(names(overlay)[2]),colour=data),
+                          size=1)
+        }
         
         # Observerd Ill, ICU -----------------------------------------
         if ( (ii == "ill_ICU") & !is.null(seed_icu) ) {
@@ -320,6 +328,11 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
                     names(m.cs)[names(m.cs)==""] <- round(as.numeric(names(state.list)),3)
                 }
 
+                if (!is.null(overlay)) {
+                    m.cs <- c(m.cs, "green")
+                    names(m.cs)[length(m.cs)] <- names(overlay)[2]
+                }
+                
                 plt[[ii]] <- plt[[ii]] +
                     scale_color_manual(values = m.cs)+
                     scale_fill_manual (values = m.cs)
@@ -387,7 +400,8 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                            Sec.Axis = "RMS", fk.sec=rep(1/15, 15),
                            sec.text = FALSE,
                            ind.states=NULL, silent=FALSE, relative=FALSE,
-                           split.in = NULL, y.max=NULL, prog=NULL) {
+                           split.in = NULL, y.max=NULL, prog=NULL,
+                           overlay = NULL) {
 
     if (is.null(x.max) & is.null(sp$time_n)) {
         warning(paste("is.null(x.max) & is.null(sp$time_n) holds TRUE.",
@@ -669,13 +683,31 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                 ax.scale <- 1
             } 
 
+            ## Overlay ----------------------------------------------
+            if ( !is.null(overlay) ) {
+                nov <- paste(names(overlay)[grep(iol$states[st,"Shortcut"],names(overlay))],
+                             "op",sep=".")
+                col.ov <- grep(iol$states[st,"Shortcut"],names(overlay))
+
+                gg.ov <- data.frame(time=as.Date(overlay[,1]),
+                                    ov=as.numeric(overlay[, grep(iol$states[st,"Shortcut"],names(overlay))]),
+                                    data=nov)
+
+                plt[[ii]] <- plt[[ii]] +
+                    geom_line(data=gg.ov,
+                              aes(x=time,
+                                  y=ov,
+                                  colour=data),
+                              size=1)
+            }
+
             ## R0change marks ----------------------------------------
             plt[[ii]] <- plt[[ii]] +
                 geom_vline(xintercept = week.marks, linetype="dotted") +
                 geom_text(data=data.frame(date=week.marks,event=seq(1,length(week.marks))),
                           mapping=aes(x=date, y=0, label=event),
                           size=3, angle=90, vjust=-0.1, hjust=0)
-            
+           
             ## Add observerd Ill, ICU and difference against observed ----------
             if ( (jj == "ill_ICU") & !is.null(seed_icu) ) {
 
@@ -731,7 +763,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                                                                            as.integer(x[1]+(x[2]-x[1])/2)})),
                                                      R0e = as.numeric(
                                                          state.list[[pg]][1,paste0(iol$states[st,"Shortcut"],
-                                                         sprintf("%02d",(1:length(sp$R0change))))]),
+                                                         sprintf("%03d",(1:length(sp$R0change))))]),
                                                      name= paste("R0effect",fill.dt))
                             }
                             if ( region == "nuts2" ) {
@@ -961,7 +993,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                     }
 
                     m.cs[-1] <- rainbow(length(m.cs)-1)
-                } 
+                }
                 
                 if ("prog.RKI" %in% prog) {
                     m.cs <- c(m.cs, prog.RKI="red")
@@ -977,6 +1009,13 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                     } else {
                         names(m.cs)[names(m.cs)==""] <- prog
                     }
+                }
+
+                if (!is.null(overlay)) {
+                    m.cs <- c(m.cs, "green")
+                    names(m.cs)[length(m.cs)] <- paste(
+                        names(overlay)[grep(iol$states[st,"Shortcut"],names(overlay))],
+                        "op",sep=".")
                 }
                 
                 plt[[ii]] <- plt[[ii]] +
