@@ -1191,7 +1191,7 @@ Contains
     Integer(Kind=ik), Dimension(n_counties), Intent(In) :: counties
     
     Real(Kind=rk)   , Dimension(n_counties,2:time_n)  , Intent(In) ::  R0matrix
-    Real(kind=rk)            , Allocatable, Dimension(:,:)     , Intent(In) ::  tmp_connect
+    Real(kind=rk)   , Allocatable, Dimension(:,:)     , Intent(In) ::  tmp_connect
   !  Real(Kind=rk)   , Dimension(n_counties,n_counties), Intent(In) ::  connect
     Real(Kind=rk)   , Allocatable, Dimension(:,:)     , Intent(In) ::  surv_ill_pas
     Real(Kind=rk)   , Allocatable, Dimension(:,:,:)   , Intent(In) ::  ICU_risk_pasd
@@ -1717,9 +1717,9 @@ Contains
 
   Subroutine summary_2_int(arr1,arr2,nn, cnt,lb1,ub1,lb2,ub2)
 
-    Integer(kind=1) , Dimension(nn)    , Intent(in)  :: arr1
-    Integer(kind=2) , Dimension(nn)    , Intent(in)  :: arr2
-    Integer(kind=ik)                   , Intent(in)  :: nn,lb1,ub1,lb2,ub2
+    Integer(kind=1)  , Dimension(nn)    , Intent(in)  :: arr1
+    Integer(kind=ik) , Dimension(nn)    , Intent(in)  :: arr2
+    Integer(kind=ik)                    , Intent(in)  :: nn,lb1,ub1,lb2,ub2
     
     Integer(kind=ik), Dimension(lb1:ub1,lb2:ub2) , Intent(Out) :: cnt
 
