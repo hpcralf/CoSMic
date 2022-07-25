@@ -45,4 +45,5 @@ module swap gcc/9.2.0 gcc/10.2.0
 # MPI environment ------------------------
 module swap mpt/2.23  mpt/2.25
 
-FC=mpif90
+export FC=mpif90
+export FCFLAGS=-fopenmp
