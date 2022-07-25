@@ -1546,7 +1546,7 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
                 if ( (sl > 80) & (length(tmp) > 1) ) {
                     s  <- seq(1,length(tmp),by=as.integer(sl/80))
                     ss <- s[1:(length(s))]
-                    se <- s[2:(length(s))]
+                    se <- s[2:(length(s))]-1
                     se[length(se)+1] <- length(tmp)
                     a <- apply(data.frame(ss,se),1,
                                function(x){
