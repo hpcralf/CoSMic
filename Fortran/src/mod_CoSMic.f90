@@ -67,7 +67,7 @@ Module kernel
      Character*2,Allocatable         :: age(:)
      Integer,Allocatable             :: agei(:)
      Character*1,Allocatable         :: sex(:)
-     Real,Allocatable                :: risk(:)
+     Real(kind=rk),Allocatable       :: risk(:)
      Integer,Allocatable             :: dur(:)
   End Type icu_risk_lists
 
@@ -93,6 +93,15 @@ Module kernel
 
   Integer, Parameter ::   min_state  = -1
   Integer, Parameter ::   max_state  =  6
+
+  ! Declare the interface for POSIX fsync function
+  interface
+     function fsync (fd) bind(c,name="fsync")
+       use iso_c_binding, only: c_int
+       integer(c_int), value :: fd
+       integer(c_int) :: fsync
+     end function fsync
+  end interface
   
 Contains
   
@@ -159,11 +168,11 @@ Contains
     Integer,Allocatable             :: rownumbers_ill(:),rownumbers_cont(:),rownumbers_ncont(:)
     Integer,Allocatable             :: rownumbers_left(:),rownumbers_dea(:)
     Integer,Allocatable             :: gettime(:),ur(:)
-    Real,Allocatable                :: getchange(:)
+    Real(kind=rk),Allocatable                :: getchange(:)
     Integer                         :: inf_ill,inf_cont,inf_ncont,inf_dth
 
-    Real                            :: R0_daily
-    Real,Allocatable                :: R0matrix(:,:),connect(:,:)
+    Real(kind=rk)                            :: R0_daily
+    Real(kind=rk),Allocatable                :: R0matrix(:,:),connect(:,:)
     Integer,Allocatable             :: healthy_cases_final(:,:,:)
     Integer,Allocatable             :: ill_ICU_cases_final(:,:,:)
     Integer,Allocatable             :: immune_cases_final(:,:,:)
@@ -180,11 +189,11 @@ Contains
 
     Integer                         :: max_date,n_change
     character(len=10)               :: l_seed_date
-    Real                            :: iter_pass_handle(6)
+    Real(kind=rk)                            :: iter_pass_handle(6)
 
     Character(len=8)                :: proc_char
     
-    Type(tTimer)                    :: timer
+    Type(tTimer),pointer            :: timer
 
     Integer(kind=ik), Allocatable, Dimension(:)     :: dist_id_cref 
 
@@ -222,7 +231,7 @@ Contains
     Logical                                         :: cp_reload
     Integer(kind=ik)                                :: cp_reload_time
     Integer                                         :: cp_reload_unit
-    character(len=:), Allocatable                   :: cp_dir
+    character(len=:), Allocatable                   :: cp_dir, cp_file
     
     character(len=8)                                :: cp_time_char
     Logical                                         :: cp_exist, cp_unit_open 
@@ -230,7 +239,7 @@ Contains
     Integer                                         :: std_int
     Integer                                         :: int_storage_size
     Integer(kind=1)                                 :: std_int1
-    Integer                                         :: int1_storage_size
+    Integer                                         :: int1_storage_size,ret
 
     Integer(kind=8)                                 :: wpos
     !===========================================================================
@@ -566,14 +575,16 @@ Contains
 !!!=============================================================================
     call pt_get("#cp.write" , cp_write)
     if ( cp_write ) then
-
+      
        call pt_get("#cp.time" , cp_time)
 
        write(cp_time_char,'("_",I7.7)')cp_time
 
+       cp_file = trim(output_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart"
+       !cp_file = "/quobyte/qb1/s33094/s33094/Archive/"//"CoSMic"//cp_time_char//proc_char//".restart"
+       !cp_file = "/quobyte/qb1/s16182/s16182/Archive/"//"CoSMic"//cp_time_char//proc_char//".restart"
        ! If we already have a restart file at the given timestep -----
-       inquire(exist=cp_exist, &
-            file=trim(output_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart")
+       inquire(exist=cp_exist, file=trim(cp_file))
 
        cp_unit_open = .FALSE.
        
@@ -584,7 +595,7 @@ Contains
           write(un_lf,'(A)')"Reset cp_write = .FALSE."
        else
           Open(newunit=cp_unit, action="write", status="replace", access="stream", &
-               file=trim(output_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart")
+               file=trim(cp_file))
           cp_unit_open =.TRUE.
        end if
        
@@ -660,7 +671,7 @@ Contains
           temp_int = pop_total(i)
           sim%dist_id(index+1: index+temp_int) = Int(pop_distid(i),2)
           sim%sex(index+1: index+temp_int)     = pop_sex(i)
-          sim%age( index+1: index+temp_int)    = pop_age(i)
+          sim%age( index+1: index+temp_int)    = int(pop_age(i),1)
           index                                = index + temp_int
        End Do
 
@@ -681,11 +692,11 @@ Contains
        Allocate(tmp_count(pop_size))
 
        if ( cp_reload ) then
-          call start_timer("cp_reload tmp_count",reset=.FALSE.)
+          !call start_timer("cp_reload tmp_count",reset=.FALSE.)
           wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
           !write(un_lf,PTF_M_AI0)"Reading index shuffle at position:",wpos,OMP_GET_THREAD_NUM()
           read(cp_reload_unit,pos=wpos)tmp_count
-          call end_timer("cp_reload tmp_count")
+          !call end_timer("cp_reload tmp_count")
        Else
           tmp_count = sample(sim%d,pop_size)
        End if
@@ -695,11 +706,17 @@ Contains
 !!!=============================================================================
        if ( cp_write ) then
           !$OMP critical
-          call start_timer("cp_write",reset=.FALSE.)
+          !call start_timer("cp_write",reset=.FALSE.)
           wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
           !write(un_lf,PTF_M_AI0)"Writing index shuffle at position:",wpos
           write(cp_unit,pos=wpos)tmp_count
-          call end_timer("cp_write")
+          flush(cp_unit)
+          ret = fsync(fnum(cp_unit))
+          if (ret /= 0) then
+             write(*,*) "ret = fsync(fnum(cp_unit)) = ",ret
+             stop
+          End if
+          !call end_timer("cp_write")
           !$OMP end critical 
        End if
        
@@ -717,7 +734,7 @@ Contains
           !     int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
           !     int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8,&
           !     OMP_GET_THREAD_NUM()
-          call start_timer("cp_reload sim",reset=.FALSE.) 
+          !call start_timer("cp_reload sim",reset=.FALSE.) 
           read(cp_reload_unit,  &
                pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
                      int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
@@ -732,7 +749,7 @@ Contains
                pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
                      int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
                      int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%d
-          call end_timer("cp_reload sim")
+          !call end_timer("cp_reload sim")
        Else
           
           Do icounty = 1,num_counties
@@ -987,9 +1004,9 @@ Contains
 
   Subroutine write_data_v2(healthy_cases_final,iter_pass_handle,R0Change,counties_index,&
        type_file,filename,proc,iter_s,iter_e)
-    Real,Dimension(:)             :: iter_pass_handle(:)
+    Real(kind=rk),Dimension(:)             :: iter_pass_handle(:)
     Real(kind=rk),Dimension(:,:)  :: R0Change
-    Real,Allocatable              :: R0change_rep(:,:),R0change_exp(:,:),temp_output(:)
+    Real(kind=rk),Allocatable              :: R0change_rep(:,:),R0change_exp(:,:),temp_output(:)
     Integer,Dimension(:,:,:)      :: healthy_cases_final
     Integer,Dimension(:)          :: counties_index
     Integer                       :: iter_s,iter_e, n_iter
@@ -1058,14 +1075,12 @@ Contains
        Write(Label(i),"(I3)")i
     End Do
 
-
     Write(year,"(I4)")date_time(1)
     Write(month,"(I2)")date_time(2)
     Write(day,"(I2)")date_time(3)
     If (date_time(2)<=9)Then
        month = "0"//Adjustl(month)
     Endif
-
 
     dir_prefix = "./output/"
 
@@ -1120,7 +1135,7 @@ Contains
     Integer(Kind=ik), Dimension(n_counties), Intent(In) :: counties
     
     Real(Kind=rk)   , Dimension(n_counties,2:time_n)  , Intent(In) ::  R0matrix
-    Real            , Allocatable, Dimension(:,:)     , Intent(In) ::  tmp_connect
+    Real(kind=rk)            , Allocatable, Dimension(:,:)     , Intent(In) ::  tmp_connect
   !  Real(Kind=rk)   , Dimension(n_counties,n_counties), Intent(In) ::  connect
     Real(Kind=rk)   , Allocatable, Dimension(:,:)     , Intent(In) ::  surv_ill_pas
     Real(Kind=rk)   , Allocatable, Dimension(:,:,:)   , Intent(In) ::  ICU_risk_pasd
@@ -1169,7 +1184,7 @@ Contains
     Integer                                          :: int1_storage_size
 
     Real(Kind=rk)   , Dimension(n_counties,n_counties) ::  connect
-    Integer                                            :: len
+    Integer                                            :: len, ret
     
     !===========================================================================
     ! Implementation
@@ -1232,6 +1247,7 @@ Contains
     immune_cases(:,start_time,it_ss)     = state_count_pl(immune    ,:)
 
     !write(un_lf,PTF_M_AI0)"sum(state_count_pl) =",sum(state_count_pl)
+    write(*,*)"it_ss=",it_ss
     
     Do timestep = start_time+1, time_n
 
@@ -1580,13 +1596,19 @@ Contains
           !     int(OMP_GET_NUM_THREADS(),8) + &
           !    int(int1_storage_size,8) * int(pop_size,8) * &
           !     int(OMP_GET_THREAD_NUM() ,8) + 1_8
-          call start_timer("cp_write",reset=.FALSE.)
           write(cp_unit,  &
                pos = int(int_storage_size,8)  * int(pop_size,8) * &
                      int(OMP_GET_NUM_THREADS(),8) + &
                      int(int1_storage_size,8) * int(pop_size,8) * &
                      int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
 
+          Flush(cp_unit)
+          ret = fsync(fnum(cp_unit))
+          if (ret /= 0) then
+             write(*,*) "ret = fsync(fnum(cp_unit)) = ",ret
+             stop
+          End if
+          
           !write(un_lf,PTF_M_AI0)"Writing sim%d at position:",&
           !     int(int_storage_size,8)  * int(pop_size,8) * &
           !    int(OMP_GET_NUM_THREADS(),8) + &
@@ -1602,7 +1624,13 @@ Contains
                      int(OMP_GET_NUM_THREADS(),8) + &
                      int(int_storage_size,8)  * int(pop_size,8) * &
                      int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%d
-          call end_timer("cp_write")
+          Flush(cp_unit)
+          ret = fsync(fnum(cp_unit))
+          if (ret /= 0) then
+             write(*,*) "ret = fsync(fnum(cp_unit)) = ",ret
+             stop
+          End if
+          
           !$OMP end critical 
        End if
 
@@ -1662,7 +1690,7 @@ Contains
     Integer, Dimension(:), Allocatable          :: temp,temp1
     Integer, Dimension(:), Allocatable          :: target_icu_risk_index
 
-    Real   , Dimension(:), Allocatable          :: icu_risk
+    Real(kind=rk)   , Dimension(:), Allocatable          :: icu_risk
 
     Character(Len=:), allocatable, Dimension(:)     :: transpr_sex
     Character(Len=:), allocatable, Dimension(:)     :: transpr_age_gr
@@ -1674,7 +1702,7 @@ Contains
     !** ------------------------------------------------------------------------
     
     If (control_age_sex == "NONE") Then
-       ch_age = (/"total"/)
+       ch_age = (/"to"/)
        ch_sex = (/"total"/)
     End If
 
@@ -1687,7 +1715,7 @@ Contains
     End If
 
     If (control_age_sex == "sex") Then
-       ch_age = (/"total"/)
+       ch_age = (/"to"/)
        ch_sex = (/"m","f"/)
     End If
 
@@ -1793,7 +1821,7 @@ Contains
     Integer, Dimension(:), Allocatable          :: temp,temp1
     Integer, Dimension(:), Allocatable          :: target_icu_risk_index
 
-    Real   , Dimension(:), Allocatable          :: surv_ill
+    Real(kind=rk)   , Dimension(:), Allocatable          :: surv_ill
     Character(Len=:), allocatable, Dimension(:) :: transpr_sex
     Character(Len=:), allocatable, Dimension(:) :: transpr_age_gr
     real(kind=rk), pointer, dimension(:)        :: transpr_surv_ill
@@ -1805,7 +1833,7 @@ Contains
 
     
     If (control_age_sex == "NONE") Then
-       ch_age = (/"total"/)
+       ch_age = (/"to"/)
        ch_sex = (/"total"/)
     End If
     
@@ -1818,7 +1846,7 @@ Contains
     End If
 
     If (control_age_sex == "sex") Then
-       ch_age = (/"total"/)
+       ch_age = (/"to"/)
        ch_sex = (/"m","f"/)
     End If
 
@@ -1913,7 +1941,7 @@ Contains
     Integer, Dimension(:), Allocatable          :: temp,temp1
     Integer, Dimension(:), Allocatable          :: target_icu_risk_index
 
-    Real   , Dimension(:), Allocatable          :: surv_icu
+    Real(kind=rk), Dimension(:), Allocatable    :: surv_icu
     Character(Len=:), allocatable, Dimension(:) :: transpr_sex
     Character(Len=:), allocatable, Dimension(:) :: transpr_age_gr
     real(kind=rk), pointer, dimension(:)        :: transpr_surv_icu
@@ -1923,7 +1951,7 @@ Contains
     !** ------------------------------------------------------------------------
     
     If (control_age_sex == "NONE") Then
-       ch_age = (/"total"/)
+       ch_age = (/"to"/)
        ch_sex = (/"total"/)
     End If
     
@@ -1936,7 +1964,7 @@ Contains
     End If
 
     If (control_age_sex == "sex") Then
-       ch_age = (/"total"/)
+       ch_age = (/"to"/)
        ch_sex = (/"m","f"/)
     End If
 
@@ -2012,5 +2040,5 @@ Contains
     End Do
 
   end subroutine init_surv_icu
-  
+ 
 End Module kernel
