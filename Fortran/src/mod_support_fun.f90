@@ -44,6 +44,7 @@
 !###############################################################################
 module support_fun
 
+  use precision
   use qsort_c_module
   use quicksort_nr
   
@@ -568,40 +569,40 @@ end do
 return
 end function get_file_N
 
-real function invert_char(Input_char)
-implicit none
-character(len=30)        Input_char
-character*28        temp_char_in
-real                temp_real
-integer             temp_int,i
-character           temp
-i = 1
-temp = Input_char(1)
-write(temp,"(i2)")temp_int
-temp_real = real(temp_int)
-invert_char = temp_real
-i = i + 1
-do
-    if (Input_char(i) == '.') then
-        i = i + 1
-        continue
-    else if (Input_char(i) == ' ') then
-        exit
-    else
-        temp = Input_char(i)
-        write(temp,"(i2)")temp_int
-        temp_real = real(temp_int)
-        invert_char = invert_char + temp_real/(10**(i-2))
-        i = i + 1
-    end if
-enddo
-return
-end function invert_char
+!!$real function invert_char(Input_char)
+!!$implicit none
+!!$character(len=30)        Input_char
+!!$character*28        temp_char_in
+!!$real                temp_real
+!!$integer             temp_int,i
+!!$character           temp
+!!$i = 1
+!!$temp = Input_char(1)
+!!$write(temp,"(i2)")temp_int
+!!$temp_real = real(temp_int)
+!!$invert_char = temp_real
+!!$i = i + 1
+!!$do
+!!$    if (Input_char(i) == '.') then
+!!$        i = i + 1
+!!$        continue
+!!$    else if (Input_char(i) == ' ') then
+!!$        exit
+!!$    else
+!!$        temp = Input_char(i)
+!!$        write(temp,"(i2)")temp_int
+!!$        temp_real = real(temp_int)
+!!$        invert_char = invert_char + temp_real/(10**(i-2))
+!!$        i = i + 1
+!!$    end if
+!!$enddo
+!!$return
+!!$end function invert_char
 
 function smoothing_change(x,steps,types)result(output)
 implicit none
-real,dimension(:)           :: x
-real,dimension(size(x))     :: output
+real(kind=rk),dimension(:)           :: x
+real(kind=rk),dimension(size(x))     :: output
 integer                     :: steps
 character(len = *)          :: types
 

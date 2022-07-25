@@ -54,6 +54,7 @@ Program CoSMic
   Use cosmic_io
   Use kernel
 
+  use OMP_LIB
   use mpi
 
   Implicit None
@@ -115,6 +116,8 @@ Program CoSMic
   Character(len=:), allocatable                  :: exec_type
   Integer(kind=ik),dimension(:), Allocatable     :: full_region_index ! Required by "optimization"
   Integer,dimension(:,:,:), Allocatable          :: ill_ICU_cases_final ! Store the evaluated ICU cases
+  Type(sims)                                     :: sim
+  Type(opt_sim_switchs)                          :: sim_switch
   Call mpi_init(ierr)
 
   Call MPI_COMM_RANK(MPI_COMM_WORLD, rank_mpi, ierr)
@@ -216,18 +219,16 @@ Program CoSMic
      Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%obsicu_nuts2)
   End If
 
-  Call end_Timer("Broadcast input data")
-  
   call pt_get("#R0_effects",R0_effects_fn)
 
-  If (rank_mpi==0) Then
-     write(un_lf,PTF_M_A)"Got R0_effects :",trim(R0_effects_fn)
-  End If
-  
   If (trim(R0_effects_fn) .NE. "LHC") then
      Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%R0_effect)
   End If
    
+  !Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%connect_total)
+  !Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%connect_states)
+  
+  Call end_Timer("Broadcast input data")
   !=============================================================================
   ! Load input data from param tree ============================================
   Call start_Timer("Load pt variables")
@@ -264,6 +265,10 @@ Program CoSMic
 
   call pt_get("#output.dir" , output_dir)
   call pt_get("#export_name", export_name)
+
+  sim_switch%sim_reuse  = .false.
+  sim_switch%sim_reload = .false.
+  sim_switch%sim_write  = .false.
   
   If (trim(R0_effects_fn) .NE. "LHC") then
      R0_effects = table_to_real_array(iol%R0_effect)
@@ -317,8 +322,8 @@ Program CoSMic
         write(*,*)"Program halted"
         goto 1001
         
-        !region_ids     = get_char_column(iol%counties,'Nuts2')
-        !region_ids_R0e = iol%R0_effect%head(1:38*(cur_week+1):cur_week+1)(1:4)
+        region_ids     = get_char_column(iol%counties,'Nuts2')
+        region_ids_R0e = iol%R0_effect%head(1:38*(cur_week+1):cur_week+1)(1:4)
         
         num_counties = size(region_ids)
         allocate(region_index(num_counties))
@@ -345,7 +350,7 @@ Program CoSMic
              less_contagious, R0_force, immune_stop, &
              R0change, R0delay ,R0delay_days, R0delay_type, &
              control_age_sex, seed_date, seed_before, sam_size, R0, &
-             R0_effects, region_index, &
+             R0_effects, region_index, sim, sim_switch, &
              output_dir, export_name, rank_mpi)
         
      End Do
@@ -364,20 +369,20 @@ Program CoSMic
         
      Else
 
-        !region_ids     = get_char_column(iol%counties,'Nuts2')
-        !write(*,*)"Found head iol%R0_effect%head: ",iol%R0_effect%head
-        !write(*,*) region_ids
+        region_ids     = get_char_column(iol%counties,'Nuts2')
+        write(*,*)"Found head iol%R0_effect%head: ",iol%R0_effect%head
+        write(*,*) region_ids
 
-        !num_counties = size(region_ids)
-        !allocate(region_index(num_counties))
+        num_counties = size(region_ids)
+        allocate(region_index(num_counties))
         
-        !do ii = 1, num_counties
-        !   do jj = 1, size(iol%R0_effect%head)
-        !      if (trim(region_ids(ii)) == trim(iol%R0_effect%head(jj)))then
-        !         region_index(ii) = jj
-        !      endif
-        !   end do
-        !end do
+        do ii = 1, num_counties
+           do jj = 1, size(iol%R0_effect%head)
+              if (trim(region_ids(ii)) == trim(iol%R0_effect%head(jj)))then
+                 region_index(ii) = jj
+              endif
+           end do
+        end do
         
      end if
 
@@ -413,7 +418,7 @@ Program CoSMic
             less_contagious, R0_force, immune_stop, &
             R0change, R0delay ,R0delay_days, R0delay_type, &
             control_age_sex, seed_date, seed_before, sam_size, R0, &
-            R0_effects, region_index, output_dir, export_name, rank_mpi)
+            R0_effects, region_index, sim, sim_switch, output_dir, export_name, rank_mpi)
      endif
      
      Call end_Timer("Exec. Simulation")

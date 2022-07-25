@@ -118,6 +118,14 @@ module global_types
 
   end type iols
 
+  type opt_sim_switchs
+     Logical                                :: sim_reuse  ! Reuse the previous sim data
+     Logical                                :: sim_reload ! Reloading checkpoint 
+     Logical                                :: sim_write  ! Writing restart data
+     Integer                                :: read_week  ! Reloading checkpoint of the given week
+     Integer                                :: write_week ! Writing restart data for the given week
+  end type 
+
 end module global_types
 
 !===============================================================================

@@ -34,6 +34,10 @@ Module param_tree
   !== Interfaces
   !> Getter functions to retrieve values from pt to local variables
   interface pt_get
+     module procedure pt_get_scalar_i4
+     module procedure pt_get_1d_i4
+     module procedure pt_get_2d_i4
+     
      module procedure pt_get_scalar_i8
      module procedure pt_get_1d_i8
      module procedure pt_get_2d_i8
@@ -66,13 +70,90 @@ Contains
   !> \name param tree public getter subroutines
   !> @{
   !> Module procedures for data retrieval from pt.
+  !! ===========================================================================
+  !> Subroutine to rerieve a scalar integer 8 value from pt
+  Subroutine pt_get_scalar_i4(p_name,arr,success)
+
+    character(len=*)               , intent(in)   :: p_name
+    integer(kind=4)                , intent(out)  :: arr
+
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+
+    loc_success=.FALSE.
+    
+    call get_scalar_i4(p_name,pt,arr,loc_success)
+
+    if (.not.present(success)) then
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
+    else
+       success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
+    End if
+
+  End Subroutine pt_get_scalar_i4
+
+  !! ===========================================================================
+  !> Subroutine to rerieve a 1D integer 8 value from pt
+  Subroutine pt_get_1d_i4(p_name,arr,success)
+
+    character(len=*)               , intent(in)   :: p_name
+    integer(kind=4)    ,allocatable, Dimension(:) :: arr
+
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+
+    loc_success=.FALSE.
+    
+    call get_1d_i4(p_name,pt,arr,loc_success)
+
+    if (.not.present(success)) then
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
+    else
+       success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
+    End if
+
+  End Subroutine pt_get_1d_i4
+  
+  !! ===========================================================================
+  !> Subroutine to rerieve a 2D integer 8 value from pt
+  Subroutine pt_get_2d_i4(p_name,arr,success)
+
+    character(len=*)               , intent(in)     :: p_name
+    integer(kind=4)    ,allocatable, Dimension(:,:) :: arr
+
+    Logical, optional, intent(out)                  :: success
+    Logical                                         :: loc_success
+
+    loc_success=.FALSE.
+    
+    call get_2d_i4(p_name,pt,arr,loc_success)
+
+    if (.not.present(success)) then
+       if (.not. loc_success) then
+          write(pt_umon,PTF_W_A)trim(p_name)//" was not found!"
+          if (STOP_IF_MISSING) stop
+       end if
+    else
+       success = loc_success
+       if ((.not. success) .AND. STOP_IF_MISSING) stop
+    End if
+
+  End Subroutine pt_get_2d_i4
   
   !! ===========================================================================
   !> Subroutine to rerieve a scalar integer 8 value from pt
   Subroutine pt_get_scalar_i8(p_name,arr,success)
 
     character(len=*)               , intent(in)   :: p_name
-    integer(kind=pt_ik)            , intent(out)  :: arr
+    integer(kind=8)                , intent(out)  :: arr
 
     Logical, optional, intent(out)                  :: success
     Logical                                         :: loc_success
@@ -98,7 +179,7 @@ Contains
   Subroutine pt_get_1d_i8(p_name,arr,success)
 
     character(len=*)               , intent(in)   :: p_name
-    integer(kind=pt_ik),allocatable, Dimension(:) :: arr
+    integer(kind=8)    ,allocatable, Dimension(:) :: arr
 
     Logical, optional, intent(out)                  :: success
     Logical                                         :: loc_success
@@ -124,7 +205,7 @@ Contains
   Subroutine pt_get_2d_i8(p_name,arr,success)
 
     character(len=*)               , intent(in)     :: p_name
-    integer(kind=pt_ik),allocatable, Dimension(:,:) :: arr
+    integer(kind=8)    ,allocatable, Dimension(:,:) :: arr
 
     Logical, optional, intent(out)                  :: success
     Logical                                         :: loc_success
@@ -306,6 +387,103 @@ Contains
   !> @{
   !> Module procedures for data retrieval from pt. Since they are recursive
   !> they have to have a branch as input parameter
+
+  !! ===========================================================================
+  !> Subroutine to rerieve a scalar integer 4 value from a branch
+  Recursive subroutine get_scalar_i4(p_name,branch,arr,success)
+
+    character(len=*)   , intent(in)    :: p_name
+    Type(pt_branch)    , intent(in)    :: branch
+    integer(kind=4)    , intent(out)   :: arr
+    Logical            , intent(inout) :: success
+
+    integer                          :: ii
+
+    do ii = 1, branch%no_leaves
+
+       if (p_name == trim(branch%leaves(ii)%name)) then
+          if (branch%leaves(ii)%dat_ty == "I") then
+             arr = Int(branch%leaves(ii)%i8(1),4)
+             success = .TRUE.
+             exit
+          End if
+       end if
+
+    End do
+
+    if (.not. success) then
+       do ii = 1, branch%no_branches
+          call  get_scalar_i4(p_name,branch%branches(ii),arr,success)
+          if (success) exit
+       End do
+    End if
+    
+  End subroutine get_scalar_i4
+
+  !! ===========================================================================
+  !> Subroutine to rerieve a 1D integer 8 value from a branch
+  Recursive subroutine get_1d_i4(p_name,branch,arr,success)
+
+    character(len=*)   , intent(in)                            :: p_name
+    Type(pt_branch)    , intent(in)                            :: branch
+    integer(kind=4)    , Allocatable, Dimension(:),intent(out) :: arr
+    Logical            , intent(inout)              :: success
+
+    integer                                    :: ii
+    
+    do ii = 1, branch%no_leaves
+       if (p_name == trim(branch%leaves(ii)%name)) then
+          if (branch%leaves(ii)%dat_ty == "I") then
+             arr = Int(branch%leaves(ii)%i8,4)
+             success = .TRUE.
+             exit
+          End if
+       end if
+
+    End do
+
+    if (.not.success) then
+       do ii = 1, branch%no_branches
+          call  get_1d_i4(p_name,branch%branches(ii),arr,success)
+          if(success) exit
+       End do
+    End if
+    
+  End subroutine get_1d_i4
+
+  !! ===========================================================================
+  !> Subroutine to rerieve a 2D integer 8 value from a branch
+  Recursive subroutine get_2d_i4(p_name,branch,arr,success)
+
+    character(len=*)   , intent(in)                              :: p_name
+    Type(pt_branch)    , intent(in)                              :: branch
+    integer(kind=4)    , Allocatable, Dimension(:,:),intent(out) :: arr
+    Logical            , intent(inout)                           :: success
+
+    integer                                    :: ii
+    
+    do ii = 1, branch%no_leaves
+       if (p_name == trim(branch%leaves(ii)%name)) then
+          if (branch%leaves(ii)%dat_ty == "I") then
+             arr = reshape(&
+                  Int(branch%leaves(ii)%i8,4), &
+                  [branch%leaves(ii)%dat_no(1),branch%leaves(ii)%dat_no(2)]&
+                  )
+             
+             success = .TRUE.
+             exit
+          End if
+       end if
+    End do
+
+    if(.not. success) then
+       do ii = 1, branch%no_branches
+          call  get_2d_i4(p_name,branch%branches(ii),arr,success)
+          if(success) exit
+       End do
+    End if
+    
+  End subroutine get_2d_i4
   
   !! ===========================================================================
   !> Subroutine to rerieve a scalar integer 8 value from a branch
@@ -313,10 +491,10 @@ Contains
 
     character(len=*)   , intent(in)    :: p_name
     Type(pt_branch)    , intent(in)    :: branch
-    integer(kind=pt_ik), intent(out)   :: arr
+    integer(kind=8)    , intent(out)   :: arr
     Logical            , intent(inout) :: success
 
-    integer                          :: ii, jj, c_len
+    integer                          :: ii
 
     do ii = 1, branch%no_leaves
 
@@ -345,10 +523,10 @@ Contains
 
     character(len=*)   , intent(in)                            :: p_name
     Type(pt_branch)    , intent(in)                            :: branch
-    integer(kind=pt_ik), Allocatable, Dimension(:),intent(out) :: arr
+    integer(kind=8)    , Allocatable, Dimension(:),intent(out) :: arr
     Logical            , intent(inout)              :: success
 
-    integer                                    :: ii, jj, c_len
+    integer                                    :: ii
     
     do ii = 1, branch%no_leaves
        if (p_name == trim(branch%leaves(ii)%name)) then
@@ -376,10 +554,10 @@ Contains
 
     character(len=*)   , intent(in)                              :: p_name
     Type(pt_branch)    , intent(in)                              :: branch
-    integer(kind=pt_ik), Allocatable, Dimension(:,:),intent(out) :: arr
+    integer(kind=8)    , Allocatable, Dimension(:,:),intent(out) :: arr
     Logical            , intent(inout)                           :: success
 
-    integer                                    :: ii, jj, c_len
+    integer                                    :: ii
     
     do ii = 1, branch%no_leaves
        if (p_name == trim(branch%leaves(ii)%name)) then
@@ -413,7 +591,7 @@ Contains
     Real(kind=pt_rk)                             ,intent(out)  :: arr
     Logical            , intent(inout)                         :: success
 
-    integer                                    :: ii, jj, c_len
+    integer                                    :: ii
 
     do ii = 1, branch%no_leaves
 
@@ -452,7 +630,7 @@ Contains
     Real(kind=pt_rk), Allocatable, Dimension(:)  ,intent(out)  :: arr
     Logical            , intent(inout)                         :: success
 
-    integer                                    :: ii, jj, c_len
+    integer                                    :: ii
 
     do ii = 1, branch%no_leaves
 
@@ -485,8 +663,7 @@ Contains
     Real(kind=pt_rk), Allocatable, Dimension(:,:),intent(out)  :: arr
     Logical            , intent(inout)                         :: success
 
-    integer                                    :: ii, jj, c_len
-
+    integer                                    :: ii
     do ii = 1, branch%no_leaves
 
        if (p_name == trim(branch%leaves(ii)%name)) then
@@ -521,7 +698,7 @@ Contains
     character(len=:)   , intent(inout), allocatable :: arr
     Logical            , intent(inout)              :: success
     
-    integer                          :: ii, jj, c_len
+    integer                          :: ii
 
     do ii = 1, branch%no_leaves
        
@@ -595,7 +772,7 @@ Contains
     Logical            , intent(inout) :: arr
     Logical            , intent(inout) :: success
     
-    integer                            :: ii, jj, c_len
+    integer                            :: ii
 
     do ii = 1, branch%no_leaves
 
@@ -647,7 +824,7 @@ Contains
 
     Character(len=pt_mcl)                   :: fmt_str   = ''
 
-    Logical                                 :: loc_data, loc_commands
+    Logical                                 :: loc_data
     
     !---------------------------------------------------------------------------
     spacer=Len_Trim(branch%desc)+23
@@ -698,10 +875,10 @@ Contains
     do ii = 1, branch%no_leaves
        If (ii < branch%no_leaves) Then
           Call log_pt_leaf(branch%leaves(ii), unit_lf, &
-                           fmt_str(1:len_fmt_str)//"   |", data, branch)
+                           fmt_str(1:len_fmt_str)//"   |", data)
        Else
           Call log_pt_leaf(branch%leaves(ii), unit_lf, &
-                           fmt_str(1:len_fmt_str)//"    ", data, branch) 
+                           fmt_str(1:len_fmt_str)//"    ", data) 
        End If
     end do
 
@@ -709,13 +886,12 @@ Contains
 
   !! ===========================================================================
   !> Subroutine which prints out a pt_leaf structure
-  Subroutine log_pt_leaf(leaf, unit_lf, fmt_str_in, data, parent)
+  Subroutine log_pt_leaf(leaf, unit_lf, fmt_str_in, data)
 
     Type(pt_leaf)   , intent(in)            :: leaf
     Integer         , Intent(in)            :: unit_lf
     Character(len=*), Intent(In) , optional :: fmt_str_in
     Logical         , Intent(In) , optional :: data
-    Type(pt_Branch) , Intent(in) , optional :: parent 
 
     Character(Len=pt_mcl)           :: b_sep, fmt_str
     Integer                         :: lt_desc, len_fmt_str
@@ -856,7 +1032,7 @@ Contains
     Integer                          :: un, io_stat
     Integer                          :: n_lines, n_params, n_files
     integer                          :: line_len, dat_dim
-    integer                          :: ii, nn, kk, pos, nn_fields, n_elem, elems_read
+    integer                          :: ii, nn, kk, nn_fields, n_elem, elems_read
 
     Character(Len=pt_mcl), Allocatable, Dimension(:)  :: lines
 
@@ -946,6 +1122,7 @@ Contains
 
           !! Get positions of field seperator --------------
           str_arr = strtok(lines(ii),fsep)
+write(*,*)"-",str_arr,"--"
           !! Calc number of fields in keyword line ---------
           nn_fields = size(str_arr)
 
@@ -1349,7 +1526,6 @@ Contains
     Integer(kind=pt_ik), Dimension(:), Intent(in)    :: head
     Integer(kind=pt_ik)              , Intent(InOut) :: pos
 
-    CHARACTER(len=pt_mcl)                            :: char_mold
     Integer(kind=pt_ik)                              :: ii, jj
     Integer(kind=pt_ik)                              :: no_pt_ik_elems, dat_no
 

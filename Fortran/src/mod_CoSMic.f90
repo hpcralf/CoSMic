@@ -72,8 +72,9 @@ Module kernel
   End Type icu_risk_lists
 
   Type sims
-     Integer(kind=2),Allocatable     :: dist_id(:)
-     Integer(kind=2),Allocatable     :: dist_id_rn(:)
+     Integer,Allocatable             :: dist_id(:)
+     Integer,Allocatable             :: dist_id_rn(:)
+     Integer,Allocatable             :: sample_index(:)
      Character,Allocatable           :: sex(:)
      Integer(kind=1),Allocatable     :: age(:)
      Integer(kind=1),Allocatable     :: t1(:)
@@ -112,7 +113,7 @@ Contains
        less_contagious, R0_force, immune_stop, &
        R0change, R0delay ,R0delay_days, R0delay_type, &
        control_age_sex, seed_date, seed_before, sam_size, R0, &
-       R0_effects, region_index, output_dir, export_name, proc ) Result(ill_ICU_cases_final)
+       R0_effects, region_index, sim_backup, sim_switch, output_dir, export_name, proc ) Result(ill_ICU_cases_final)
 
     !===========================================================================
     ! Declaration
@@ -139,6 +140,8 @@ Contains
     Real(kind=rk)                                , intent(in) :: R0
     Real(kind=rk),    Allocatable, Dimension(:,:),intent(in)  :: R0_effects
     integer(kind=ik), allocatable, dimension(:)  , intent(in) :: region_index
+    Type(sims)                                 , intent(inout):: sim_backup
+    Type(opt_sim_switchs)                        , intent(in) :: sim_switch
     character(len=:), Allocatable                , intent(in) :: output_dir
     character(len=:), Allocatable                , intent(in) :: export_name
     Integer(kind=mpi_ik)                         , intent(in) :: proc
@@ -239,9 +242,10 @@ Contains
     Integer                                         :: std_int
     Integer                                         :: int_storage_size
     Integer(kind=1)                                 :: std_int1
-    Integer                                         :: int1_storage_size,ret
 
+    Integer                                         :: int1_storage_size,ret
     Integer(kind=8)                                 :: wpos
+    Character(len=:), allocatable                   :: exec_type
     !===========================================================================
     ! Implementation
     !===========================================================================
@@ -256,11 +260,17 @@ Contains
     !** Get time_n from R0change -----------------
     time_n = Maxval(R0change) + 1
 
+    Call pt_get("#exec.procedure",exec_type)
     !** If Checkpoint should be loaded -----------
-    call pt_get("#cp.reload"      , cp_reload)
-    if (cp_reload) then
-       call pt_get("#cp.reload.time" , cp_reload_time)
-    end if
+    if (trim(exec_type) .eq. "Optimization") then 
+       cp_reload = sim_switch%sim_reload
+       cp_reload_time = sim_switch%read_week
+    else
+      call pt_get("#cp.reload"      , cp_reload)
+      if (cp_reload) then
+         call pt_get("#cp.reload.time" , cp_reload_time)
+      end if
+    endif
     
     !** Shift seed_date --------------------------
     days             = 1
@@ -573,16 +583,21 @@ Contains
 !!!=============================================================================
 !!! Open checkpoint restart file ===============================================
 !!!=============================================================================
-    call pt_get("#cp.write" , cp_write)
+    if (trim(exec_type) .eq. "Optimization") then 
+       cp_write = sim_switch%sim_write
+    else
+       call pt_get("#cp.write" , cp_write)
+    endif
     if ( cp_write ) then
-      
-       call pt_get("#cp.time" , cp_time)
-
-       write(cp_time_char,'("_",I7.7)')cp_time
-
+       if (trim(exec_type) .eq. "Optimization") then 
+          cp_time  = time_n ! Write restart file at the last timestep
+          write(cp_time_char,'("_",I3.3,"week")')sim_switch%write_week ! The restart file is written in weeks
+       else
+          call pt_get("#cp.time" , cp_time)
+          write(cp_time_char,'("_",I7.7)')cp_time
+       endif
        cp_file = trim(output_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart"
-       !cp_file = "/quobyte/qb1/s33094/s33094/Archive/"//"CoSMic"//cp_time_char//proc_char//".restart"
-       !cp_file = "/quobyte/qb1/s16182/s16182/Archive/"//"CoSMic"//cp_time_char//proc_char//".restart"
+
        ! If we already have a restart file at the given timestep -----
        inquire(exist=cp_exist, file=trim(cp_file))
 
@@ -605,8 +620,11 @@ Contains
 
        call pt_get("#cp.dir"         , cp_dir)
 
-       write(cp_time_char,'("_",I7.7)')cp_reload_time
-
+       if (trim(exec_type) .eq. "Optimization") then 
+          write(cp_time_char,'("_",I3.3,"week")')cp_reload_time
+       else
+          write(cp_time_char,'("_",I7.7)')cp_reload_time
+       endif
        Open(newunit=cp_reload_unit, action="read", status="old", access="stream", &
             file=trim(cp_dir)//"/"//"CoSMic"//cp_time_char//proc_char//".restart")
 
@@ -628,23 +646,16 @@ Contains
     pop_total = Nint(Real(pop_total)/Real(Sum(pop_total)) * sam_size)
     pop_size      = Sum(pop_total)
 
-    !call random_seed(size=ii)               ! Get size of seed array.
-    !ii = max(ii,OMP_GET_MAX_THREADS())
-    !ur = urandom_seed(ii)
-    !write(un_lf,*)ii,proc,ur
-    !    call random_seed(put=ur)  ! Put seed array into PRNG.
-    !    call random_seed(put=(/1,2,3,4,5,6,7,8/))  ! Put seed array into PRNG.
-
-    !$OMP PARALLEL default(shared) &
-    !$OMP& private(sim,tmp_count,ii) &
-    !$OMP& firstprivate(index,temp_int,i,temp,days,icounty,county,jj,kk) &
-    !$OMP& firstprivate(seed_ill,seed_inf_cont,seed_inf_ncont,seed_death,seed_d_seq,temp_date) &
+    !$OMP PARALLEL  IF(trim(exec_type) .ne. "Optimization")&
+    !$OMP& default(shared) &
+    !$OMP& private(sim) &
     !$OMP& firstprivate(tmp_d_new) &
+    !$OMP& firstprivate(index,temp_int,i,temp,days,icounty,county,jj,kk,ii,tmp_count) &
+    !$OMP& firstprivate(seed_ill,seed_inf_cont,seed_inf_ncont,seed_death,seed_d_seq,temp_date) &
     !$OMP& firstPRIVATE(il_d,inf_ill,inf_c_d,inf_cont,inf_nc_d,inf_ncont,inf_dth) &
     !$OMP& firstPRIVATE(rownumbers_left,rownumbers) &
     !$OMP& firstPRIVATE(rownumbers_ill,rownumbers_cont,rownumbers_ncont,rownumbers_dea) &
     !$OMP& firstprivate(seed_ill_dur,seed_inf_cont_dur,seed_inf_ncont_dur,l_seed_date) 
-
     !$OMP DO
     Do it_ss = 1, (iter_e-iter_s+1)
 
@@ -658,6 +669,7 @@ Contains
        
        If (.Not.Allocated(sim%dist_id))Then
           Allocate(sim%dist_id(pop_size))
+          Allocate(sim%sample_index(pop_size))
           Allocate(sim%sex(pop_size))
           Allocate(sim%age(pop_size))
           Allocate(sim%t1(pop_size))
@@ -665,6 +677,18 @@ Contains
           Allocate(sim%d(pop_size))
        Endif
 
+       If (.Not.Allocated(sim_backup%dist_id))Then
+          Allocate(sim_backup%dist_id(pop_size))
+          Allocate(sim_backup%sample_index(pop_size))
+          Allocate(sim_backup%sex(pop_size))
+          Allocate(sim_backup%age(pop_size))
+          Allocate(sim_backup%t1(pop_size))
+          Allocate(sim_backup%t2(pop_size))
+          Allocate(sim_backup%d(pop_size))
+       Endif
+
+
+     If (.not.(sim_switch%sim_reuse)) then
        index = 0 ! position index
 
        Do i = 1, Size(pop_total)
@@ -679,12 +703,12 @@ Contains
        sim%t2 = missing
        sim%d(:)  = 1
 
-       write(un_lf,PTF_SEP)
-       Write(un_lf,PTF_M_AI0)"Size of population is", pop_size
+     write(un_lf,PTF_SEP)
+     Write(un_lf,PTF_M_AI0)"Size of population is", pop_size
 
-       !** Reshuffle population since ordering according to dist id leads to ***
-       !** lower infections in older age groups                              ***
-       !** To do so we use sim$d
+     !** Reshuffle population since ordering according to dist id leads to ***
+     !** lower infections in older age groups                              ***
+     !** To do so we use
        do ii = 1, pop_size
           sim%d(ii) = ii
        End do
@@ -700,6 +724,7 @@ Contains
        Else
           tmp_count = sample(sim%d,pop_size)
        End if
+       sim%sample_index = tmp_count
 
 !!!=============================================================================
 !!! Write index shuffle for restart since this is non deterministic ============
@@ -876,7 +901,20 @@ Contains
           End Do ! do icounty = 1,size(sim_counties)
 
        end if
-
+      else ! Reuse the passed sim data
+        sim%dist_id      = sim_backup%dist_id
+        sim%sample_index = sim_backup%sample_index
+        sim%sex          = sim_backup%sex 
+        sim%age          = sim_backup%age
+        sim%t1           = sim_backup%t1  
+        sim%d            = sim_backup%d
+        if ( cp_write ) then
+          !$OMP critical
+          write(cp_unit,pos=int_storage_size*pop_size*OMP_GET_THREAD_NUM()+1)sim%sample_index
+          !$OMP end critical 
+        End if
+      endif
+      
        sim%t2 = missing
 
        !** Set up dist_id renumbered cross_reference ---------------------------
@@ -905,6 +943,17 @@ Contains
             immune_cases_final,dead_cases_final, &
             it_ss, cp_write, cp_time , cp_unit, cp_reload, cp_reload_time)
 
+       !** Return the ultimate sim data to the caller --------------------------
+       if((OMP_GET_THREAD_NUM() == 0) .and. (it_ss .eq. (iter_e-iter_s+1))) then
+        sim_backup%dist_id      = sim%dist_id
+        sim_backup%sample_index = sim%sample_index
+        sim_backup%sex          = sim%sex 
+        sim_backup%age          = sim%age
+        sim_backup%t1           = sim%t1
+        sim_backup%t2           = sim%t2 
+        sim_backup%d            = sim%d
+       endif
+
        if (OMP_GET_THREAD_NUM() == 0) then
           call end_timer("Sim Loop")
 
@@ -917,6 +966,7 @@ Contains
        days             = +1
 
        l_seed_date        = add_date(l_seed_date,days)
+        
     End Do     ! end do it_ss
     !$OMP END DO
     !$OMP END PARALLEL
@@ -929,25 +979,31 @@ Contains
     if ( cp_write .AND. cp_unit_open ) then
        close(cp_unit)
     End if
-       
-    call start_timer("+- Writeout",reset=.FALSE.)
+    if ( cp_reload ) then 
+       close(cp_reload_unit)
+    End if
     
-    call write_data(trim(output_dir)//"healthy_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         healthy_cases_final,R0_effects)                                    
-    call write_data(trim(output_dir)//"inf_noncon_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         inf_noncon_cases_final,R0_effects)
-    call write_data(trim(output_dir)//"inf_contag_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         inf_contag_cases_final,R0_effects)
-    call write_data(trim(output_dir)//"ill_contag_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         ill_contag_cases_final,R0_effects)
-    call write_data(trim(output_dir)//"ill_ICU_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         ill_ICU_cases_final,R0_effects)
-    call write_data(trim(output_dir)//"dead_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         dead_cases_final,R0_effects)
-    call write_data(trim(output_dir)//"immune_cases_"//trim(export_name)//trim(proc_char)//".dat", &
-         immune_cases_final,R0_effects)
-    
-    call end_timer("+- Writeout")
+    !** Disable the writeout operation for the execution with "Optimization" type ------------------
+    if(trim(exec_type) .ne. "Optimization") then  
+      call start_timer("+- Writeout",reset=.FALSE.)
+      
+      call write_data(trim(output_dir)//"healthy_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+           healthy_cases_final,R0_effects)                                    
+      call write_data(trim(output_dir)//"inf_noncon_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+           inf_noncon_cases_final,R0_effects)
+      call write_data(trim(output_dir)//"inf_contag_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+           inf_contag_cases_final,R0_effects)
+      call write_data(trim(output_dir)//"ill_contag_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+           ill_contag_cases_final,R0_effects)
+      call write_data(trim(output_dir)//"ill_ICU_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+           ill_ICU_cases_final,R0_effects)
+      call write_data(trim(output_dir)//"dead_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+           dead_cases_final,R0_effects)
+      call write_data(trim(output_dir)//"immune_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+           immune_cases_final,R0_effects)
+      
+      call end_timer("+- Writeout")
+    endif
 
   End Function COVID19_Spatial_Microsimulation_for_Germany
 
@@ -1184,7 +1240,10 @@ Contains
     Integer                                          :: int1_storage_size
 
     Real(Kind=rk)   , Dimension(n_counties,n_counties) ::  connect
+
     Integer                                            :: len, ret
+
+    Character(len=:), allocatable                    :: exec_type
     
     !===========================================================================
     ! Implementation
@@ -1221,6 +1280,7 @@ Contains
     call pt_get("#cont_dur"       , cont_dur       )
     call pt_get("#ill_dur"        , ill_dur        )
     call pt_get("#icu_dur"        , icu_dur        )
+    call pt_get("#exec.procedure" ,exec_type       )
 
     ! call end_timer("+- Prepare data")
 
@@ -1232,7 +1292,7 @@ Contains
          state_count_pl, min_state, max_state, 1, n_counties)
 
     !** Record initial state -----------------------------------------
-    if (cp_reload) then
+    if (cp_reload .and. ((trim(exec_type) .ne. "Optimization"))) then
        start_time = cp_reload_time
     else
        start_time = 1

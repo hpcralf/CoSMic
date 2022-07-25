@@ -238,7 +238,7 @@ contains
     Character                              :: loc_sep
     Logical                                :: loc_head, loc_rownames
 
-    Integer                                :: io_stat, un, ii, jj
+    Integer                                :: io_stat, un, ii, jj, ls
     Integer                                :: no_lines, dim1, dim2, sep_pos
     character(len=65536)                   :: l_head
     character(len=:),allocatable           :: loc_str_chars
