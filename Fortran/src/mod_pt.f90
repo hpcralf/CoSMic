@@ -1032,7 +1032,7 @@ Contains
     Integer                          :: un, io_stat
     Integer                          :: n_lines, n_params, n_files
     integer                          :: line_len, dat_dim
-    integer                          :: ii, nn, kk, nn_fields, n_elem, elems_read
+    integer                          :: ii, nn, kk, nn_fields, n_elem, elems_read, cc
 
     Character(Len=pt_mcl), Allocatable, Dimension(:)  :: lines
 
@@ -1122,7 +1122,7 @@ Contains
 
           !! Get positions of field seperator --------------
           str_arr = strtok(lines(ii),fsep)
-write(*,*)"-",str_arr,"--"
+
           !! Calc number of fields in keyword line ---------
           nn_fields = size(str_arr)
 
@@ -1496,7 +1496,6 @@ write(*,*)"-",str_arr,"--"
        
     End Do
 
-    write(*,*)branch%no_branches,trim(branch%desc),"--"
     !** Branches **************************************************************
     Do ii = 1, branch%no_branches
        Call serialize_branch_rec(branch%branches(ii),head,pos)

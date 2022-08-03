@@ -119,32 +119,32 @@ Contains
     ! Declaration
     !===========================================================================
 
-    Type(iols), Target                           , intent(in) :: iol
-    Integer(kind=ik)                             , intent(in) :: iter_s, iter_e
-    Integer(kind=ik)                             , intent(in) :: inf_dur
-    Integer(kind=ik)                             , intent(in) :: cont_dur
-    Integer(kind=ik)                             , intent(in) :: ill_dur
-    Integer(kind=ik)                             , intent(in) :: icu_dur
-    Integer(kind=ik), Allocatable, Dimension(:)  , intent(in) :: icu_per_day
-    Real(kind=rk)                                , intent(in) :: less_contagious
-    Real(kind=rk)                                , intent(in) :: R0_force
-    Logical                                      , intent(in) :: immune_stop
-    Integer(kind=ik), Allocatable, Dimension(:,:), intent(in) :: R0change
-    Logical                                      , intent(in) :: R0delay
-    Integer(kind=ik)                             , intent(in) :: R0delay_days
-    Character(len=*)                             , intent(in) :: R0delay_type
-    character(len=*)                             , intent(in) :: control_age_sex
-    character(len=*)                             , intent(in) :: seed_date
-    Integer(kind=ik)                             , intent(in) :: seed_before    
-    Integer(kind=ik)                             , intent(in) :: sam_size
-    Real(kind=rk)                                , intent(in) :: R0
-    Real(kind=rk),    Allocatable, Dimension(:,:),intent(in)  :: R0_effects
-    integer(kind=ik), allocatable, dimension(:)  , intent(in) :: region_index
-    Type(sims)                                 , intent(inout):: sim_backup
-    Type(opt_sim_switchs)                        , intent(in) :: sim_switch
-    character(len=:), Allocatable                , intent(in) :: output_dir
-    character(len=:), Allocatable                , intent(in) :: export_name
-    Integer(kind=mpi_ik)                         , intent(in) :: proc
+    Type(iols), Target                           , intent(in)   :: iol
+    Integer(kind=ik)                             , intent(in)   :: iter_s, iter_e
+    Integer(kind=ik)                             , intent(in)   :: inf_dur
+    Integer(kind=ik)                             , intent(in)   :: cont_dur
+    Integer(kind=ik)                             , intent(in)   :: ill_dur
+    Integer(kind=ik)                             , intent(in)   :: icu_dur
+    Integer(kind=ik), Allocatable, Dimension(:)  , intent(in)   :: icu_per_day
+    Real(kind=rk)                                , intent(in)   :: less_contagious
+    Real(kind=rk)                                , intent(in)   :: R0_force
+    Logical                                      , intent(in)   :: immune_stop
+    Integer(kind=ik), Allocatable, Dimension(:,:), intent(in)   :: R0change
+    Logical                                      , intent(in)   :: R0delay
+    Integer(kind=ik)                             , intent(in)   :: R0delay_days
+    Character(len=*)                             , intent(in)   :: R0delay_type
+    character(len=*)                             , intent(in)   :: control_age_sex
+    character(len=*)                             , intent(in)   :: seed_date
+    Integer(kind=ik)                             , intent(in)   :: seed_before    
+    Integer(kind=ik)                             , intent(in)   :: sam_size
+    Real(kind=rk)                                , intent(in)   :: R0
+    Real(kind=rk),    Allocatable, Dimension(:,:), intent(in)   :: R0_effects
+    integer(kind=ik), allocatable, dimension(:)  , intent(in)   :: region_index
+    Type(sims)                                   , intent(inout):: sim_backup
+    Type(opt_sim_switchs)                        , intent(in)   :: sim_switch
+    character(len=:), Allocatable                , intent(in)   :: output_dir
+    character(len=:), Allocatable                , intent(in)   :: export_name
+    Integer(kind=mpi_ik)                         , intent(in)   :: proc
     
     !--------------------------------------------------------------------------
 
@@ -957,10 +957,10 @@ Contains
        if (OMP_GET_THREAD_NUM() == 0) then
           call end_timer("Sim Loop")
 
-          timer = get_timer("Sim Loop")
+          !timer = get_timer("Sim Loop")
 
-          write(un_lf,'(A)',ADVANCE="NO")"Time per day:"
-          call write_realtime(frac_realtime(diff_realtimes(timer%rt_end,timer%rt_start),time_n),un_lf)
+          !write(un_lf,'(A)',ADVANCE="NO")"Time per day:"
+          !call write_realtime(frac_realtime(diff_realtimes(timer%rt_end,timer%rt_start),time_n),un_lf)
        End if
 
        days             = +1
