@@ -250,8 +250,13 @@ Contains
     ! Implementation
     !===========================================================================
 
+    Call pt_get("#exec.procedure",exec_type)
     !** Init proc character to name files --------
-    write(proc_char,'("_",I7.7)')proc
+    if(trim(exec_type) .eq. "Optimization") then
+      write(proc_char,'("_",I7.7)')ROOT
+    else
+      write(proc_char,'("_",I7.7)')proc
+    endif
 
     !** Init default integer storage size --------
     int_storage_size  = storage_size(std_int)  / FILE_STORAGE_SIZE
@@ -260,7 +265,6 @@ Contains
     !** Get time_n from R0change -----------------
     time_n = Maxval(R0change) + 1
 
-    Call pt_get("#exec.procedure",exec_type)
     !** If Checkpoint should be loaded -----------
     if (trim(exec_type) .eq. "Optimization") then 
        cp_reload = sim_switch%sim_reload
@@ -646,7 +650,7 @@ Contains
     pop_total = Nint(Real(pop_total)/Real(Sum(pop_total)) * sam_size)
     pop_size      = Sum(pop_total)
 
-    !$OMP PARALLEL  IF(trim(exec_type) .ne. "Optimization")&
+    !$OMP PARALLEL if((iter_e-iter_s+1) .gt. 1)&
     !$OMP& default(shared) &
     !$OMP& private(sim) &
     !$OMP& firstprivate(tmp_d_new) &
@@ -677,7 +681,8 @@ Contains
           Allocate(sim%d(pop_size))
        Endif
 
-       If (.Not.Allocated(sim_backup%dist_id))Then
+       !$OMP critical
+        If ((OMP_GET_THREAD_NUM() == 0) .and. (.Not.Allocated(sim_backup%dist_id))) Then
           Allocate(sim_backup%dist_id(pop_size))
           Allocate(sim_backup%sample_index(pop_size))
           Allocate(sim_backup%sex(pop_size))
@@ -686,7 +691,7 @@ Contains
           Allocate(sim_backup%t2(pop_size))
           Allocate(sim_backup%d(pop_size))
        Endif
-
+       !$OMP END critical
 
      If (.not.(sim_switch%sim_reuse)) then
        index = 0 ! position index
@@ -716,8 +721,13 @@ Contains
        Allocate(tmp_count(pop_size))
 
        if ( cp_reload ) then
+          if ( trim(exec_type) .eq. "Optimization" ) then 
+            wpos = int(int_storage_size,8)*int(pop_size,8)*int(ROOT,8)+1_8
+          else
+            wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
+          endif
           !call start_timer("cp_reload tmp_count",reset=.FALSE.)
-          wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
+          
           !write(un_lf,PTF_M_AI0)"Reading index shuffle at position:",wpos,OMP_GET_THREAD_NUM()
           read(cp_reload_unit,pos=wpos)tmp_count
           !call end_timer("cp_reload tmp_count")
@@ -730,19 +740,25 @@ Contains
 !!! Write index shuffle for restart since this is non deterministic ============
 !!!=============================================================================
        if ( cp_write ) then
-          !$OMP critical
-          !call start_timer("cp_write",reset=.FALSE.)
-          wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
-          !write(un_lf,PTF_M_AI0)"Writing index shuffle at position:",wpos
-          write(cp_unit,pos=wpos)tmp_count
-          flush(cp_unit)
-          ret = fsync(fnum(cp_unit))
-          if (ret /= 0) then
-             write(*,*) "ret = fsync(fnum(cp_unit)) = ",ret
-             stop
-          End if
-          !call end_timer("cp_write")
-          !$OMP end critical 
+          if ( (trim(exec_type) .eq. "Optimization") &
+           .and. (OMP_GET_THREAD_NUM() .eq. 0) ) then
+            wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
+            write(cp_unit,pos=wpos)tmp_count
+          else
+            !$OMP critical
+            !call start_timer("cp_write",reset=.FALSE.)
+            wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
+            !write(un_lf,PTF_M_AI0)"Writing index shuffle at position:",wpos
+            write(cp_unit,pos=wpos)tmp_count
+            flush(cp_unit)
+            ret = fsync(fnum(cp_unit))
+            if (ret /= 0) then
+               write(*,*) "ret = fsync(fnum(cp_unit)) = ",ret
+               stop
+            End if
+            !call end_timer("cp_write")
+            !$OMP end critical
+          endif 
        End if
        
        sim%dist_id=sim%dist_id(tmp_count)
@@ -760,20 +776,30 @@ Contains
           !     int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8,&
           !     OMP_GET_THREAD_NUM()
           !call start_timer("cp_reload sim",reset=.FALSE.) 
-          read(cp_reload_unit,  &
-               pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
-                     int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
+          if ( trim(exec_type) .eq. "Optimization" ) then
+            read(cp_reload_unit,  &
+                 pos = int(int_storage_size,8)  * int(pop_size,8) + &
+                       int(int1_storage_size,8) * int(pop_size,8) * int(ROOT ,8) + 1_8)sim%t1
+            read(cp_reload_unit, &
+                 pos = int(int_storage_size,8)  * int(pop_size,8) + &
+                       int(int1_storage_size,8) * int(pop_size,8) + &
+                       int(int_storage_size,8)  * int(pop_size,8) * int(ROOT ,8) + 1_8)sim%d
+          else
+            read(cp_reload_unit,  &
+                 pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
+                       int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
 
-          !write(un_lf,PTF_M_AI0)"Reading sim%d at position:",&
-          !     int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
-          !     int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
-          !     int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8,&
-          !     OMP_GET_THREAD_NUM()
-          
-          read(cp_reload_unit, &
-               pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
-                     int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
-                     int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%d
+            !write(un_lf,PTF_M_AI0)"Reading sim%d at position:",&
+            !     int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
+            !     int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
+            !     int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8,&
+            !     OMP_GET_THREAD_NUM()
+            
+            read(cp_reload_unit, &
+                 pos = int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
+                       int(int1_storage_size,8) * int(pop_size,8) * int(OMP_GET_NUM_THREADS(),8) + &
+                       int(int_storage_size,8)  * int(pop_size,8) * int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%d
+          endif
           !call end_timer("cp_reload sim")
        Else
           
@@ -909,9 +935,11 @@ Contains
         sim%t1           = sim_backup%t1  
         sim%d            = sim_backup%d
         if ( cp_write ) then
-          !$OMP critical
-          write(cp_unit,pos=int_storage_size*pop_size*OMP_GET_THREAD_NUM()+1)sim%sample_index
-          !$OMP end critical 
+          if ( (trim(exec_type) .eq. "Optimization") &
+           .and. (OMP_GET_THREAD_NUM() .eq. 0) ) then
+            wpos = int(int_storage_size,8)*int(pop_size,8)*int(OMP_GET_THREAD_NUM(),8)+1_8
+            write(cp_unit,pos=wpos)sim%sample_index
+          endif
         End if
       endif
       
@@ -944,7 +972,10 @@ Contains
             it_ss, cp_write, cp_time , cp_unit, cp_reload, cp_reload_time)
 
        !** Return the ultimate sim data to the caller --------------------------
-       if((OMP_GET_THREAD_NUM() == 0) .and. (it_ss .eq. (iter_e-iter_s+1))) then
+      
+       !$OMP critical
+       ! when there is only one single thread
+       if(OMP_GET_THREAD_NUM() == 0 .and. (it_ss .eq. (iter_e-iter_s+1))) then
         sim_backup%dist_id      = sim%dist_id
         sim_backup%sample_index = sim%sample_index
         sim_backup%sex          = sim%sex 
@@ -953,7 +984,8 @@ Contains
         sim_backup%t2           = sim%t2 
         sim_backup%d            = sim%d
        endif
-
+       !$OMP end critical
+     
        if (OMP_GET_THREAD_NUM() == 0) then
           call end_timer("Sim Loop")
 
@@ -979,9 +1011,9 @@ Contains
     if ( cp_write .AND. cp_unit_open ) then
        close(cp_unit)
     End if
-    if ( cp_reload ) then 
-       close(cp_reload_unit)
-    End if
+  !  if ( cp_reload ) then 
+  !     close(cp_reload_unit)
+  !  End if
     
     !** Disable the writeout operation for the execution with "Optimization" type ------------------
     if(trim(exec_type) .ne. "Optimization") then  
@@ -1307,7 +1339,7 @@ Contains
     immune_cases(:,start_time,it_ss)     = state_count_pl(immune    ,:)
 
     !write(un_lf,PTF_M_AI0)"sum(state_count_pl) =",sum(state_count_pl)
-    write(*,*)"it_ss=",it_ss
+    !write(*,*)"it_ss=",it_ss
     
     Do timestep = start_time+1, time_n
 
@@ -1650,48 +1682,66 @@ Contains
        !!=======================================================================
        if ( cp_write .AND. (timestep == cp_time) ) then
 
-          !$OMP critical
-          !write(un_lf,PTF_M_AI0)"Writing sim%t1 at position:",&
-          !     int(int_storage_size,8)  * int(pop_size,8) * &
-          !     int(OMP_GET_NUM_THREADS(),8) + &
-          !    int(int1_storage_size,8) * int(pop_size,8) * &
-          !     int(OMP_GET_THREAD_NUM() ,8) + 1_8
-          write(cp_unit,  &
-               pos = int(int_storage_size,8)  * int(pop_size,8) * &
-                     int(OMP_GET_NUM_THREADS(),8) + &
-                     int(int1_storage_size,8) * int(pop_size,8) * &
-                     int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
+          if( (trim(exec_type) .eq. "Optimization") .and. &
+            ( OMP_GET_THREAD_NUM() .eq. 0) ) then
+            write(cp_unit,  &
+                 pos = int(int_storage_size,8)  * int(pop_size,8) &
+                        + &
+                       int(int1_storage_size,8) * int(pop_size,8) * &
+                       int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
+            
+            write(cp_unit, &
+                 pos = int(int_storage_size,8)  * int(pop_size,8) &
+                        + &
+                       int(int1_storage_size,8) * int(pop_size,8) &
+                        + &
+                       int(int_storage_size,8)  * int(pop_size,8) * &
+                       int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%d
+            
+          else
+            !$OMP critical
+            !write(un_lf,PTF_M_AI0)"Writing sim%t1 at position:",&
+            !     int(int_storage_size,8)  * int(pop_size,8) * &
+            !     int(OMP_GET_NUM_THREADS(),8) + &
+            !    int(int1_storage_size,8) * int(pop_size,8) * &
+            !     int(OMP_GET_THREAD_NUM() ,8) + 1_8
+            write(cp_unit,  &
+                 pos = int(int_storage_size,8)  * int(pop_size,8) * &
+                       int(OMP_GET_NUM_THREADS(),8) + &
+                       int(int1_storage_size,8) * int(pop_size,8) * &
+                       int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%t1
 
-          Flush(cp_unit)
-          ret = fsync(fnum(cp_unit))
-          if (ret /= 0) then
-             write(*,*) "ret = fsync(fnum(cp_unit)) = ",ret
-             stop
-          End if
-          
-          !write(un_lf,PTF_M_AI0)"Writing sim%d at position:",&
-          !     int(int_storage_size,8)  * int(pop_size,8) * &
-          !    int(OMP_GET_NUM_THREADS(),8) + &
-          !     int(int1_storage_size,8) * int(pop_size,8) * &
-          !     int(OMP_GET_NUM_THREADS(),8) + &
-          !     int(int_storage_size,8)  * int(pop_size,8) * &
-          !     int(OMP_GET_THREAD_NUM() ,8) + 1_8
-          
-          write(cp_unit, &
-               pos = int(int_storage_size,8)  * int(pop_size,8) * &
-                     int(OMP_GET_NUM_THREADS(),8) + &
-                     int(int1_storage_size,8) * int(pop_size,8) * &
-                     int(OMP_GET_NUM_THREADS(),8) + &
-                     int(int_storage_size,8)  * int(pop_size,8) * &
-                     int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%d
-          Flush(cp_unit)
-          ret = fsync(fnum(cp_unit))
-          if (ret /= 0) then
-             write(*,*) "ret = fsync(fnum(cp_unit)) = ",ret
-             stop
-          End if
-          
-          !$OMP end critical 
+            Flush(cp_unit)
+            ret = fsync(fnum(cp_unit))
+            if (ret /= 0) then
+               write(*,*) "ret = fsync(fnum(cp_unit)) = ",ret
+               stop
+            End if
+            
+            !write(un_lf,PTF_M_AI0)"Writing sim%d at position:",&
+            !     int(int_storage_size,8)  * int(pop_size,8) * &
+            !    int(OMP_GET_NUM_THREADS(),8) + &
+            !     int(int1_storage_size,8) * int(pop_size,8) * &
+            !     int(OMP_GET_NUM_THREADS(),8) + &
+            !     int(int_storage_size,8)  * int(pop_size,8) * &
+            !     int(OMP_GET_THREAD_NUM() ,8) + 1_8
+            
+            write(cp_unit, &
+                 pos = int(int_storage_size,8)  * int(pop_size,8) * &
+                       int(OMP_GET_NUM_THREADS(),8) + &
+                       int(int1_storage_size,8) * int(pop_size,8) * &
+                       int(OMP_GET_NUM_THREADS(),8) + &
+                       int(int_storage_size,8)  * int(pop_size,8) * &
+                       int(OMP_GET_THREAD_NUM() ,8) + 1_8)sim%d
+            Flush(cp_unit)
+            ret = fsync(fnum(cp_unit))
+            if (ret /= 0) then
+               write(*,*) "ret = fsync(fnum(cp_unit)) = ",ret
+               stop
+            End if
+            
+            !$OMP end critical 
+          endif
        End if
 
     ENd Do
