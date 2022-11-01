@@ -667,7 +667,7 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                     geom_line(data=df.gg,aes(x=time,y = dt.mean, color = data), size=1)
                 
                 ## Store global maximum ------------------------------
-                glob.max[ii] <- max(c(glob.max[ii],max(df.gg[,2:4])))
+                glob.max[ii] <- max(c(glob.max[ii],max(df.gg[df.gg$time>=x.min,2:4])))
                 
             }
             
@@ -767,14 +767,20 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
                                                      name= paste("R0effect",fill.dt))
                             }
                             if ( region == "nuts2" ) {
-                                gg.R0e <- data.frame(date = sp$seed_date +
-                                                         unlist(lapply(sp$R0change,
-                                                                       function(x){
-                                                                           as.integer(x[1]+(x[2]-x[1])/2)})),
-                                                     R0e = as.numeric(
-                                                         state.list[[pg]][1,paste0(st,
-                                                         (1:length(sp$R0change)))]),
+
+			       gg.R0e.date <- sp$seed_date + unlist(
+			          lapply(sp$R0change,function(x){
+                                     as.integer(x[1]+(x[2]-x[1])/2)}))
+                            if ( pspace$R0effect$type == "directv" ) {
+                                gg.R0e.R0e <- pspace$R0effect$param[,st]
+                            } else {
+				gg.R0e.R0e <- as.numeric(state.list[[pg]][1,paste0(st,
+                                                         (1:length(sp$R0change)))])
+			    }
+                                gg.R0e <- data.frame(date = gg.R0e.date,
+                                                     R0e = gg.R0e.R0e,
                                                      name= paste("R0effect",fill.dt))
+						     
                             }
                             
                             
