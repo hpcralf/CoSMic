@@ -48,6 +48,7 @@ Module genetic_algorithm
   use precision
   use urandom
   use global_types
+  use global_constants
   use precision
   use cosmic_io
   use kernel
@@ -61,11 +62,10 @@ Module genetic_algorithm
   implicit none
 
   !** Constants ---------------------------------------
-  Real, parameter     :: INV     = 99.0 ! Corresponds to NA for fitness array
-  Real, parameter     :: EPS     = EPSILON(1.0) ! Tolerance precision, a magnitude of e-07
-  Real, parameter     :: NULVAL  = -1.0 ! Corresponds to NA for icu_nuts2_cases
-  Integer,parameter   :: ROOT    = 0 ! The root rank
-  Integer,parameter   :: WEEKLEN = 7 ! The length of a week by days
+  Real, parameter     :: INV       = 99.0 ! Corresponds to NA for fitness array
+  Real, parameter     :: EPS       = EPSILON(1.0) ! Tolerance precision, a magnitude of e-07
+  Real, parameter     :: NULVAL    = -1.0 ! Corresponds to NA for icu_nuts2_cases
+  Integer,parameter   :: WEEKLEN   = 7 ! The length of a week by days
 
   !** Extend the Five-number summary statistic with a mean value -------
   !** The description of the Five-number summary can be found: ---------
@@ -138,6 +138,7 @@ Contains
     Real, Allocatable, Dimension(:)               :: local_fitness ! Store the local fitness for each rank
     Real, Allocatable, Dimension(:)               :: fitness, tmp_fitness ! fitness: store the calculated fitness 
     Real, Allocatable, Dimension(:)               :: sorted_fitness
+    Real                                          :: dummy_fitness
     Type(ga_summary)                              :: summary_fitness
 
     Integer,dimension(:,:,:), Allocatable         :: ill_ICU_cases_final ! Store the evaluated ICU cases
@@ -151,6 +152,7 @@ Contains
     integer                                       :: half
     Integer,dimension(:,:,:), Allocatable         :: aggreg_sum_by_county
     Real,dimension(:,:), Allocatable              :: avg_by_county ! Record the simulated ICU cases by state/nuts2
+    Real,dimension(:), Allocatable                :: pre_eval
 
     Character(Len=10), allocatable, Dimension(:)  :: obsicu_nuts2_date
     Integer(kind=ik), Allocatable, Dimension(:)   :: obsicu_nuts2_cases
@@ -164,7 +166,7 @@ Contains
     Integer(kind=ik)                              :: iter
     Integer                                       :: R0_effects_dim2size, R0change_dim2size
     Integer                                       :: end_week
-    Integer                                       :: tail_pos
+    Integer                                       :: head_pos, tail_pos
 
 
     !=================================================
@@ -208,14 +210,14 @@ Contains
     Integer, Allocatable, dimension(:)            :: opt_index, opt_week_index
     Integer                                       :: opt_local_size ! The number of local population when there are more than two MPI ranks
     Integer                                       :: nvals ! The total number of parameters to be optimized
-     integer, Allocatable, dimension(:)           :: sorted_index
-    integer                                       :: idx
-    real                                          :: pre_fitv, curr_fitv
+    Integer, Allocatable, dimension(:)            :: sorted_index
+    Integer                                       :: idx
+    Real                                          :: pre_fitv, curr_fitv
 
     !=================================================
     ! Automation
     !=================================================
-    Type(sims)                                    :: sim, sim_backup ! sim_backup exists forau guaranteeing data correctness
+    Type(sims)                                    :: sim, sim_backup ! sim_backup exists for guaranteeing data correctness
     Type(opt_sim_switchs)                         :: sim_switch
     Integer                                       :: start_window, end_window ! [start_window:end_window] spans the calibrated weeks
     Real(kind=rk), Allocatable, Dimension(:,:)    :: tmp_R0_effects ! Temporarily store the R0 values, currently being calibrated
@@ -243,7 +245,8 @@ Contains
     Real                                          :: opt_pmutation ! 0.1
 
     Character(len=:),Allocatable,dimension(:)     :: opt_names ! The optimized targets
-    Real                                          :: opt_lb, opt_ub
+    Real(kind=rk),Allocatable,dimension(:)        :: opt_lb, opt_ub, global_opt_lb, global_opt_ub ! Indicate the R0 range for each region
+    Logical                                       :: flag
     !=======================================================
     ! MPI-related
     !=======================================================
@@ -255,6 +258,8 @@ Contains
     call pt_get("#opt_filter",opt_filter)
     call pt_get("#opt_pop_size",opt_pop_size)
     call pt_get("#opt_max_iter",opt_num_gene)
+    call pt_get("#opt_lb",opt_lb)
+    call pt_get("#opt_ub",opt_ub)
     call pt_get("#opt_target_region",opt_target_region)
     call pt_get("#auto_calibrate",auto_calibrate)
     call pt_get("#sim_reload",sim_reload)
@@ -289,12 +294,10 @@ Contains
     opt_pmutation     = 0.1
     
     !** TODO: shall we obtain the value of opt_lb and opt_ub dynamically (from static_parameters.dat) --
-    opt_lb = 0.1
-    opt_ub = 1.0
     opt_elitism = max(1,NINT(opt_pop_size*0.05))
     if (rank_mpi .eq. ROOT) then
       call print_ga_header(opt_pop_size, opt_num_gene, opt_elitism, opt_pcrossover, opt_pmutation, &
-                    opt_target_region)
+                    opt_target_region, auto_calibrate)
     endif
   
     iter = iter_e - iter_s + 1
@@ -313,7 +316,11 @@ Contains
       
         !** unique_nuts2s: set of affected nuts2; pos_nuts2: see the function "get_unique_nuts2_state" ----
         unique_nuts2s = get_unique_nuts2_state(region_index,pos_nuts2)
+
         num_nuts2 = size(unique_nuts2s) ! Get the number of affected nuts2
+
+      !  Allocate(opt_lb(num_nuts2))
+      !  Allocate(opt_ub(num_nuts2))
 
         !** Get the position of the given nuts2 in the full nuts2 list -----
         !** The results are stored back to array "unique_nuts2s" -----------
@@ -325,7 +332,7 @@ Contains
             endif
           enddo
         enddo
-      
+       
         Allocate(obs_lb(num_nuts2))
         Allocate(obs_ub(num_nuts2))
         Allocate(eval_lb(num_nuts2))
@@ -335,6 +342,9 @@ Contains
         obs_ub  = 0
         eval_lb = 0
         eval_ub = 0
+
+        Allocate(pre_eval(num_nuts2))
+        pre_eval = 0.0
 
         obsicu_nuts2_date     = get_char_column(iol%obsicu_nuts2,'date')
         obsicu_nuts2_cases    = get_int_table_column(iol%obsicu_nuts2,'cases')
@@ -387,9 +397,9 @@ Contains
             !** Apply convolution filter ---------------
             if (opt_filter) then
               call conv_filter(seltarget_icu_by_nuts2_icucases(:,i), coff_len, num_actudays)
-            endif
-            obs_starttime = Date2Unixtime(seltarget_icu_by_nuts2_icudates(1,1))
+            endif  
           enddo
+          obs_starttime = Date2Unixtime(seltarget_icu_by_nuts2_icudates(1,1))
         endif
            
       !** When the optimized target region is "state" ------------------- 
@@ -399,6 +409,9 @@ Contains
         ! uniq_distid: the affected states; pos_state: collect the beginning index from which a different state starts
         uniq_distid = get_unique_nuts2_state(region_index, pos_state) 
         num_states = size(uniq_distid) ! Get the number of the affected states
+
+      !  Allocate(opt_lb(num_states))
+      !  Allocate(opt_ub(num_states))
 
         Allocate(obs_lb(num_states))
         Allocate(obs_ub(num_states))
@@ -457,13 +470,15 @@ Contains
             if (opt_filter) then
               call conv_filter(seltarget_icu_by_state_icucases(:,i), coff_len, m)                      
             endif
-            obs_starttime = Date2Unixtime(seltarget_icu_by_state_icudates(1,1))
           enddo
+          obs_starttime = Date2Unixtime(seltarget_icu_by_state_icudates(1,1))
         end if
       case default
         write(*,*)  "Otherwise, the given target is not supported yet"
         call exit(status) 
     end select
+  !  opt_lb = 0.1
+  !  opt_ub = 1.0
 
     !** The checkpoint reloading and wirte are performed in weeks
     if (.not. sim_reload) then
@@ -523,7 +538,6 @@ Contains
       if (size(sim_R0change,dim=2) .ne. 0) then
         call ini_R0change(sim_R0change)
       endif
-
       !!** By default the optimization target cover all the nuts2 regions or states, the order is indentical to
       !!** the one shown in the R0effect header. ---
       allocate(tmp_R0_effects(diff_weeks,R0_effects_dim2size))
@@ -563,9 +577,10 @@ Contains
 
       Allocate(opt_week_index(nvals))
       opt_week_index = 0
+      head_pos = len(trim(iol%R0_effect%head(1)))+1
       tail_pos = len(trim(opt_names(1)))
       do i = 1,nvals
-        READ(opt_names(i)(tail_pos:tail_pos), "(I4)") j
+        READ(opt_names(i)(head_pos:tail_pos), "(I4)") j
         opt_week_index(i) = j
       enddo
       start_window = opt_week_index(1)
@@ -583,12 +598,20 @@ Contains
         print *,"Error: R0change is not large enough to cover all the optimized target!"
         Call exit(status)
       endif
-      if (end_week .gt. R0_effects_dim2size) then
+      if (end_week .gt. size(R0_effects,dim=1)) then
         print *,"Error: R0change is so large that execeed the upper bound of R0_effects!"
         Call exit(status)
       endif
 
       allocate(tmp_R0_effects(R0change_dim2size,R0_effects_dim2size))
+      select case (trim(opt_target_region))
+        case("nuts2")
+          Allocate(global_opt_lb(num_nuts2))
+          Allocate(global_opt_ub(num_nuts2))
+        case("state")
+          Allocate(global_opt_lb(num_states))
+          Allocate(global_opt_ub(num_states))
+      end select
     endif
 
     Allocate(local_fitness(opt_local_size))
@@ -603,7 +626,11 @@ Contains
     do j = 1, opt_local_size
       do i = 1, nvals
         !! The random number is between opt_lb and opt_ub.
-        local_ini_pop(i,j) = random_uniform(opt_lb,opt_ub)
+        if (auto_calibrate) then
+          local_ini_pop(i,j) = random_uniform(opt_lb(opt_index(i)),opt_ub(opt_index(i)))
+        else
+          local_ini_pop(i,j) = random_uniform(opt_lb(i),opt_ub(i))
+        endif
       enddo
     enddo
 
@@ -639,10 +666,10 @@ Contains
       !!! ==============================================
       !!! Core of the genetic algorithm ================
       !!! ==============================================
-
+      flag = .false.
       do gene_ii=1,opt_num_gene ! Iterate over the generations
         ga_res%opt_acuiter = gene_ii
-    
+
         do pop_ii = 1,opt_local_size ! Iterate over all the population
           !** Proceed only when the corresponding fitness is not given (aka. INV) ----
           if (local_fitness(pop_ii) .ne. INV) then
@@ -662,6 +689,7 @@ Contains
           else
             tmp_R0_effects = R0_effects(start_week:end_week,:)
           endif
+         
           !** Call the COVID19 spatial simuation and store the simulated ICU data to ill_ICU_cases_final -----
           if ( auto_calibrate .and. ((end_window - start_window + 1) .ne. opt_window_size) ) then
             !** Handle with the corner cases (initial and last)
@@ -692,7 +720,8 @@ Contains
                             num_nuts2, num_states, pos_nuts2, pos_state, &
                             time_n, iter, coff_len, ill_ICU_cases_final, rank_mpi, &
                             seltarget_icu_by_state_icucases, seltarget_icu_by_nuts2_icucases, &
-                            obs_lb, obs_ub, eval_lb)
+                            obs_lb, obs_ub, eval_lb, eval_ub, opt_lb, opt_ub, flag, &
+                            auto_calibrate, tmp_R0_effects, pre_eval, opt_window_size)
           
       
           deallocate(ill_ICU_cases_final)
@@ -757,8 +786,12 @@ Contains
         !** 1. reaches the generation limit --------------------------------------------------------
         !** 2. the maximal fitnesses over the passed generations are equal with tolerable error ----
         !** 3. all the values in the fitness are identical -----------------------------------------
-        if ((gene_ii .eq. opt_num_gene) .or. (run_sum .ge. opt_num_gene)&
-            .or. (fitness(max_pos) .eq. fitness(min_pos))) then
+      !  if ((gene_ii .eq. opt_num_gene) .or. (run_sum .ge. opt_num_gene)&
+      !      .or. (fitness(max_pos) .eq. fitness(min_pos))) then
+      !    exit
+      !  endif
+      !!TODO: Temporarily set the stop criteria to the below
+        if ((gene_ii .eq. opt_num_gene)) then
           exit
         endif
 
@@ -835,7 +868,7 @@ Contains
           endif
           !** To randomly mutate a parameter/gene ------------------------------------------------------
           if(opt_pmutation .ne. 0.0) then
-            call mutation(ini_pop, fitness, opt_pmutation, opt_lb, opt_ub)
+            call mutation(ini_pop, fitness, opt_pmutation, opt_lb, opt_ub, opt_index, auto_calibrate)
           endif
           !** Replace the unfittest populations with the fittest ones, which are stored in sorted_pop ---
           call elitism(fitness, ini_pop, sorted_pop, sorted_fitness)
@@ -848,7 +881,6 @@ Contains
                       ROOT, MPI_COMM_WORLD, ierr) ! Root scatters the updated population to all ranks
    
       enddo
-
       if (rank_mpi .eq. ROOT) then
         ! Store the best solution to "ga_res"
         ga_res%opt_bestsol      = ini_pop(:,max_pos)
@@ -873,11 +905,50 @@ Contains
         tmp_R0_effects = 0._rk
         tmp_R0_effects(1:(end_window-start_window+1),:) = R0_effects(start_window:end_window,:)
 
+        !** Call the microsimulation again with the best R0 effects to ---
+        !** adjust the R0 range for each region --------------------------
+        flag = .true.
+       
+        if (((end_window - start_window + 1) .ne. opt_window_size) ) then
+          !** Handle with the corner cases (initial and last)
+          ill_ICU_cases_final = COVID19_Spatial_Microsimulation_for_Germany(iol,&
+              iter_s, iter_e , &
+              inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
+              less_contagious, R0_force, immune_stop, &
+              cor_R0change, R0delay ,R0delay_days, R0delay_type, &
+              control_age_sex, seed_date, seed_before, sam_size, R0, &
+              tmp_R0_effects, region_index, sim, sim_switch, output_dir, export_name, rank_mpi)
+        else
+          ill_ICU_cases_final = COVID19_Spatial_Microsimulation_for_Germany(iol,&
+              iter_s, iter_e , &
+              inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
+              less_contagious, R0_force, immune_stop, &
+              R0change, R0delay ,R0delay_days, R0delay_type, &
+              control_age_sex, seed_date, seed_before, sam_size, R0, &
+              tmp_R0_effects, region_index, sim, sim_switch, output_dir, export_name, rank_mpi)
+        endif
+
+        call fitness_cal(dummy_fitness, opt_target_region, opt_target_icu, opt_filter, &
+                          num_nuts2, num_states, pos_nuts2, pos_state, &
+                          time_n, iter, coff_len, ill_ICU_cases_final, rank_mpi, &
+                          seltarget_icu_by_state_icucases, seltarget_icu_by_nuts2_icucases, &
+                          obs_lb, obs_ub, eval_lb, eval_ub, opt_lb, opt_ub, flag, &
+                          auto_calibrate, tmp_R0_effects, pre_eval, opt_window_size)
+        deallocate(ill_ICU_cases_final)
+        
+        if (sim_switch%sim_reuse) then
+          sim%t1      = sim_backup%t1
+          sim%d       = sim_backup%d
+        endif
+
         !** Write restart file before automation ends ----------------------
-        if (end_window .ge. current_week) then 
+        if ((end_window .ge. current_week) .and. &
+          (rank_mpi .eq. ROOT)) then 
           sim_switch%sim_write  = .true.
           sim_switch%write_week = start_window + size(sim_R0change,dim=2)
         endif
+
+        R0_effects(start_window,:) = tmp_R0_effects(1,:)
 
         !** Call the COVID19 spatial simuation once again, its resulting sim data serves as the --
         !** input to the next-round calibration -------------------------------------------------- 
@@ -889,13 +960,99 @@ Contains
               sim_R0change, R0delay ,R0delay_days, R0delay_type, &
               control_age_sex, seed_date, seed_before, sam_size, R0, &
               tmp_R0_effects, region_index, sim, sim_switch, output_dir, export_name, rank_mpi)
+
+          call MPI_Bcast(sim%t1,size(sim%t1),MPI_INTEGER1,ROOT,MPI_COMM_WORLD,ierr)
+          call MPI_Bcast(sim%d, size(sim%d) ,MPI_INTEGER ,ROOT,MPI_COMM_WORLD,ierr)
+          call MPI_Bcast(opt_lb,size(opt_lb),MPI_REAL8   ,ROOT,MPI_COMM_WORLD,ierr)
+          call MPI_Bcast(opt_ub,size(opt_ub),MPI_REAL8   ,ROOT,MPI_COMM_WORLD,ierr)
+            
           sim_backup%t1           = sim%t1
           sim_backup%d            = sim%d
           sim_switch%sim_reuse    = .true.
           sim_switch%sim_reload   = .false.
         endif
+      else
+        tmp_R0_effects = 0._rk  
+        tmp_R0_effects(start_week:end_week,:) = R0_effects(start_week:end_week,:)
+    
+        !** Call the microsimulation again with the best R0 effects to ---
+        !** adjust the R0 range for each region --------------------------
+        flag = .true.
+
+        ill_ICU_cases_final = COVID19_Spatial_Microsimulation_for_Germany(iol,&
+                iter_s, iter_e , &
+                inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
+                less_contagious, R0_force, immune_stop, &
+                R0change, R0delay ,R0delay_days, R0delay_type, &
+                control_age_sex, seed_date, seed_before, sam_size, R0, &
+                tmp_R0_effects, region_index, sim, sim_switch, output_dir, export_name, rank_mpi)
+        
+        call fitness_cal(dummy_fitness, opt_target_region, opt_target_icu, opt_filter, &
+                          num_nuts2, num_states, pos_nuts2, pos_state, &
+                          time_n, iter, coff_len, ill_ICU_cases_final, rank_mpi, &
+                          seltarget_icu_by_state_icucases, seltarget_icu_by_nuts2_icucases, &
+                          obs_lb, obs_ub, eval_lb, eval_ub, global_opt_lb, global_opt_ub, flag, &
+                          auto_calibrate, tmp_R0_effects, pre_eval, opt_window_size)
+        deallocate(ill_ICU_cases_final)
+
+        if (rank_mpi .eq. ROOT) then 
+          sim_switch%sim_write  = .true.
+          sim_switch%write_week = start_week + size(R0change,dim=2)
+        endif
+        
+        ill_ICU_cases_final = COVID19_Spatial_Microsimulation_for_Germany(iol,&
+            1, 1 , &
+            inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
+            less_contagious, R0_force, immune_stop, &
+            R0change, R0delay ,R0delay_days, R0delay_type, &
+            control_age_sex, seed_date, seed_before, sam_size, R0, &
+            tmp_R0_effects, region_index, sim, sim_switch, output_dir, export_name, rank_mpi)
       endif
-             
+      if (sim_switch%sim_write ) then
+              if (auto_calibrate) then
+                time_n = maxval(sim_R0change) + 1
+              else
+                time_n = maxval(R0change) + 1
+              endif
+              if (.not.allocated(aggreg_sum_by_county)) then
+                Allocate(aggreg_sum_by_county(num_nuts2,time_n,1))
+                Allocate(avg_by_county(num_nuts2,time_n))
+              endif
+              aggreg_sum_by_county = 0
+              avg_by_county = 0.0
+
+              !** TODO: The fitness relevant to the death data ----------
+              !** The fitness relavant to the icu data ------------------
+            
+              ! TODO: record the number of the affected states
+              do j = 1,1
+                do i = 1,time_n 
+                  do k = 1,num_nuts2
+                    aggreg_sum_by_county(k,i,j) = sum(ill_ICU_cases_final(pos_nuts2(k):pos_nuts2(k+1)-1,i,j)) ! Sum over all the counties within one state
+                  enddo
+                enddo
+              enddo
+        
+              do j = 1,time_n
+                do i = 1,num_nuts2
+                  avg_by_county(i,j) = Real(sum(aggreg_sum_by_county(i,j,:)))/Real(1) ! Average over the running iterates
+                enddo
+              enddo
+              if (PT_DEBUG) then
+                if (rank_mpi .eq. ROOT) then
+                  do j = 1,time_n 
+                    print *,avg_by_county(:,j)
+                  enddo
+                endif
+              endif
+            deallocate(aggreg_sum_by_county)
+            deallocate(avg_by_county)
+      endif
+
+      if (allocated(ill_ICU_cases_final)) then
+        deallocate(ill_ICU_cases_final)
+      endif
+        
       !** The automation stop criteria reaches ---------------
       if (end_window .ge. current_week) then
         start_window = end_window+1
@@ -950,11 +1107,15 @@ Contains
         opt_week_index(i) = opt_week_index(i-opt_window_size)
       enddo
       
-      !** Population generation --------------------------
+      !** Population generation -------------------------- 
       do j = 1, opt_local_size
         do i = 1, nvals
           ! The random number is between opt_lb and opt_ub.
-          local_ini_pop(i,j) = random_uniform(opt_lb,opt_ub)
+          if (auto_calibrate) then
+            local_ini_pop(i,j) = random_uniform(opt_lb(opt_index(i)),opt_ub(opt_index(i)))
+          else
+            local_ini_pop(i,j) = random_uniform(opt_lb(i),opt_ub(i))
+          endif
         enddo
       enddo
       refer_date_mod = add_date(refer_date,1)
@@ -989,15 +1150,26 @@ Contains
         endif
         time_n = maxval(cor_R0change) + 1
       endif
+
     enddo
     
     !** Write the updated R0 value to the resulting file ---------------------
     if(rank_mpi .eq. ROOT) then
       write(*,'(A)')"Write the calibrated R0effects to a restart file..."
-      call writeback_R0effects(auto_calibrate, opt_target_region, &
+      if (auto_calibrate) then
+        call writeback_R0effects_optlub(auto_calibrate, opt_target_region, &
                                   opt_names, ga_res, &
-                                  R0_effects, iol%R0_effect%head, start_week)
+                                  R0_effects, iol%R0_effect%head, start_week, &
+                                  sim_switch%write_week, opt_lb, opt_ub)
+      else
+        call writeback_R0effects_optlub(auto_calibrate, opt_target_region, &
+                                  opt_names, ga_res, &
+                                  R0_effects, iol%R0_effect%head, start_week, &
+                                  sim_switch%write_week, global_opt_lb, global_opt_ub)
+      endif
     endif
+
+    call MPI_Barrier(MPI_COMM_WORLD,ierr)
 
     !!! ===================================
     !!! Deallocation ======================
@@ -1203,25 +1375,35 @@ Contains
                             num_nuts2, num_states, pos_nuts2, pos_state, &
                             time_n, iter, coff_len, ill_ICU_cases_final, rank_mpi, &
                             seltarget_icu_by_state_icucases, seltarget_icu_by_nuts2_icucases, &
-                            obs_lb, obs_ub, eval_lb)
-    Real, intent(out)                                   :: val_localfitness
-    character(Len=:), Allocatable, intent(in)           :: opt_target_region
-    Logical, intent(in)                                 :: opt_target_icu, opt_filter ! .true.
-    Integer, intent(in)                                 :: num_nuts2, num_states
-    Integer, Allocatable,dimension(:), intent(in)       :: pos_nuts2, pos_state
-    Integer, intent(in)                                 :: time_n, iter, coff_len
-    Integer, Allocatable,dimension(:,:,:), intent(in)   :: ill_ICU_cases_final ! Store the evaluated ICU cases
-    Integer(kind=mpi_ik), intent(in)                    :: rank_mpi
-    Real,Allocatable,dimension(:,:), intent(in)         :: seltarget_icu_by_state_icucases
-    Real,Allocatable,dimension(:,:), intent(in)         :: seltarget_icu_by_nuts2_icucases
-    Integer, Allocatable,dimension(:), intent(in)       :: obs_lb, obs_ub, eval_lb
+                            obs_lb, obs_ub, eval_lb, eval_ub, opt_lb, opt_ub, flag, &
+                            auto_cali, tmp_R0_effects, pre_eval, opt_window_size)
+    Real, intent(out)                                      :: val_localfitness
+    character(Len=:), Allocatable, intent(in)              :: opt_target_region
+    Logical, intent(in)                                    :: opt_target_icu, opt_filter
+    Integer, intent(in)                                    :: num_nuts2, num_states
+    Integer, Allocatable,dimension(:), intent(in)          :: pos_nuts2, pos_state
+    Integer, intent(in)                                    :: time_n, iter, coff_len
+    Integer, Allocatable,dimension(:,:,:), intent(in)      :: ill_ICU_cases_final ! Store the evaluated ICU cases
+    Integer(kind=mpi_ik), intent(in)                       :: rank_mpi
+    Real,Allocatable,dimension(:,:), intent(in)            :: seltarget_icu_by_state_icucases
+    Real,Allocatable,dimension(:,:), intent(in)            :: seltarget_icu_by_nuts2_icucases
+    Integer, Allocatable,dimension(:), intent(in)          :: obs_lb, obs_ub, eval_lb, eval_ub
+    Real(kind=rk),Allocatable,dimension(:),intent(inout)   :: opt_lb, opt_ub
+    Logical,intent(inout)                                  :: flag
+    Real(kind=rk),Allocatable,dimension(:,:),intent(inout) :: tmp_R0_effects
+    Real, Allocatable, dimension(:), intent(inout)         :: pre_eval
+    Logical,intent(in)                                     :: auto_cali
+    Integer(kind=ik),intent(in)                            :: opt_window_size 
 
     
-    Real                                          :: diff_sum, diff_loc_sum, diff_tmp_power
+    Real                                          :: diff_sum, diff_loc_sum, diff_tmp_power, diff_tmp, diff_tmp_rate
+    Real                                          :: trend_obs, trend_eval
     Integer                                       :: diff_len, diff_loc_len
     Integer, Allocatable,dimension(:,:,:)         :: aggreg_sum_by_county
     Real, Allocatable,dimension(:,:)              :: avg_by_county ! Record the simulated ICU cases by state/nuts2
-    Integer                                       :: i, j, k, status
+    Integer                                       :: i, j, k, tail_j, tail_k, head_j, head_k,&
+                                                      status, count, size_tmp_R0effects
+    Real(kind=rk),dimension(num_nuts2)            :: avg_R0
     
     diff_sum = 0.0
     diff_len = 0
@@ -1229,7 +1411,6 @@ Contains
     !==================================================!
     !====== Calculate fitness function value ==========!
     !==================================================!
-
     select case (trim(opt_target_region))
       case("nuts2")  
         !** All the data are represented by nuts2 --------
@@ -1258,33 +1439,131 @@ Contains
           enddo
 
           if (PT_DEBUG) then
+           if (rank_mpi .eq. ROOT) then
             do j = 1,time_n 
               print *,avg_by_county(:,j)
             enddo
+           endif
           endif
-            !** Calculate the difference between the observed and evaluated/simulated ICU data -----------
+          count = 0
+          
+          !** Calculate the difference between the observed and evaluated/simulated ICU data -----------
           do i = 1,num_nuts2                  
             if (opt_filter) then
               call conv_filter(avg_by_county(i,:), coff_len, time_n)                   
             endif
             diff_loc_sum = 0.0
             diff_loc_len = 0
+
+            head_j = 0
+            head_k = 0
             j = obs_lb(i)
             k = eval_lb(i)
 
-            do while (j .le. obs_ub(i))
+            do while (k .le. min(eval_ub(i),time_n))
               if (seltarget_icu_by_nuts2_icucases(j,i) .ne. NULVAL) then
-                diff_tmp_power = (seltarget_icu_by_nuts2_icucases(j,i) - avg_by_county(i,k))**2
-                diff_loc_sum = diff_loc_sum + diff_tmp_power
-                diff_loc_len = diff_loc_len + 1
+                diff_tmp       = seltarget_icu_by_nuts2_icucases(j,i) - avg_by_county(i,k)   
+                diff_tmp_power = (diff_tmp)**2
+                diff_loc_sum   = diff_loc_sum + diff_tmp_power
+                diff_loc_len   = diff_loc_len + 1
+
+                if (head_j .eq. 0) then
+                  head_j = j 
+                  head_k = k
+                endif
+
+                tail_j = j 
+                tail_k = k
+              else
+                print *,"The NULVAL in seltarget_icu_by_nuts_icucases is ",j, " and ",i
               endif
               j = j + 1
               k = k + 1
             end do
+
+            if (.not.auto_cali) then
+              tail_j = tail_j + 2*WEEKLEN
+              do while (seltarget_icu_by_nuts2_icucases(tail_j,i) .eq. NULVAL)
+                tail_j = tail_j + 1
+              end do 
+            endif
+           
+            if (flag) then
+
+              !** Adjust the range of R0 (namely, opt_lb and opt_ub) for next-round calibration ---
+              !** to better fit with the observed data --------------------------------------------
+              diff_tmp   = avg_by_county(i,tail_k) - seltarget_icu_by_nuts2_icucases(tail_j,i)
+              size_tmp_R0effects = size(tmp_R0_effects,dim=1)
+              avg_R0(i) = sum(tmp_R0_effects((size_tmp_R0effects-opt_window_size+1):size_tmp_R0effects,i)) &
+                          / Real(opt_window_size,kind=rk)
+
+              if (PT_DEBUG .and. (rank_mpi .eq. ROOT)) then
+                print *,"size_tmp_R0effects:",size_tmp_R0effects
+                print *,"avg_R0:",avg_R0(i)
+                print *,"nuts2:",i 
+                print *,"lb: ",eval_lb(i), " ub: ",tail_k
+                print *,"eval:", (avg_by_county(i,tail_k))
+                print *,"observed:",(seltarget_icu_by_nuts2_icucases(tail_j,i))
+              endif
+     
+              if (diff_tmp .lt. 0) then ! Lower than expected
+                diff_tmp_rate = (-1)*diff_tmp/seltarget_icu_by_nuts2_icucases(tail_j,i)
+                if (diff_tmp_rate .ge. 0.55) then
+                  opt_lb(i) = min(avg_R0(i)+0.1_rk,0.7_rk)
+                  opt_ub(i) = min(avg_R0(i)+0.4_rk,0.9_rk)
+                elseif(diff_tmp_rate .ge. 0.35) then
+                  opt_lb(i) = min(avg_R0(i),0.7_rk)
+                  opt_ub(i) = min(avg_R0(i)+0.3_rk,0.9_rk)
+                elseif(diff_tmp_rate .ge. 0.15) then
+                  opt_lb(i) = min(avg_R0(i),0.7_rk)
+                  opt_ub(i) = min(avg_R0(i)+0.2_rk,0.9_rk)
+                else
+                  opt_lb(i) = min(avg_R0(i),0.7_rk)
+                  opt_ub(i) = min(avg_R0(i)+0.1_rk,0.9_rk)
+                endif
+              elseif (diff_tmp .gt. 0) then ! Higher than expected
+                diff_tmp_rate = diff_tmp/avg_by_county(i,tail_k)
+                if (diff_tmp_rate .ge. 0.55) then
+                  opt_lb(i) = max(avg_R0(i)-0.4_rk,0.1_rk)
+                  opt_ub(i) = max(avg_R0(i)-0.1_rk,0.2_rk)
+                  if (seltarget_icu_by_nuts2_icucases(tail_j,i) .eq. 0.0) then
+                    opt_lb(i) = max(avg_R0(i)-0.4_rk,0.2_rk)
+                    opt_ub(i) = max(avg_R0(i)-0.1_rk,0.3_rk)
+                  endif
+                elseif(diff_tmp_rate .ge. 0.35) then
+                  opt_lb(i) = max(avg_R0(i)-0.3_rk,0.1_rk)
+                  opt_ub(i) = max(avg_R0(i),0.3_rk)
+                elseif(diff_tmp_rate .ge. 0.15) then
+                  opt_lb(i) = max(avg_R0(i)-0.2_rk,0.1_rk)
+                  opt_ub(i) = max(avg_R0(i),0.3_rk)
+                else
+                  opt_lb(i) = max(avg_R0(i)-0.1_rk,0.1_rk)
+                  opt_ub(i) = max(avg_R0(i),0.3_rk)
+                endif
+              else ! Equal to the expected
+                opt_lb(i) = max(avg_R0(i)-0.1_rk,0.1_rk)
+                opt_ub(i) = min(avg_R0(i)+0.1_rk,0.9_rk)
+              endif
+
+              !** Smoothen the curves ---------------------------------------------
+              !** TODO: consider the case when the shift size is larger than 1 ----
+            
+              if ((diff_tmp .gt. 0) .and. (diff_tmp_rate .ge. 0.1)) then
+                tmp_R0_effects(1,i) = (opt_lb(i)+opt_ub(i))/2.0_rk
+              endif
+            endif   
             diff_sum = diff_sum + diff_loc_sum
             diff_len = diff_len + diff_loc_len  
-          enddo   
+          enddo
+          flag = .false.
           val_localfitness = -1*sqrt(diff_sum/diff_len)
+
+          if (PT_DEBUG .and. (rank_mpi .eq. ROOT)) then
+            print *,"opt_lb:"
+            print *,opt_lb
+            print *,"opt_ub:"
+            print *,opt_ub
+          endif
         end if
       case("state")
         !** All the data are represented by state --------
@@ -1326,12 +1605,14 @@ Contains
 
           diff_loc_sum = 0.0
           diff_loc_len = 0
+
           j = obs_lb(i)
           k = eval_lb(i)
 
           do while (j .le. obs_ub(i))
             if (seltarget_icu_by_state_icucases(j,i) .ne. NULVAL) then
-              diff_tmp_power = (seltarget_icu_by_state_icucases(j,i) - avg_by_county(i,k))**2
+              diff_tmp       = seltarget_icu_by_state_icucases(j,i) - avg_by_county(i,k)
+              diff_tmp_power = (diff_tmp)**2
               diff_loc_sum = diff_loc_sum + diff_tmp_power
               diff_loc_len = diff_loc_len + 1
             endif
@@ -1340,7 +1621,7 @@ Contains
           end do
           diff_sum = diff_sum + diff_loc_sum
           diff_len = diff_len + diff_loc_len    
-        enddo     
+        enddo
         val_localfitness = -1*sqrt(diff_sum/diff_len)
       case default
         write(*,*)  "Otherwise, the given target is not supported yet"
@@ -1455,12 +1736,14 @@ Contains
   !> Subroutine that randomly mutates certain parameter
   !>
   !> The results are stored back to ini_pop and fitness.
-  subroutine mutation(ini_pop, fitness, pmutation, lb, ub)
+  subroutine mutation(ini_pop, fitness, pmutation, lb, ub, opt_index, auto_calibrate)
     Real,Allocatable,dimension(:),intent(inout)                :: fitness
     Real(kind=rk),Allocatable,dimension(:,:),intent(inout)     :: ini_pop
     
     Real,intent(in)                                         :: pmutation
-    Real, intent(in)                                        :: lb, ub
+    Real(kind=rk), Allocatable,dimension(:), intent(in)     :: lb, ub
+    Integer, Allocatable, dimension(:), intent(in)          :: opt_index
+    Logical, intent(in)                                     :: auto_calibrate
 
     Integer,dimension(size(ini_pop,dim=1))                  :: sample_input
     Integer,dimension(1)                                    :: sample_parents
@@ -1475,7 +1758,12 @@ Contains
       call random_number(ran)
       if (pmutation > ran) then
         sample_parents = sample_i4(sample_input,size(sample_parents)) ! Randomly generate the mutated gene/parameter
-        Res = random_uniform(lb,ub)
+        
+        if (auto_calibrate) then
+          Res = random_uniform(lb(opt_index(sample_parents(1))),ub(opt_index(sample_parents(1))))
+        else
+          Res = random_uniform(0.1_rk,1.0_rk)
+        endif
         ini_pop(sample_parents(1),i) = Res  
       !  print *,"Mutation: chromosome ",i,",gene: ",sample_parents(1),",res: ", Res
         fitness(i) = INV ! Invalidate the mutated chromosome/population individual
@@ -1557,7 +1845,7 @@ Contains
     mean = Sum(fitness)/length
 
     median = get_median(fitness, sorted_index, length)
-    half = length/2.0
+    half = length/2
     upper_hinge = get_median(fitness, sorted_index((half+1):length), length-half) ! Get the median of the second half
     lower_hinge = get_median(fitness, sorted_index(1:half), half) ! Get the median of the first half
 
@@ -1585,7 +1873,7 @@ Contains
     length = size(sorted_index)
     half = length/2
 
-    if (mod(length,2) .eq. 0) then
+    if ((mod(length,2) .eq. 0) .and. (len .ne. 0)) then
       med = (dataset(sorted_index(half))+dataset(sorted_index(half+1)))/2.0
     else
       med = dataset(sorted_index(half+1))
@@ -1597,13 +1885,14 @@ Contains
   !> This subroutine is only called once
   !>
   subroutine print_ga_header(opt_pop_size, opt_num_gene, opt_elitism, opt_pcrossover, opt_pmutation, &
-                  opt_target_region)  
+                  opt_target_region, auto_calibrate)  
     character(len=*), intent(in)                              :: opt_target_region ! Optimized region. Valid values: "state" and "nuts2"
     Integer, intent(in)                                       :: opt_pop_size ! 4 Population size
     Integer, intent(in)                                       :: opt_num_gene ! 2 Maximal number of generations
     Integer, intent(in)                                       :: opt_elitism ! The number of the chosen elitism
     Real, intent(in)                                          :: opt_pcrossover ! 0.8
     Real, intent(in)                                          :: opt_pmutation ! 0.1
+    Logical, intent(in)                                       :: auto_calibrate
     Integer                                                   :: i
 
     write(*,'(A)')"!############ Launch Genetic Algorithm #############!"
@@ -1615,6 +1904,11 @@ Contains
     print *,"Crossover probability: ",opt_pcrossover
     print *,"Mutation probability: ",opt_pmutation
     print *,"Optimization target: ",trim(opt_target_region)
+    if (auto_calibrate) then
+      print *,"Auto calibrate with sliding window"
+    else
+      print *,"Oneoff calibrate with specific purpose"
+    endif
     write(*,'(A)')"!--------------------------------------------!"
   end subroutine print_ga_header
 
@@ -1655,31 +1949,36 @@ Contains
   !> There are two different kinds of file:
   !> 1. for auto_calibrate (include prognosis); 2. one-off calibration
   !> 
-  Subroutine writeback_R0effects(auto_calibrate, opt_target_region, &
+  Subroutine writeback_R0effects_optlub(auto_calibrate, opt_target_region, &
                                   opt_names, ga_res, &
-                                  R0_effects, head, start_week)
+                                  R0_effects, head, start_week, write_week, opt_lb, opt_ub)
 
     Logical,intent(in)                                       :: auto_calibrate
     character(len=*), intent(in)                             :: opt_target_region
     Character(len=:),Allocatable,dimension(:),intent(in)     :: opt_names
     Type(opt_res),intent(in)                                 :: ga_res
     Real(kind=rk),    Allocatable, Dimension(:,:),intent(in) :: R0_effects
+    Real(kind=rk),    Allocatable, Dimension(:),intent(in)   :: opt_lb, opt_ub
     character(len=:), Allocatable, Dimension(:)  ,intent(in) :: head
-    Integer                                      ,intent(in) :: start_week
+    Integer                                      ,intent(in) :: start_week, write_week
     
     logical                                            :: exs
-    Integer                                            :: un, i,j
+    Integer                                            :: un, i,j, lub_un
     character(3)                                       :: c_index
-    character(len=40)                                  :: filename
+    character(len=50)                                  :: filename
+    character(len=30)                                  :: lub_fn
  
     !---------------------------------------------------------------------------
     exs = .FALSE.
 
     If (auto_calibrate) then
-      write(filename,'("R0effects_prog_update.auto_",A,".csv")')trim(opt_target_region)
+      write(filename,'("R0effects_prog_update.auto_",A,"_week",i0,"-",i0,".csv")')trim(opt_target_region),&
+                                          start_week,size(R0_effects,dim=1)
     Else
-      write(filename,'("R0effects_calibrate_update.",A,".csv")')trim(opt_target_region)
+      write(filename,'("R0effects_calibrate_update_",A,"_week",i0,"-",i0,".csv")')trim(opt_target_region),&
+                                          start_week,write_week-1
     Endif
+    write(lub_fn,'("opt_lb+ub_week",i0,".csv")')write_week
     
     Inquire(file = trim(filename), exist=exs)
     
@@ -1689,9 +1988,9 @@ Contains
     Else
       Open (newunit=un, file = trim(filename),&
             status ="new")
-      If (auto_calibrate) then
+    !  If (auto_calibrate) then
         write(un,'(*(3A))')('"',trim(head(i)),'" ',i=1,size(head)) 
-      Endif
+    !  Endif
     End If
     If (auto_calibrate) then
       do i = start_week, size(R0_effects,dim=1)
@@ -1700,11 +1999,30 @@ Contains
         write(un,'(*(F20.17))')(R0_effects(i,j),&
               j=1,size(R0_effects,dim=2))
       enddo
+
     Else
-      write(un,'(*(3A))')('"',trim(opt_names(i)),'" ',i=1,size(opt_names))
-      write(un,'(*(F20.17))')(ga_res%opt_bestsol(i),&
-              i=1,size(ga_res%opt_bestsol))
+    !  write(un,'(*(3A))')('"',trim(opt_names(i)),'" ',i=1,size(opt_names))
+    !  write(un,'(*(F20.17))')(ga_res%opt_bestsol(i),&
+    !          i=1,size(ga_res%opt_bestsol))
+      do i = start_week, write_week-1
+        write(c_index,'(i3.3)') i
+        write(un,'(3A)',ADVANCE="NO")'"',c_index,'"'
+        write(un,'(*(F20.17))')(R0_effects(i,j),&
+              j=1,size(R0_effects,dim=2))
+      enddo
     Endif
+    Open (newunit=lub_un, file = trim(lub_fn),&
+            status ="new")
+     
+    write(lub_un,'(A)')"opt_lb:"
+    do i = 1, size(opt_lb)
+      write(lub_un,'(F20.17)')opt_lb(i)
+    enddo
+    write(lub_un,'(A)')"opt_ub:"
+    do i = 1, size(opt_ub)
+      write(lub_un,'(F20.17)')opt_ub(i)
+    enddo
     Close(un)
-  End Subroutine writeback_R0effects
+    Close(lub_un)
+  End Subroutine writeback_R0effects_optlub
 End Module genetic_algorithm

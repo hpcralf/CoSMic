@@ -61,14 +61,14 @@ contains
     u = 1._rk - r
   end subroutine random_stduniform
 
-  !! uniform distribution
+   !! uniform distribution
   function random_uniform(a,b) Result(x)
     !  integer,intent(in)   :: n
-    real,intent(in)         :: a,b
+    real(kind=rk),intent(in):: a,b
     real(kind=rk)           :: x
     real(kind=rk)           :: u
     call random_stduniform(u)
-    x = (Real(b,rk)-Real(a,rk))*u + Real(a,rk)
+    x = (b-a)*u + a
     !     print *,size(x)
   end function random_uniform
 

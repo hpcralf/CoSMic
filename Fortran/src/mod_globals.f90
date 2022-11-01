@@ -52,6 +52,8 @@ Module global_constants
 
   Implicit None
 
+  Integer,parameter   :: ROOT    = 0 ! The root rank
+
   character(len=*), parameter :: fmt_file_missing = &
        '("Operation on file:",/,A,/, "failed.",/, "Program halted !!!")'
   

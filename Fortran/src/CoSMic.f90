@@ -9,9 +9,9 @@
 !#  COVID-19 Spatial Microsimulation  ---  For Germany  ########################
 !###############################################################################
 !#
-!# Authors:      Huan Zhou
-!#               Qifeng Pan
+!# Authors:      Qifeng Pan
 !#               Ralf Schneider
+!#               Huan Zhou
 !#               Christian Dudel
 !#               Matthias Rosenbaum-Feldbruegge
 !#               Sebastian Kluesener
