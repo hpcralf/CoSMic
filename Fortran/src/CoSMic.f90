@@ -87,7 +87,7 @@ Program CoSMic
 
   Integer(kind=ik)                              :: cur_week
   
-  Real(kind=rk)                                   :: R0
+  Real(kind=rk),    Allocatable, Dimension(:)     :: R0
   Real(kind=rk),    Allocatable, Dimension(:,:)   :: R0_effects, R0_effects_lhc
   Character(len=:), Allocatable                   :: R0_effects_fn
   Character(len=:), Allocatable                   :: lhc_dir
@@ -367,7 +367,7 @@ Program CoSMic
 
         region_ids     = get_char_column(iol%counties,'Nuts2')
 
-        write(*,*) "region_ids:",region_ids
+        !write(*,*) "region_ids:",region_ids
 
         num_counties = size(region_ids)
         allocate(region_index(num_counties))
@@ -410,7 +410,8 @@ Program CoSMic
         iter_s = rank_mpi * n_iter + 1
         iter_e = min((rank_mpi + 1 ) * n_iter , iter)
         
-        write(*,*)rank_mpi,iter_s,iter_e,n_iter,iter
+        write(un_lf,PTF_M_AI0)"rank_mpi:",rank_mpi,"iter_s:",iter_s,"iter_e:",iter_e,&
+             "n_iter:",n_iter,"iter:",iter
 
         ill_ICU_cases_final = COVID19_Spatial_Microsimulation_for_Germany(iol, &
              iter_s, iter_e , &
