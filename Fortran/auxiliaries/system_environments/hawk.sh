@@ -39,11 +39,5 @@
 # https://kb.hlrs.de/platforms/index.php/HPE_Hawk
 #------------------------------------------------------------------------------
 #
-# Compiler -------------------------------
-module swap gcc/9.2.0 gcc/10.2.0
-
-# MPI environment ------------------------
-module swap mpt/2.23  mpt/2.25
-
 export FC=mpif90
-export FCFLAGS=-fopenmp
+export FCFLAGS="-O3 -fopenmp"

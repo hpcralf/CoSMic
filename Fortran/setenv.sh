@@ -30,25 +30,25 @@
 ###############################################################################
 #
 #------------------------------------------------------------------------------
-# Setup of the build and execution environment for the 
-# HLRS - Material structure process chain
+# Setup of the build and execution environment for
+# CoSMic - COVID-19 Spatial Microsimulations
 #
 # last edited by : Ralf Schneider < schneider@hlrs.de>
-#             on : Sep 18th 2019
+#             on : Nov 1st 2022
 #
 # Prerequisites are :
 # --------------------
 # + Working mpi installation with 
 #   - mpi-compilers
 #   - mpirun
-# + Working installation of METIS with 64Bit index length
-# + Working installation of PETSc with 64Bit index length
 #------------------------------------------------------------------------------
 #
 prefix=$(dirname $BASH_SOURCE)
 #
 usage ()
 {
+    systems=`ls --color=never ${prefix}/auxiliaries/system_environments/*.sh`
+    
     echo ""
     echo "Usage:"
     echo "     setenv.sh SYSTEM [silent]"
@@ -58,7 +58,7 @@ usage ()
     echo "     for SYSTEM."
     echo ""
     echo "Parameters:"
-    echo "     SYSTEM : Valid values are 'zeus' or 'vulcan'."
+    echo "     SYSTEM : Valid values are "`basename -s .sh $systems`"."
     echo "     silent : Any value for arg 2 supresses all messages"
     echo ""           
 }
@@ -77,7 +77,7 @@ else
     fi
     #
     sys_set=0
-    for sys_file in `ls --color=never ${prefix}/auxiliaries/system_environments`
+    for sys_file in `ls --color=never ${prefix}/auxiliaries/system_environments/`
     do
 	system=`basename -s .sh $sys_file`
 	if [ "$system" == "$1" ]; then
