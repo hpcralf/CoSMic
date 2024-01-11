@@ -127,9 +127,17 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
     if (length(pspace[which(pspace.types=="directl")]) == 1) {
         
         lhc.dat <- do.call(rbind,lapply(pspace[[which(pspace.types=="directl")]]$param,unlist))
-        colnames(lhc.dat) <- paste0(
-	   str_extract(colnames(lhc.dat),"[A-Z]{2}"),
-	   sprintf(fmt="%03d",as.integer(str_extract(colnames(lhc.dat),"[0-9]{1,3}"))))
+        if ( all(is.na(str_extract(colnames(lhc.dat),"[A-Z]{2}")) )) {
+           colnames(lhc.dat) <- paste0(
+                                   str_extract(colnames(lhc.dat),"[a-z0-9]{4}"),
+                                   sprintf(fmt="%03d",
+                                      as.integer(str_extract(colnames(lhc.dat),"[0-9]{1,3}"))))  
+        } else {
+           colnames(lhc.dat) <- paste0(
+	                                 str_extract(colnames(lhc.dat),"[A-Z]{2}"),
+	                                 sprintf(fmt="%03d",
+	                                    as.integer(str_extract(colnames(lhc.dat),"[0-9]{1,3}"))))
+        }
 
         var.lens<-unlist(lapply(apply(lhc.dat,2,unique),length))
         
@@ -476,10 +484,18 @@ plots.by.state <- function(outfile, sp, seed_icu, seed_dea, iol,
         if (length(pspace[which(pspace.types=="directl")]) == 1) {
             
             lhc.dat <- do.call(rbind,lapply(pspace[[which(pspace.types=="directl")]]$param,unlist))
-            colnames(lhc.dat) <- paste0(
-	       str_extract(colnames(lhc.dat),"[A-Z]{2}"),
-               sprintf(fmt="%03d",as.integer(str_extract(colnames(lhc.dat),"[0-9]{1,3}"))))
-
+            if ( all(is.na(str_extract(colnames(lhc.dat),"[A-Z]{2}")) )) {
+              colnames(lhc.dat) <- paste0(
+                str_extract(colnames(lhc.dat),"[a-z0-9]{4}"),
+                sprintf(fmt="%03d",
+                        as.integer(str_extract(colnames(lhc.dat),"[0-9]{1,3}"))))  
+            } else {
+              colnames(lhc.dat) <- paste0(
+                str_extract(colnames(lhc.dat),"[A-Z]{2}"),
+                sprintf(fmt="%03d",
+                        as.integer(str_extract(colnames(lhc.dat),"[0-9]{1,3}"))))
+            }
+            
             var.lens<-unlist(lapply(apply(lhc.dat,2,unique),length))
             
             if  (length(gcols) == 0) {
