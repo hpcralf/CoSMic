@@ -682,7 +682,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                             getchange <- as.numeric(t(lhc[it.ss,
                                                           paste0(iol[["counties"]][
                                                               iol[["counties"]]$dist_id%in%getcounties,
-                                                              "Nuts2"],change)]))
+                                                              "Nuts2"],sprintf("%03d",change))]))
                         } 
                        
                     } else if ( pspace$R0effect$type == "directv" ) {
@@ -1770,7 +1770,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
                                ind.states   = c(1,2,3,4,5,6,7))
             }
             
-            ## Global fixed scale accross all diagramms -----------------
+            ## Globaly fixed scale accross all diagramms -----------------
             outfile <- paste0(ep$output.dir,
                               "Rplots-ByNUTS2-iter=",sp$iter,"-sam_size=",
                               pspace[["sam_size"]]$param[1],"-fixed-scale-",
