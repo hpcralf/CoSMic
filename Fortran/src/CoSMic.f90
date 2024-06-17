@@ -261,7 +261,10 @@ Program CoSMic
 
   call pt_get("#sam_size",sam_size)
   call pt_get("#R0"      ,R0      )
-
+  if (size(R0) > 1) then
+     write(*,*)"size(R0) > 1 !!!!!"
+  End if
+  
   call pt_get("#region"  ,region  )
 
   call pt_get("#output.dir" , output_dir)
@@ -346,7 +349,7 @@ Program CoSMic
              inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
              less_contagious, R0_force, immune_stop, &
              R0change, R0delay ,R0delay_days, R0delay_type, &
-             control_age_sex, seed_date, seed_before, sam_size, R0, &
+             control_age_sex, seed_date, seed_before, sam_size, R0(1), &
              R0_effects, region_index, sim, sim_switch, &
              output_dir, export_name, rank_mpi)
         
@@ -396,7 +399,7 @@ Program CoSMic
              inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
              less_contagious, R0_force, immune_stop, &
              R0change, R0delay, R0delay_days, R0delay_type, &
-             control_age_sex, seed_date, seed_before, sam_size, R0, &
+             control_age_sex, seed_date, seed_before, sam_size, R0(1), &
              R0_effects, full_region_index, region_index, output_dir, export_name, rank_mpi, size_mpi)
 
      Else ! Basic-Param
@@ -410,7 +413,7 @@ Program CoSMic
         iter_s = rank_mpi * n_iter + 1
         iter_e = min((rank_mpi + 1 ) * n_iter , iter)
         
-        write(un_lf,PTF_M_AI0)"rank_mpi:",rank_mpi,"iter_s:",iter_s,"iter_e:",iter_e,&
+        write(un_lf,PTF_M_nAI0)"rank_mpi:",rank_mpi,"iter_s:",iter_s,"iter_e:",iter_e,&
              "n_iter:",n_iter,"iter:",iter
 
         ill_ICU_cases_final = COVID19_Spatial_Microsimulation_for_Germany(iol, &
@@ -418,7 +421,7 @@ Program CoSMic
              inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
              less_contagious, R0_force, immune_stop, &
              R0change, R0delay ,R0delay_days, R0delay_type, &
-             control_age_sex, seed_date, seed_before, sam_size, R0, &
+             control_age_sex, seed_date, seed_before, sam_size, R0(1), &
              R0_effects, region_index, sim, sim_switch, output_dir, export_name, rank_mpi)
      endif
      
