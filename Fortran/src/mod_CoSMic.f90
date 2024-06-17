@@ -137,7 +137,7 @@ Contains
     character(len=*)                             , intent(in)   :: seed_date
     Integer(kind=ik)                             , intent(in)   :: seed_before    
     Integer(kind=ik)                             , intent(in)   :: sam_size
-    Real(kind=rk),    Allocatable, Dimension(:)  , intent(in)   :: R0
+    Real(kind=rk)                                , intent(in)   :: R0
     Real(kind=rk),    Allocatable, Dimension(:,:), intent(in)   :: R0_effects
     integer(kind=ik), allocatable, dimension(:)  , intent(in)   :: region_index
     Type(sims)                                   , intent(inout):: sim_backup
