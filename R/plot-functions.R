@@ -1220,6 +1220,27 @@ plots.fortran <- function(sp, iol, pspace, input.dir) {
                    relative     = FALSE,
                    split.in     = "SH1",
                    prog         = NULL)
+
+    if (sp$region == "nuts2") {
+        ## Every diagram its own scale ------------------------------
+        plots.by.state(outfile      = paste(input.dir,"plot.by.nuts2.pdf",sep="/"),
+                       sp           = sp,
+                       seed_icu     = iol$icu.cases.by.nuts2,
+                       seed_dea     = NULL,
+                       iol          = iol,
+                       pspace       = pspace,
+                       rr           = rr,
+                       region       = "nuts2",
+                       fix.lim      = FALSE,
+                       filtered     = FALSE,
+                       Sec.Axis     = NULL,
+                       silent       = FALSE,
+                       ind.states   = c(5),
+                       relative     = FALSE,
+                       split.in     = "SH1",
+                       prog         = NULL)
+    }
+    
 }
 
 plots.states.combined <- function(outfile, sp, seed_icu, seed_dea, iol,
