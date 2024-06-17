@@ -20,7 +20,7 @@ Since the CoSMic R-version is currently not developed up to the state of a
 proper R-package please install it using
 ```R
 library(devtools)
-devtools::install_github("hpcralf/CoSMic",build_manual=TRUE,build_vignettes=TRUE)
+devtools::install_github("hpcralf/CoSMic",build_vignettes=TRUE)
 ```
 
 Alternatively you can check out the code with
@@ -36,7 +36,7 @@ and execute
 
 ```R
 library(devtools)
-devtools::install(build_manual=TRUE,build_vignettes=TRUE)
+devtools::install(build_vignettes=TRUE)
 ```
 ### Fortran-version
 Even though the Fortran model version is usable as a stand alone program it is meaningfull to
