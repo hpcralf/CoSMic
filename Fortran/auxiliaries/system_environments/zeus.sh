@@ -32,7 +32,7 @@
 #------------------------------------------------------------------------------
 # Set the environment for the Zeus IV system.
 #    Zeus IV is a Whiskey Lake Intel(R) Core(TM) i7-8565U CPU @ 1.80GHz
-#    laptop running Fedora 33.
+#    laptop running Fedora 39.
 #
 # The environment has also worked on the Zeus I, II and III systems all
 # of them running Fedora up till version 30.
