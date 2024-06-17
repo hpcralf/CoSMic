@@ -126,9 +126,9 @@ set.pspace(param  = "icu_dur", values = 14)
 
 #### R0 reduction factor
 ```{r}
-data("R0effect.nuts2")
+data("R0effect.states")
 set.pspace(param  = "R0effect",
-           values =  list(R0effect.nuts2))
+           values =  list(R0effect=R0effect.states))
 ```
 
 #### Weight of infection dynamic
@@ -190,9 +190,9 @@ be stored in the output directory, genearted during the call to `set.exec.params
 ```{r}
 save.exec.params(exec.params)
 save.static.params(exec.params, static.params)
-save.pspace(exec.params, pspace)
 save.input(exec.params, iol)
 save.spatial.population(exec.params, sim.struc)
+save.pspace(exec.params, pspace)
 ```
 
 ## Execute CoSMic
