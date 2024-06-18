@@ -2,8 +2,8 @@
 ##
 ## Process this file with automake to produce Makefile.in
 ##
-AM_LD = $MPIFC
-##AM_FCFLAGS = -fbacktrace -fbounds-check -gdwarf-4
+CoSMic_FCFLAGS = -fopenmp
+CoSMic_LDFLAGS = -fopenmp
 
 bin_PROGRAMS  = CoSMic
 
