@@ -167,7 +167,7 @@ contains
   End Subroutine loaddata
   
   !! ===========================================================================
-  !> Print the CoSMic application logotted file and return its line count 
+  !> Print the CoSMic application logo
   subroutine print_cosmic_head()
 
     write(*,*)
