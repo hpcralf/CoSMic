@@ -137,9 +137,9 @@ Contains
     character(len=*)                             , intent(in)   :: seed_date
     Integer(kind=ik)                             , intent(in)   :: seed_before    
     Integer(kind=ik)                             , intent(in)   :: sam_size
-    Real(kind=rk)                                , intent(in)   :: R0
+    Real(kind=rk)   , Allocatable, dimension(:)  , intent(in)   :: R0
     Real(kind=rk),    Allocatable, Dimension(:,:), intent(in)   :: R0_effects
-    integer(kind=ik), allocatable, dimension(:)  , intent(in)   :: region_index
+    integer(kind=ik), Allocatable, dimension(:)  , intent(in)   :: region_index
     Type(sims)                                   , intent(inout):: sim_backup
     Type(opt_sim_switchs)                        , intent(in)   :: sim_switch
     character(len=:), Allocatable                , intent(in)   :: output_dir
@@ -171,11 +171,11 @@ Contains
     Integer,Allocatable             :: rownumbers_ill(:),rownumbers_cont(:),rownumbers_ncont(:)
     Integer,Allocatable             :: rownumbers_left(:),rownumbers_dea(:)
     Integer,Allocatable             :: gettime(:),ur(:)
-    Real(kind=rk),Allocatable                :: getchange(:)
+    Real(kind=rk),Allocatable       :: getchange(:)
     Integer                         :: inf_ill,inf_cont,inf_ncont,inf_dth
 
-    Real(kind=rk)                            :: R0_daily
-    Real(kind=rk),Allocatable                :: R0matrix(:,:),connect(:,:)
+    Real(kind=rk)                   :: R0_daily
+    Real(kind=rk),Allocatable       :: R0matrix(:,:),connect(:,:)
     Integer,Allocatable             :: healthy_cases_final(:,:,:)
     Integer,Allocatable             :: ill_ICU_cases_final(:,:,:)
     Integer,Allocatable             :: immune_cases_final(:,:,:)
@@ -547,25 +547,41 @@ Contains
 
     !! ----------------------------------------------------------------------
     !! Convert from Weekly to daily R0_effects ------------------------------
-    R0_daily = R0_force   * R0 / Real(Real(cont_dur)+Real(ill_dur)*less_contagious) + &
-         ( 1 - R0_force ) * R0 / Real(cont_dur+ill_dur)
-    
-    ! this block simplifies the if judgment
+
+    !! this block simplifies the if judgment
     If (.Not.Allocated(R0matrix))Then
        Allocate(R0matrix(num_counties,time_n-1))
     End If
-    R0matrix = R0_daily
+
+    R0matrix = 0.0_rk
+    
     n_change  = Size(R0change,dim=2)
+
+    !! We have to have R0 per change time frame so size(R0) not being ----------
+    !! equal to n_change is not possible                              ----------
+    If (n_change /= size(R0)) then
+       write(pt_umon,PTF_SEP)
+       write(pt_umon,PTF_E_A)"Something bad and unexpected happened!"
+       write(pt_umon,PTF_E_A)"n_change /= size(R0)"
+       write(pt_umon,PTF_E_AI0)"n_change:" , n_change
+       write(pt_umon,PTF_E_AI0)"size(R0):" , size(R0)
+       write(pt_umon,PTF_E_STOP)
+       stop
+    End If
     
     Do i = 1,n_change
-       
+
+       R0_daily = R0_force   * R0(i) / Real(Real(cont_dur)+Real(ill_dur)*less_contagious) + &
+            ( 1 - R0_force ) * R0(i) / Real(cont_dur+ill_dur)
+
        getchange = R0_effects(i,region_index)
        
        gettime = generate_seq(R0change(1,i),R0change(2,i),1)
        
        Do j = 1,Size(gettime)
-          R0matrix(:,gettime(j)) = R0matrix(:,gettime(j)) * getchange
+          R0matrix(:,gettime(j)) = R0_daily * getchange
        End Do
+       
     End Do
     
     If (R0delay) Then
@@ -573,7 +589,7 @@ Contains
           R0matrix(i,:) = smoothing_change(R0matrix(i,:),R0delay_days,R0delay_type)
        End Do
     End If
-    
+
     !! ==============================================================
     !! Init connectivity matrix
     connect =  transpose(table_to_real_array(iol%connect_work))

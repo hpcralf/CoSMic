@@ -261,9 +261,6 @@ Program CoSMic
 
   call pt_get("#sam_size",sam_size)
   call pt_get("#R0"      ,R0      )
-  if (size(R0) > 1) then
-     write(*,*)"size(R0) > 1 !!!!!"
-  End if
   
   call pt_get("#region"  ,region  )
 
@@ -349,7 +346,7 @@ Program CoSMic
              inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
              less_contagious, R0_force, immune_stop, &
              R0change, R0delay ,R0delay_days, R0delay_type, &
-             control_age_sex, seed_date, seed_before, sam_size, R0(1), &
+             control_age_sex, seed_date, seed_before, sam_size, R0, &
              R0_effects, region_index, sim, sim_switch, &
              output_dir, export_name, rank_mpi)
         
@@ -399,7 +396,7 @@ Program CoSMic
              inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
              less_contagious, R0_force, immune_stop, &
              R0change, R0delay, R0delay_days, R0delay_type, &
-             control_age_sex, seed_date, seed_before, sam_size, R0(1), &
+             control_age_sex, seed_date, seed_before, sam_size, R0, &
              R0_effects, full_region_index, region_index, output_dir, export_name, rank_mpi, size_mpi)
 
      Else ! Basic-Param
@@ -421,7 +418,7 @@ Program CoSMic
              inf_dur, cont_dur, ill_dur, icu_dur, icu_per_day, &
              less_contagious, R0_force, immune_stop, &
              R0change, R0delay ,R0delay_days, R0delay_type, &
-             control_age_sex, seed_date, seed_before, sam_size, R0(1), &
+             control_age_sex, seed_date, seed_before, sam_size, R0, &
              R0_effects, region_index, sim, sim_switch, output_dir, export_name, rank_mpi)
      endif
      

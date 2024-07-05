@@ -119,7 +119,7 @@ Contains
     character(len=*)                             , intent(in) :: seed_date
     Integer(kind=ik)                             , intent(in) :: seed_before    
     Integer(kind=ik)                             , intent(in) :: sam_size
-    Real(kind=rk)                                , intent(in) :: R0
+    Real(kind=rk), Allocatable, Dimension(:)     , intent(in) :: R0
     Real(kind=rk), Allocatable, Dimension(:,:), intent(inout) :: R0_effects ! As output
     Integer(kind=mpi_ik)                         , intent(in) :: rank_mpi
     Integer(kind=mpi_ik)                         , intent(in) :: size_mpi
