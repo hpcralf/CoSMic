@@ -81,7 +81,7 @@ contains
        maxlen = -huge(maxlen)
 
        Allocate(pos_arr(nf+1))
-       pos_arr(1) = 0
+       pos_arr = 0
 
        nn = 1
 
@@ -94,6 +94,7 @@ contains
           End if
        End Do
 
+       if (lpos == 0) lpos = -1
        maxlen = max(maxlen,str_len-lpos-1)
 
        pos_arr(NF+1) = str_len+1
@@ -105,11 +106,12 @@ contains
           str_arr(ii) = string((pos_arr(ii)+1):pos_arr(ii+1)-1)
 
           !! Ajust string to the left --------------------------------
-          fnsc = scan(str_arr(ii)," ")
-          if (fnsc < len_trim(str_arr(ii))) then
-             str_arr(ii) = str_arr(ii)(fnsc+1:len_trim(str_arr(ii)))
+          if (str_arr(ii)(1:1) == " ") then
+             fnsc = scan(str_arr(ii)," ")
+             if (fnsc < len_trim(str_arr(ii))) then
+                str_arr(ii) = str_arr(ii)(fnsc+1:len_trim(str_arr(ii)))
+             End if
           End if
-
        End Do
 
     else
