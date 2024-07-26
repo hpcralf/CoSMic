@@ -212,6 +212,7 @@ Program CoSMic
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%death)
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%pop)
   Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%connect_work)
+  Call mpi_bcast_table(MPI_COMM_WORLD, 0_mpi_ik, rank_mpi, iol%Vaccinations)
 
   !** Specifically for "optimization" execution procedure 
   If (trim(exec_type) .EQ. "Optimization") Then

@@ -164,6 +164,14 @@ contains
             )
     End If
 
+    !Read Vaccinations -----------------------------------------------
+    call pt_get("#Vaccinations",filename)
+
+    call read_TableData( &
+         trim(filename),sep=",",head=.TRUE., &
+         rownames=.FALSE., data=iol%Vaccinations &
+         )
+
   End Subroutine loaddata
   
   !! ===========================================================================
@@ -388,16 +396,31 @@ contains
        end if
     
        !! In case a different number of columns than before was found ---
-       if ( (       loc_rownames .AND. (size(data%col_lengths) .NE. size(tmp_col_lengths)-1) ) .OR. &
-            ( .NOT. loc_rownames .AND. (size(data%col_lengths) .NE. size(tmp_col_lengths)  ) ) ) then
-          write(un_lf,'("WW read_TableData:",A,1X,I0)') &
-               "Different number of columns in data line", ii
-          write(un_lf,'("WW read_TableData:",A,1X,I0)') &
-               "size(data%col_lengths) =",size(data%col_lengths)
-          write(un_lf,'("WW read_TableData:",A,1X,I0)') &
-               "size(tmp_col_lengths) =",size(tmp_col_lengths)
-       End if
+       if ( loc_rownames ) then
 
+          if (size(data%col_lengths) .NE. size(tmp_col_lengths)-1) then
+             write(un_lf,'("WW read_TableData:",A,1X,I0)') &
+                  "Different number of columns in data line with rownames present", ii
+             write(un_lf,'("WW read_TableData:",A,1X,I0)') &
+                  "size(data%col_lengths) =",size(data%col_lengths)
+             write(un_lf,'("WW read_TableData:",A,1X,I0)') &
+                  "size(tmp_col_lengths) =",size(tmp_col_lengths)-1
+          End if
+
+       else
+
+          if (size(data%col_lengths) .NE. size(tmp_col_lengths)) then
+             write(un_lf,'("WW read_TableData:",A,1X,I0)') &
+                  "Different number of columns in data line", ii
+             write(un_lf,'("WW read_TableData:",A,1X,I0)') &
+                  "size(data%col_lengths) =",size(data%col_lengths)
+             write(un_lf,'("WW read_TableData:",A,1X,I0)') &
+                  "size(tmp_col_lengths) =",size(tmp_col_lengths)
+
+          End if
+
+       end if
+       
        if (loc_rownames) then
           tmp_col_types   = tmp_col_types(2:dim2+1)
           tmp_col_lengths = tmp_col_lengths(2:dim2+1)

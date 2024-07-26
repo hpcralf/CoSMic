@@ -91,9 +91,10 @@ Module kernel
   Integer, Parameter ::   ill_ICU    =  4
   Integer, Parameter ::   immune     =  5
   Integer, Parameter ::   dead       =  6
-
+  Integer, Parameter ::   vax        =  7
+  
   Integer, Parameter ::   min_state  = -1
-  Integer, Parameter ::   max_state  =  6
+  Integer, Parameter ::   max_state  =  7
 
   ! Declare the interface for POSIX fsync function
   interface
@@ -1378,12 +1379,12 @@ Contains
        if (PT_DEBUG) then
           write(un_lf,PTF_SEP)
           write(un_lf,PTF_M_AI0)"Population Summary @ start of step:",timestep
-          write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6
+          write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6,7
           write(un_lf,'(8(I10))')state_count_t1
 
           write(un_lf,PTF_SEP)
           write(un_lf,PTF_M_AI0)"Population Summary per location @ start of step:",timestep
-          write(un_lf,'(A6,8(I10))')"Loc",-1,0,1,2,3,4,5,6
+          write(un_lf,'(A6,8(I10))')"Loc",-1,0,1,2,3,4,5,6,7
           Do ii = 1, n_counties
              write(un_lf,'(11(I10))')ii,state_count_pl(:,ii)
           End Do
@@ -1391,9 +1392,9 @@ Contains
        !** DEBUG ---------------------------------------------------------------
 
        !** Is there something to calculate ? -----------------------------------
-       If ( state_count_t1(dead) + state_count_t1(immune) == pop_size) Then
+       If ( state_count_t1(dead) + state_count_t1(immune) + state_count_t1(vax) == pop_size) Then
           write(un_lf,PTF_SEP)
-          write(un_lf,PTF_M_A)"All are immune or dead."
+          write(un_lf,PTF_M_A)"All are immune, vaxinated or dead."
           write(un_lf,PTF_SEP)
           exit
        End If
@@ -1401,22 +1402,33 @@ Contains
        !** Number of people who are at risk in population ---
        at_risk = state_count_t1(healthy)
 
+       !** Number of people who can spread the disease per location ---
        Do ii = 1, n_counties
-          risk_pl(ii) = Real(state_count_pl(inf_contag,ii),rk) +  Real(state_count_pl(ill_contag,ii),rk) * less_contagious
+          risk_pl(ii) = Real(state_count_pl(inf_contag,ii),rk) + &
+                        Real(state_count_pl(ill_contag,ii),rk) * less_contagious
        End Do
     !   risk_pl = state_count_pl(inf_contag,:) +  state_count_pl(ill_contag,:) * less_contagious
 
+       !** From the number of people who can spread the disease per location ---
+       !** we calculate the expected infections per location                 --- 
        risk_pl = risk_pl * R0matrix(:,timestep)
 
+       !** The expected infections per location are redistributed by the     ---
+       !** commuter matrix                                                   ---
        risk_pl = w_int * risk_pl + (1._rk - w_int) * Matmul(risk_pl, connect)
 
-
+       !** From the expected infections per location we can calculate the    ---
+       !** risk per location based on the number of people per location who  ---
+       !** can get in contact with an infected person. People who can get in ---
+       !** contact per location are all but dead people or people in ICU     ---
        Do ii = 1, n_counties
           risk_pl(ii) = risk_pl(ii) / sum(state_count_pl([healthy,immune, &
                                                           inf_noncon,inf_contag, &
                                                           ill_contag              ],ii))
        End Do
 
+       !** Since all people but dead or in ICU move we weight the risk via   ---
+       !** the connectivity matrix.
        risk_pl = w_int * risk_pl + (1._rk - w_int) * Matmul(risk_pl, connect)
        
        !** DEBUG --- Risk per location --------------------------------------
@@ -1760,7 +1772,7 @@ Contains
           endif
        End if
 
-    ENd Do
+    End Do
     
   End Subroutine CoSMic_TimeLoop
 

@@ -114,7 +114,7 @@ module global_types
      Type(TTableData)                       :: connect_total
      Type(TTableData)                       :: connect_work
      Type(TTableData)                       :: states
-
+     Type(TTableData)                       :: Vaccinations
      Type(TTableData)                       :: obsicu_state
      Type(TTableData)                       :: obsicu_nuts2
 
