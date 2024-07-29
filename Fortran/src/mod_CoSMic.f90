@@ -91,7 +91,7 @@ Module kernel
   Integer, Parameter ::   ill_ICU    =  4
   Integer, Parameter ::   immune     =  5
   Integer, Parameter ::   dead       =  6
-  Integer, Parameter ::   vax        =  7
+  Integer, Parameter ::   vac        =  7
   
   Integer, Parameter ::   min_state  = -1
   Integer, Parameter ::   max_state  =  7
@@ -114,7 +114,8 @@ Contains
        less_contagious, R0_force, immune_stop, &
        R0change, R0delay ,R0delay_days, R0delay_type, &
        control_age_sex, seed_date, seed_before, sam_size, R0, &
-       R0_effects, region_index, sim_backup, sim_switch, output_dir, export_name, proc ) Result(ill_ICU_cases_final)
+       R0_effects, region_index, sim_backup, sim_switch, output_dir, &
+       export_name, proc ) Result(ill_ICU_cases_final)
 
     !===========================================================================
     ! Declaration
@@ -200,7 +201,8 @@ Contains
     Type(tTimer),pointer            :: timer
 
     Integer(kind=ik), Allocatable, Dimension(:)     :: dist_id_cref 
-
+    Real(Kind=rk)   , Allocatable, Dimension(:,:)   :: vac_pl,vac_pw
+    
     Integer(kind=ik)                                :: pop_size
     Integer(kind=ik)                                :: num_counties
     Integer(kind=ik)                                :: ii,jj,kk
@@ -591,6 +593,44 @@ Contains
        End Do
     End If
 
+    !! ----------------------------------------------------------------------
+    !! Convert from weekly to daily vaccination rate ------------------------
+
+    vac_pw = table_to_real_array(iol%vaccinations)
+    
+    !! this block simplifies the if judgment
+    If (.Not.Allocated(vac_pl)) Then
+       Allocate(vac_pl(num_counties,time_n-1))
+    End If
+
+    vac_pl = 0
+    
+    n_change  = Size(R0change,dim=2)
+
+    !! We have to have vaccinations per change time frame so size(R0) ----------
+    !! not being equal to n_change is not possible                    ----------
+    If (n_change /= size(vac_pw,dim=1)) then
+       write(pt_umon,PTF_SEP)
+       write(pt_umon,PTF_E_A)"Something bad and unexpected happened!"
+       write(pt_umon,PTF_E_A)"n_change /= size(vac_pl)"
+       write(pt_umon,PTF_E_AI0)"n_change:" , n_change
+       write(pt_umon,PTF_E_AI0)"size(R0):" , size(vac_pw)
+       write(pt_umon,PTF_E_STOP)
+       stop
+    End If
+
+    Do i = 1,n_change
+
+       getchange = vac_pw(i,region_index)
+       
+       gettime = generate_seq(R0change(1,i),R0change(2,i),1)
+       
+       Do j = 1,Size(gettime)
+          vac_pl(:,gettime(j)) = getchange
+       End Do
+       
+    End Do
+   
     !! ==============================================================
     !! Init connectivity matrix
     connect =  transpose(table_to_real_array(iol%connect_work))
@@ -982,8 +1022,8 @@ Contains
        ! write(*,PTF_M_AI0)"Entering CoSMic_TimeLoop on proc",proc
        
        Call CoSMic_TimeLoop(time_n, pop_size, size(counties_index), counties_index, &
-            Real(R0matrix,rk), connect, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, sim ,&
-            healthy_cases_final, inf_noncon_cases_final,inf_contag_cases_final, &
+            Real(R0matrix,rk), connect, vac_pl, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, &
+            sim, healthy_cases_final, inf_noncon_cases_final,inf_contag_cases_final, &
             ill_contag_cases_final, ill_ICU_cases_final,  &
             immune_cases_final,dead_cases_final, &
             it_ss, cp_write, cp_time , cp_unit, cp_reload, cp_reload_time)
@@ -1228,7 +1268,8 @@ Contains
   !> Model Timeloop
   Subroutine CoSMic_TimeLoop(&
        time_n, pop_size, n_counties, counties, &
-       R0matrix, tmp_connect, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, &
+       R0matrix, tmp_connect, vac_pl, &
+       surv_ill_pas, ICU_risk_pasd, surv_icu_pas, &
        sim, &
        healthy_cases, inf_noncon_cases, inf_contag_cases, ill_contag_cases,&
        ill_ICU_cases , immune_cases, dead_cases , &
@@ -1240,6 +1281,7 @@ Contains
     Integer(Kind=ik), Dimension(n_counties), Intent(In) :: counties
     
     Real(Kind=rk)   , Dimension(n_counties,2:time_n)  , Intent(In) ::  R0matrix
+    Real(Kind=rk)   , Dimension(n_counties,2:time_n)  , Intent(In) ::  vac_pl
     Real(kind=rk)   , Allocatable, Dimension(:,:)     , Intent(In) ::  tmp_connect
   !  Real(Kind=rk)   , Dimension(n_counties,n_counties), Intent(In) ::  connect
     Real(Kind=rk)   , Allocatable, Dimension(:,:)     , Intent(In) ::  surv_ill_pas
@@ -1282,6 +1324,7 @@ Contains
     Real(kind=rk)                                    :: w_int
     Integer(kind=ik)                                 :: inf_dur, cont_dur
     Integer(kind=ik)                                 :: ill_dur, icu_dur
+    Integer(kind=ik)                                 :: imm_dur
 
     Integer                                          :: std_int
     Integer                                          :: int_storage_size
@@ -1329,6 +1372,7 @@ Contains
     call pt_get("#cont_dur"       , cont_dur       )
     call pt_get("#ill_dur"        , ill_dur        )
     call pt_get("#icu_dur"        , icu_dur        )
+    call pt_get("#imm_dur"        , imm_dur        )
     call pt_get("#exec.procedure" ,exec_type       )
 
     ! call end_timer("+- Prepare data")
@@ -1392,13 +1436,16 @@ Contains
        !** DEBUG ---------------------------------------------------------------
 
        !** Is there something to calculate ? -----------------------------------
-       If ( state_count_t1(dead) + state_count_t1(immune) + state_count_t1(vax) == pop_size) Then
+       If ( state_count_t1(dead) + state_count_t1(immune) + state_count_t1(vac) == pop_size) Then
           write(un_lf,PTF_SEP)
-          write(un_lf,PTF_M_A)"All are immune, vaxinated or dead."
+          write(un_lf,PTF_M_A)"All are immune, vaccinated or dead."
           write(un_lf,PTF_SEP)
           exit
        End If
 
+       !** ---------------------------------------------------------------------
+       !** Determine risk to be infected per locations -------------------------
+       
        !** Number of people who are at risk in population ---
        at_risk = state_count_t1(healthy)
 
@@ -1407,7 +1454,6 @@ Contains
           risk_pl(ii) = Real(state_count_pl(inf_contag,ii),rk) + &
                         Real(state_count_pl(ill_contag,ii),rk) * less_contagious
        End Do
-    !   risk_pl = state_count_pl(inf_contag,:) +  state_count_pl(ill_contag,:) * less_contagious
 
        !** From the number of people who can spread the disease per location ---
        !** we calculate the expected infections per location                 --- 
@@ -1442,10 +1488,10 @@ Contains
           write(un_lf,PTF_M_AI0)"pop_size      = ",pop_size
        End if
        !** DEBUG ------------------------------------------------------------
-
+      
        !** Draw risks for all individuals at risk --------------------
        Call random_Number(risk_pi(1:at_risk))
-       nn = 1
+       nn = 0
        Do ii = 1, pop_size
 
           if ((sim%t1(ii) == healthy)) then
@@ -1510,7 +1556,7 @@ Contains
        
        !** Draw risks for all individuals at risk --------------------
        Call random_Number(risk_pi(1:at_risk))
-       nn = 1
+       nn = 0
        Do ii = 1, pop_size
 
           if (sim%t1(ii) == ill_contag) then
@@ -1689,6 +1735,73 @@ Contains
        !write(*,'(9(I10))')timestep,state_count_t2
        !** DEBUG ------------------------------------------------------------
 
+       !** ---------------------------------------------------------------------
+       !** Determine chance to be vaccinated per location ----------------------
+
+       !** Vaccinations - How many are at chance to be vaccinated ? -------
+       at_risk = sum(state_count_t1((/Healthy,inf_noncon,inf_contag,immune/)))
+
+       !** Number of people who can become vaccinated per location --------
+       Do ii = 1, n_counties
+          risk_pl(ii) = Real(state_count_pl(healthy   ,ii),rk) + &
+               Real(state_count_pl(inf_noncon,ii),rk) + &
+               Real(state_count_pl(inf_contag,ii),rk) + &
+               Real(state_count_pl(immune    ,ii),rk)
+       End Do
+
+       !** From the number of people who can become vaccinated per location  ---
+       !** and the observed number of vaccinations per location we calculate ---
+       !** the chance of being vaccinated.                                   ---
+       risk_pl = vac_pl(:,timestep) / risk_pl        
+       
+       !** Draw chance for all individuals at chance ---
+       Call random_Number(risk_pi(1:at_risk))
+       nn = 0
+       Do ii = 1, pop_size
+
+          if ((sim%t1(ii) /= healthy) .OR. (sim%t1(ii) /= inf_noncon) .OR. &
+              (sim%t1(ii) /= inf_contag) ) then
+
+             nn = nn + 1
+
+             if (risk_pi(nn) >= risk_pl(sim%dist_id_rn(ii))) then
+                !** Individual becomes vaccinated --------------------
+                sim%t2(ii) = vac
+                d_new(ii)  = 1
+             Else
+                !** Individual stays in its current state ------------
+                d_new(ii) = d_new(ii)  + 1
+                
+             End if
+
+          !+ If individual is already vaccinated ---------------------
+          else if ( sim%t1(ii) /= vac ) then
+
+             if (sim%d(ii) >= imm_dur) then
+                !** Individual moves back to healthy -----------------
+                sim%t2(ii) = healthy
+                d_new(ii)  = 1
+             Else
+                !** Individual stays vaccinated ----------------------
+                d_new(ii) = d_new(ii)  + 1
+             End if
+             
+          End if
+          
+       End Do
+       
+       !** Population summary --------------------------------------------------
+       Call summary_1_int(sim%t2, pop_size, state_count_t2, min_state, max_state)
+       
+       !** DEBUG --- Population Summary -------------------------------------
+       if (PT_DEBUG) then
+          write(un_lf,PTF_SEP)
+          write(un_lf,PTF_M_AI0)"Population Summary after infection @ timestep ",timestep
+          write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6
+          write(un_lf,'(8(I10))')state_count_t2
+       End if
+       !** DEBUG ------------------------------------------------------------
+       
        !** Population summary per location -------------------------------------
        Call summary_2_int(&
             sim%t2, sim%dist_id_rn, pop_size, &
