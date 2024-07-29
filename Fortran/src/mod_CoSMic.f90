@@ -185,6 +185,7 @@ Contains
     Integer,Allocatable             :: inf_contag_cases_final(:,:,:)
     Integer,Allocatable             :: dead_cases_final(:,:,:)
     Integer,Allocatable             :: ill_contag_cases_final(:,:,:)
+    Integer,Allocatable             :: vac_cases_final(:,:,:)
 
     Integer                         :: timestep
     
@@ -243,6 +244,7 @@ Contains
     Logical                                         :: cp_exist, cp_unit_open 
     
     Integer                                         :: std_int
+    Integer                                         :: ndays
     Integer                                         :: int_storage_size
     Integer(kind=1)                                 :: std_int1
 
@@ -346,6 +348,7 @@ Contains
     Allocate(ill_ICU_cases_final   (num_counties,time_n,n_iter))
     Allocate(immune_cases_final    (num_counties,time_n,n_iter))
     Allocate(dead_cases_final      (num_counties,time_n,n_iter))
+    Allocate(vac_cases_final       (num_counties,time_n,n_iter))
          
     inf_seed_date = get_char_column(iol%seed,'date')
 
@@ -596,7 +599,7 @@ Contains
     !! ----------------------------------------------------------------------
     !! Convert from weekly to daily vaccination rate ------------------------
 
-    vac_pw = table_to_real_array(iol%vaccinations)
+    vac_pw = table_to_real_array(table=iol%vaccinations, incint=.TRUE.)
     
     !! this block simplifies the if judgment
     If (.Not.Allocated(vac_pl)) Then
@@ -614,21 +617,20 @@ Contains
        write(pt_umon,PTF_E_A)"Something bad and unexpected happened!"
        write(pt_umon,PTF_E_A)"n_change /= size(vac_pl)"
        write(pt_umon,PTF_E_AI0)"n_change:" , n_change
-       write(pt_umon,PTF_E_AI0)"size(R0):" , size(vac_pw)
+       write(pt_umon,PTF_E_AI0)"size(vac_pw,dim=1):" , size(vac_pw,dim=1)
        write(pt_umon,PTF_E_STOP)
        stop
     End If
 
     Do i = 1,n_change
 
-       getchange = vac_pw(i,region_index)
-       
        gettime = generate_seq(R0change(1,i),R0change(2,i),1)
-       
-       Do j = 1,Size(gettime)
-          vac_pl(:,gettime(j)) = getchange
+       ndays   = Size(gettime)
+
+       Do j = 1, ndays
+          vac_pl(:,gettime(j)) = vac_pw(i,:)/ndays
        End Do
-       
+
     End Do
    
     !! ==============================================================
@@ -1025,7 +1027,7 @@ Contains
             Real(R0matrix,rk), connect, vac_pl, surv_ill_pas, ICU_risk_pasd, surv_icu_pas, &
             sim, healthy_cases_final, inf_noncon_cases_final,inf_contag_cases_final, &
             ill_contag_cases_final, ill_ICU_cases_final,  &
-            immune_cases_final,dead_cases_final, &
+            immune_cases_final,dead_cases_final, vac_cases_final, &
             it_ss, cp_write, cp_time , cp_unit, cp_reload, cp_reload_time)
 
        !** Return the ultimate sim data to the caller --------------------------
@@ -1090,6 +1092,8 @@ Contains
            dead_cases_final,R0_effects)
       call write_data(trim(output_dir)//"immune_cases_"//trim(export_name)//trim(proc_char)//".dat", &
            immune_cases_final,R0_effects)
+      call write_data(trim(output_dir)//"vac_cases_"//trim(export_name)//trim(proc_char)//".dat", &
+           vac_cases_final,R0_effects)
       
       call end_timer("+- Writeout")
     endif
@@ -1272,7 +1276,7 @@ Contains
        surv_ill_pas, ICU_risk_pasd, surv_icu_pas, &
        sim, &
        healthy_cases, inf_noncon_cases, inf_contag_cases, ill_contag_cases,&
-       ill_ICU_cases , immune_cases, dead_cases , &
+       ill_ICU_cases , immune_cases, dead_cases , vac_cases, &
        it_ss, cp_write, cp_time , cp_unit, cp_reload, cp_reload_time)
     
     Integer(Kind=ik)                       , Intent(In) :: time_n
@@ -1297,6 +1301,7 @@ Contains
     Integer         , Allocatable, Dimension(:,:,:), Intent(inout) :: ill_ICU_cases
     Integer         , Allocatable, Dimension(:,:,:), Intent(inout) :: immune_cases
     Integer         , Allocatable, Dimension(:,:,:), Intent(inout) :: dead_cases
+    Integer         , Allocatable, Dimension(:,:,:), Intent(inout) :: vac_cases
 
     Integer(Kind=ik)                               , Intent(In)    :: it_ss
 
@@ -1398,7 +1403,8 @@ Contains
     ill_ICU_cases(:,start_time,it_ss)    = state_count_pl(ill_ICU   ,:)
     dead_cases(:,start_time,it_ss)       = state_count_pl(dead      ,:)
     immune_cases(:,start_time,it_ss)     = state_count_pl(immune    ,:)
-
+    vac_cases(:,start_time,it_ss)        = state_count_pl(vac       ,:)
+    
     !write(un_lf,PTF_M_AI0)"sum(state_count_pl) =",sum(state_count_pl)
     !write(*,*)"it_ss=",it_ss
     
@@ -1423,12 +1429,12 @@ Contains
        if (PT_DEBUG) then
           write(un_lf,PTF_SEP)
           write(un_lf,PTF_M_AI0)"Population Summary @ start of step:",timestep
-          write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6,7
-          write(un_lf,'(8(I10))')state_count_t1
+          write(un_lf,'(9(I10))')-1,0,1,2,3,4,5,6,7
+          write(un_lf,'(9(I10))')state_count_t1
 
           write(un_lf,PTF_SEP)
           write(un_lf,PTF_M_AI0)"Population Summary per location @ start of step:",timestep
-          write(un_lf,'(A6,8(I10))')"Loc",-1,0,1,2,3,4,5,6,7
+          write(un_lf,'(A6,9(I10))')"Loc",-1,0,1,2,3,4,5,6,7
           Do ii = 1, n_counties
              write(un_lf,'(11(I10))')ii,state_count_pl(:,ii)
           End Do
@@ -1537,8 +1543,8 @@ Contains
        if (PT_DEBUG) then
           write(un_lf,PTF_SEP)
           write(un_lf,PTF_M_AI0)"Population Summary after infection @ timestep ",timestep
-          write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6
-          write(un_lf,'(8(I10))')state_count_t2
+          write(un_lf,'(9(I10))')-1,0,1,2,3,4,5,6,7
+          write(un_lf,'(9(I10))')state_count_t2
        End if
        !** DEBUG ------------------------------------------------------------
        
@@ -1588,8 +1594,8 @@ Contains
        if (PT_DEBUG) then
           write(un_lf,PTF_SEP)
           write(un_lf,PTF_M_AI0)"Population Summary after dying from infection @ timestep ",timestep
-          write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6
-          write(un_lf,'(8(I10))')state_count_t2
+          write(un_lf,'(9(I10))')-1,0,1,2,3,4,5,6,7
+          write(un_lf,'(9(I10))')state_count_t2
        End if
        !** DEBUG ------------------------------------------------------------
 
@@ -1609,12 +1615,8 @@ Contains
           if ((sim%t1(ii) == ill_contag) .AND. (sim%t2(ii) /= dead)) then
              !** Individual is ill_contag ----------------------------
              nn = nn + 1
-
-             if ((ICU_risk_pasd(sim%age(ii),1,sim%d(ii))  >0.) .or. &
-                 (ICU_risk_pasd(sim%age(ii),2,sim%d(ii))  >0.)       ) &
-                 new_in_state = new_in_state + 1
-             
              if (sim%sex(ii) == "m") then
+
                 if (risk_pi(nn) <= ICU_risk_pasd(sim%age(ii),1,sim%d(ii))) then
                    !** Individual moves to icu -----------------------
                    sim%t2(ii) = ill_ICU
@@ -1646,11 +1648,10 @@ Contains
                 End if
              End if
           End if
-         
+
        ENd Do
 
        if (PT_DEBUG) then
-          write(un_lf,PTF_M_AI0)"Really at risk        :",new_in_state
           write(un_lf,PTF_M_AI0)"risks evaluated       :",nn
        End if
        
@@ -1661,8 +1662,8 @@ Contains
        if (PT_DEBUG) then
           write(un_lf,PTF_SEP)
           write(un_lf,PTF_M_AI0)"Population Summary after moving to ICU @ timestep ",timestep
-          write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6
-          write(un_lf,'(8(I10))')state_count_t2
+          write(un_lf,'(9(I10))')-1,0,1,2,3,4,5,6,7
+          write(un_lf,'(9(I10))')state_count_t2
        End if
        !** DEBUG ------------------------------------------------------------
 
@@ -1728,9 +1729,9 @@ Contains
        !** DEBUG --- Population Summary -------------------------------------
        if (PT_DEBUG) then
           write(un_lf,PTF_SEP)
-          write(un_lf,PTF_M_AI0)"Population Summary after timestep ",timestep
-          write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6
-          write(un_lf,'(8(I10))')state_count_t2
+          write(un_lf,PTF_M_AI0)"Population Summary after movement to ICU ",timestep
+          write(un_lf,'(9(I10))')-1,0,1,2,3,4,5,6,7
+          write(un_lf,'(9(I10))')state_count_t2
        End if
        !write(*,'(9(I10))')timestep,state_count_t2
        !** DEBUG ------------------------------------------------------------
@@ -1753,41 +1754,36 @@ Contains
        !** and the observed number of vaccinations per location we calculate ---
        !** the chance of being vaccinated.                                   ---
        risk_pl = vac_pl(:,timestep) / risk_pl        
-       
+
        !** Draw chance for all individuals at chance ---
        Call random_Number(risk_pi(1:at_risk))
        nn = 0
        Do ii = 1, pop_size
 
-          if ((sim%t1(ii) /= healthy) .OR. (sim%t1(ii) /= inf_noncon) .OR. &
-              (sim%t1(ii) /= inf_contag) ) then
+          if ((sim%t1(ii) == healthy) .OR. (sim%t1(ii) == inf_noncon) .OR. &
+              (sim%t1(ii) == inf_contag) ) then
 
              nn = nn + 1
 
-             if (risk_pi(nn) >= risk_pl(sim%dist_id_rn(ii))) then
+             if (risk_pi(nn) <= risk_pl(sim%dist_id_rn(ii))) then
                 !** Individual becomes vaccinated --------------------
                 sim%t2(ii) = vac
-                d_new(ii)  = 1
-             Else
-                !** Individual stays in its current state ------------
-                d_new(ii) = d_new(ii)  + 1
-                
+                d_new(ii)  = 1               
              End if
 
           !+ If individual is already vaccinated ---------------------
-          else if ( sim%t1(ii) /= vac ) then
+          else if ( (sim%t1(ii) == vac) .OR. (sim%t1(ii) == immune) ) then
 
              if (sim%d(ii) >= imm_dur) then
                 !** Individual moves back to healthy -----------------
                 sim%t2(ii) = healthy
                 d_new(ii)  = 1
              Else
-                !** Individual stays vaccinated ----------------------
+                !** Individual stays vaccinated or immune ------------
                 d_new(ii) = d_new(ii)  + 1
              End if
              
           End if
-          
        End Do
        
        !** Population summary --------------------------------------------------
@@ -1796,9 +1792,9 @@ Contains
        !** DEBUG --- Population Summary -------------------------------------
        if (PT_DEBUG) then
           write(un_lf,PTF_SEP)
-          write(un_lf,PTF_M_AI0)"Population Summary after infection @ timestep ",timestep
-          write(un_lf,'(8(I10))')-1,0,1,2,3,4,5,6
-          write(un_lf,'(8(I10))')state_count_t2
+          write(un_lf,PTF_M_AI0)"Population Summary after timestep ",timestep
+          write(un_lf,'(9(I10))')-1,0,1,2,3,4,5,6,7
+          write(un_lf,'(9(I10))')state_count_t2
        End if
        !** DEBUG ------------------------------------------------------------
        
@@ -1814,10 +1810,12 @@ Contains
        ill_ICU_cases(:,timestep,it_ss)    = state_count_pl(ill_ICU   ,:)
        immune_cases(:,timestep,it_ss)     = state_count_pl(immune    ,:)
        dead_cases(:,timestep,it_ss)       = state_count_pl(dead      ,:)
+       vac_cases(:,start_time,it_ss)      = state_count_pl(vac       ,:)
        
        sim%t1 = sim%t2
        sim%d  = d_new
 
+       write(*,*)timestep-maxval(sim%d)
        !!=======================================================================
        !! Write restart data per thread ========================================
        !!=======================================================================
