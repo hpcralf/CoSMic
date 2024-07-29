@@ -553,24 +553,37 @@ contains
   
   !! ---------------------------------------------------------------------------
   !> Function to retreve all real columns of kind rk from the table
-  Function table_to_real_array(table) Result(array)
+  Function table_to_real_array(table,incint) Result(array)
 
     Type(TTableData)                          , intent(in)  :: table
+    logical, optional                         , intent(in)  :: incint
     Real(kind=rk), allocatable, Dimension(:,:)              :: array
-
+    
     Integer                                                 :: ii, nc
+    logical                                                 :: loc_incint
 
+    if (present(incint)) then
+       loc_incint = incint
+    else
+       loc_incint = .FALSE.
+    End if
+    
     nc = 0
     Do ii = 1, table%data_size(2)
        if (table%col_types(ii) == "r") then
           nc = nc + 1
+       End if
+       if (loc_incint) then
+          if (table%col_types(ii) == "i") then
+             nc = nc + 1
+          End if
        End if
     End Do
     
     If (nc == 0) then
        Write(un_lf,PTF_W_A)"table_to_real_array: Found no real columns !"
     End If
-    
+   
     Allocate(array(table%data_size(1),nc))
 
     nc = 1
@@ -579,7 +592,15 @@ contains
           array(:,nc) = table%data(ii)%cd_r
           nc = nc + 1
        End if
+       if (loc_incint) then
+          if (table%col_types(ii) == "i") then
+             array(:,nc) = real(table%data(ii)%cd_i,rk)
+             nc = nc + 1
+          End if
+       End if
     End Do
+
+    Write(un_lf,PTF_M_AI0)"table_to_real_array: Converted # of cols:",nc
     
   End Function table_to_real_array
   
