@@ -168,8 +168,8 @@ contains
     call pt_get("#Vaccinations",filename)
 
     call read_TableData( &
-         trim(filename),sep=",",head=.TRUE., &
-         rownames=.FALSE., data=iol%Vaccinations &
+         trim(filename),sep=" ",head=.TRUE., &
+         rownames=.TRUE., data=iol%Vaccinations &
          )
 
   End Subroutine loaddata
@@ -339,7 +339,7 @@ contains
        
     Else
 
-       !! In case rownames are included number of columns - 1 gives dim2 ---
+       !! In case rownames are included (number of columns - 1) gives dim2 ---
        if( loc_rownames ) then
           dim2 = size(str_arr)-1
        Else
@@ -441,8 +441,8 @@ contains
     rewind(un)
 
     !! if (PT_DEBUG) then
-       write(un_lf,PTF_M_A)"Column types  :",data%col_types
-       write(un_lf,PTF_M_AI0)"Column lengths:",data%col_lengths
+       write(un_lf,PTF_M_A)  "Column types          :",data%col_types
+       write(un_lf,PTF_M_AI0)"Column lengths        :",data%col_lengths
     !! End if
 
     !! If rownmaes are included allocate the rowname field ---
@@ -454,6 +454,9 @@ contains
     !! Set data size -----------------------------------------------------------
     data%data_size(1) = dim1
     data%data_size(2) = dim2
+
+    write(un_lf,PTF_M_AI0)"Number of data columns:",data%data_size(2)
+    write(un_lf,PTF_M_AI0)"Number of data rows   :",data%data_size(1)
     
     !! -------------------------------------------------------------------------
     !! Allocate columns --------------------------------------------------------
