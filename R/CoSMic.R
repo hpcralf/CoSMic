@@ -115,6 +115,7 @@ CoSMic <- function(ep, sp, iol, pspace, sim.struc, op, opt) {
     ill_ICU    <- 4 # Ill, ICU
     immune     <- 5 # Immune
     dead       <- 6 # Dead
+    vac        <- 7 # Vaccinated
     
     ## NA -----------------------------------------------------------
     missing <- -99

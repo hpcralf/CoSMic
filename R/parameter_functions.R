@@ -907,7 +907,8 @@ set.static.params <- function(pspace,
                         "Ill contagious",
                         "Ill ICU",
                         "Immune",
-                        "Dead")
+                        "Dead",
+                        "Vac")
         
         sp <- list.append(sp, sp.states=sp.states)
         
@@ -1416,7 +1417,7 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
             
             if ( class(tmp) == "character" ) {
                 sl <- str_length(paste(tmp,collapse=","))
-                if ( sl > 80 ) {
+                if ( sl > 80 & length(tmp) > 1) {
                     s  <- seq(1,length(tmp),by=as.integer(sl/80))
                     ss <- s[1:(length(s))]
                     se <- s[2:(length(s))]
@@ -1486,7 +1487,17 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
                     cat(paste0('.',paste(tmp,collapse='","'),'.','\n'))
                 } else {
                     if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
+                      sl <- str_length(paste(as.integer(tmp),collapse=","))
+                      if ( (sl > 80) & (length(tmp) > 1) ) {
+                        s  <- seq(1,length(tmp),by=as.integer(sl/80))
+                        ss <- s[1:(length(s))]
+                        se <- s[2:(length(s))]-1
+                        se[length(se)+1] <- length(tmp)
+                        a <- apply(data.frame(ss,se),1,
+                                   function(x){cat(paste0(as.numeric(tmp[x[1]:x[2]]),collapse=","),"\n")})
+                      } else {
                         cat(paste0(paste(tmp,collapse=","),'\n'))
+                      }
                     } else {
                         cat(paste0(paste(as.integer(tmp),collapse=","),'\n'))
                     }
@@ -1529,7 +1540,7 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
                 ## if we have a parameter of type logical ------------
                 cat(paste(paste0("#",i),", l ,",shape,"\n"))
             } else if  (class(tmp) == "Date") {
-                ## if we have a parameter of type logical ------------
+                ## if we have a parameter of type Date ------------
                 cat(paste(paste0("#",i),", c ,",shape,"\n"))
             } else {
                 if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
@@ -1561,7 +1572,17 @@ convert.Rp.to.Fp <- function(filename.sp, sp,
                 cat(paste0('"',paste(tmp,collapse='","'),'"','\n'))
             } else {
                 if (all(grepl("\\.",paste(tmp,collapse=" ")))) {
+                  sl <- str_length(paste(as.integer(tmp),collapse=","))
+                  if ( (sl > 80) & (length(tmp) > 1) ) {
+                    s  <- seq(1,length(tmp),by=as.integer(sl/80))
+                    ss <- s[1:(length(s))]
+                    se <- s[2:(length(s))]-1
+                    se[length(se)+1] <- length(tmp)
+                    a <- apply(data.frame(ss,se),1,
+                               function(x){cat(paste0(as.numeric(tmp[x[1]:x[2]]),collapse=","),"\n")})
+                  } else {
                     cat(paste0(paste(tmp,collapse=","),'\n'))
+                  }
                 } else {                   
                     sl <- str_length(paste(as.integer(tmp),collapse=","))
                     if ( (sl > 80) & (length(tmp) > 1) ) {

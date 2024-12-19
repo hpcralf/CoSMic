@@ -50,7 +50,7 @@
 #' @import ggplot2
 #' 
 #' @export
-plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
+plots.by.country <- function(outfile, sp, seed_icu, seed_dea, obs_vac,
                              iol, pspace,
                              rr,  ind.states=NULL, global.plot,
                              x.min=NULL,x.max=NULL, relative=FALSE,
@@ -355,7 +355,6 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
 
         # Observerd dead cases ---------------------------------------
         if ( (ii == "Dead") & !is.null(seed_dea) ) {
-
             plt[[ii]] <- plt[[ii]] +
                 geom_line(data=seed_dea,
                           aes(x=date,y=cases,color="Observed"),size=1) +
@@ -363,6 +362,15 @@ plots.by.country <- function(outfile, sp, seed_icu, seed_dea,
                 theme(legend.title = element_blank())
         }
         
+        # Observerd Vaccinations -------------------------------------
+        if ( (ii == "vac") & !is.null(obs_vac) ) {
+          plt[[ii]] <- plt[[ii]] +
+            geom_line(data=obs_vac,
+                      aes(x=date,y=total,color="Observed"),size=1) +
+            scale_color_manual(values = c('Observed' = 'black')) +
+            theme(legend.title = element_blank())
+        }
+
         if ( !is.null(split.by) ) {
             plt[[ii]] <- plt[[ii]] + labs(fill = split.by, colour=NULL)
         }
