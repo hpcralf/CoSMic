@@ -11,7 +11,7 @@ set.static.params(
   country = "Germany",
   restrict = TRUE,
   sim.regions = c("Schleswig-Holstein", "Hamburg", "Niedersachsen", "Bremen"),
-  sam_prop.ps = c(1, 1, 1, 1),
+  sam_prop.ps = NULL,
   sim_pop = "proportional",
   ini_infected = 10,
   seed_infections = "data",
@@ -26,7 +26,9 @@ set.static.params(
   R0_force = 0,
   immune_stop = TRUE,
   import_R0_matrix = FALSE,
-  R0change = lapply(seq(1, by = 7, length.out = 20), function(x) {     c(x, x + 6) }),
+  R0change = lapply(seq(1, by = 7, length.out = 20), function(x) {
+     c(x, x + 6)
+ }),
   R0county = as.list(rep("ALL", 20)),
   R0delay = TRUE,
   R0delay_days = 5,

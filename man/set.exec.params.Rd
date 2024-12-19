@@ -48,7 +48,9 @@ a file called cl.out.\cr
 }
 \value{
 A list with parameters needed to set up the execution of the CoSMic
-function. The default structure is:\preformatted{$exec.procedure
+function. The default structure is:
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{$exec.procedure
 [1] "Basic-Param"
 $parallel.method
 [1] "OMP"
@@ -62,7 +64,7 @@ $model.version
 [1] "12.0"
 $export_name
 [1] "v12.0-2020-11-07_21:53:00"
-}
+}\if{html}{\out{</div>}}
 }
 \description{
 Setup of execution parameters

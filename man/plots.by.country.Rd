@@ -20,7 +20,8 @@ plots.by.country(
   silent = FALSE,
   split.in = NULL,
   y.max = NULL,
-  prog = NULL
+  prog = NULL,
+  overlay = NULL
 )
 }
 \description{

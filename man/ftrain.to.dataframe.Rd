@@ -4,7 +4,7 @@
 \alias{ftrain.to.dataframe}
 \title{Load Fortran training results as data.frame}
 \usage{
-ftrain.to.dataframe(data.dir, basename, split.col = "SH1")
+ftrain.to.dataframe(data.dir, basename, iol, split.col = "SH1")
 }
 \description{
 The function converts the result files of the Fortran model version in

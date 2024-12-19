@@ -14,7 +14,9 @@ init.spatial.population(iol, sp)
 create a valid layout.}
 }
 \value{
-A list with population data. Structured as follows:\preformatted{ sim.struc : List of 3
+A list with population data. Structured as follows:
+
+\if{html}{\out{<div class="sourceCode">}}\preformatted{ sim.struc : List of 3
            $ pop     : data.frame
                      $ dist_id: int
                      $ date   : chr  
@@ -27,7 +29,7 @@ A list with population data. Structured as follows:\preformatted{ sim.struc : Li
                      $ inhabitants: int
                      $ Shortcut   : chr
                      $ Name       : chr
-}
+}\if{html}{\out{</div>}}
 }
 \description{
 The function initializes the population and its spatial structure according

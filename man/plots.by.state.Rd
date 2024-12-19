@@ -26,7 +26,8 @@ plots.by.state(
   relative = FALSE,
   split.in = NULL,
   y.max = NULL,
-  prog = NULL
+  prog = NULL,
+  overlay = NULL
 )
 }
 \description{

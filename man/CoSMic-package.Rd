@@ -2,7 +2,6 @@
 % Please edit documentation in R/CoSMic-package.R
 \docType{package}
 \name{CoSMic-package}
-\alias{CoSMic}
 \alias{CoSMic-package}
 \title{CoSMic: COVID-19 spatial microsimulation for Germany}
 \description{
