@@ -86,6 +86,7 @@ else
 	fi
     done
 
+    # --------------------------------------------------------------------------
     if [ $sys_set == 0 ]; then
        echo ""
        echo "!!! System $1 is currently not supported !!!"
@@ -99,7 +100,16 @@ else
 	export SP_PREFIX=${prefix}/
 	#
 	# PATH extensions ------------------------
-	export PATH=${prefix}/bin:$PATH
+	dn=`find ${prefix} -name CoSMic -type f | grep bin`
+	if [ -z "$dn" ]; then
+	    echo "== CoSMic binary not found in ${prefix}"
+	    echo "== Please build and source again or export PATH manually !"
+	else
+	    export PATH=`dirname $dn`:$PATH
+	    if [ -z $2 ]; then
+		echo "== Extended PATH by "`dirname $dn`
+	    fi
+	fi
 	#
 	if [ -z $2 ]; then
 	    echo "== Done"
