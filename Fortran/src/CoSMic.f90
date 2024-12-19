@@ -431,6 +431,8 @@ Program CoSMic
   
   call end_timer("CoSMic")
 
+  call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+  
   call write_timelist(unit=un_lf)
 
   Call MPI_FINALIZE(ierr)
