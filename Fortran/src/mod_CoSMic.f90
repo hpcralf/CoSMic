@@ -612,9 +612,9 @@ Contains
 
     !! We have to have vaccinations per change time frame so size(R0) ----------
     !! not being equal to n_change is not possible                    ----------
-    If (n_change /= size(vac_pw,dim=1)) then
+    If (n_change > size(vac_pw,dim=1)) then
        write(pt_umon,PTF_SEP)
-       write(pt_umon,PTF_E_A)"Something bad and unexpected happened!"
+       write(pt_umon,PTF_E_A)"Something is wrong with input data!"
        write(pt_umon,PTF_E_A)"n_change /= size(vac_pl)"
        write(pt_umon,PTF_E_AI0)"n_change:" , n_change
        write(pt_umon,PTF_E_AI0)"size(vac_pw,dim=1):" , size(vac_pw,dim=1)
@@ -884,7 +884,7 @@ Contains
              temp   = get_index(seed_death%dist_id,county)
              inf_dth = Sum(seed_death%cases(temp))
 
-             if (PT_DEBUG) then
+             if (PT_DEBUG .AND. PT_DEBUG_LEVEL == 3) then
                 write(un_lf,'(11(I11))')county,inf_ncont,inf_cont,inf_ill,inf_dth,&
                      minval(inf_nc_d),maxval(inf_nc_d),minval(inf_c_d),maxval(inf_c_d),&
                      minval(il_d),maxval(il_d)
@@ -1073,10 +1073,11 @@ Contains
   !  if ( cp_reload ) then 
   !     close(cp_reload_unit)
   !  End if
-    
+
     !** Disable the writeout operation for the execution with "Optimization" type ------------------
     if(trim(exec_type) .ne. "Optimization") then  
-      call start_timer("+- Writeout",reset=.FALSE.)
+       write(un_lf,PTF_M_A)"Starting data write"
+       call start_timer("+- Writeout",reset=.FALSE.)
       
       call write_data(trim(output_dir)//"healthy_cases_"//trim(export_name)//trim(proc_char)//".dat", &
            healthy_cases_final,R0_effects)                                    
@@ -1096,6 +1097,8 @@ Contains
            vac_cases_final,R0_effects)
       
       call end_timer("+- Writeout")
+      write(un_lf,PTF_M_A)"Ending data write"
+      
     endif
 
   End Function COVID19_Spatial_Microsimulation_for_Germany
@@ -1107,7 +1110,7 @@ Contains
     Real(kind=rk),    Allocatable, Dimension(:,:),intent(in)  :: R0_effects
     
     logical                                            :: exs
-    Integer                                            :: un, i,j
+    Integer                                            :: un, i,j,ret
  
     !---------------------------------------------------------------------------
     exs = .FALSE.
@@ -1146,6 +1149,13 @@ Contains
     End If
     
     write(un)data
+
+    Flush(un)
+    ret = fsync(fnum(un))
+    if (ret /= 0) then
+       write(*,*) "ret = fsync(fnum(cp_unit)) = ",ret
+       stop
+    End if
     
     Close(un)
     
@@ -1341,6 +1351,8 @@ Contains
     Integer                                            :: len, ret
 
     Character(len=:), allocatable                    :: exec_type
+
+    Integer, Dimension(8)          :: realt_s,realt_e,realt
     
     !===========================================================================
     ! Implementation
@@ -1410,6 +1422,7 @@ Contains
     
     Do timestep = start_time+1, time_n
 
+       Call date_and_time(values=realt_s)
        !call start_timer("+- From healthy to infected",reset=.FALSE.)
 
 !!$       if ( mod(timestep,7) == 0 ) then
@@ -1432,12 +1445,14 @@ Contains
           write(un_lf,'(9(I10))')-1,0,1,2,3,4,5,6,7
           write(un_lf,'(9(I10))')state_count_t1
 
-          write(un_lf,PTF_SEP)
-          write(un_lf,PTF_M_AI0)"Population Summary per location @ start of step:",timestep
-          write(un_lf,'(A6,9(I10))')"Loc",-1,0,1,2,3,4,5,6,7
-          Do ii = 1, n_counties
-             write(un_lf,'(11(I10))')ii,state_count_pl(:,ii)
-          End Do
+          if (PT_DEBUG_LEVEL == 3) then
+             write(un_lf,PTF_SEP)
+             write(un_lf,PTF_M_AI0)"Population Summary per location @ start of step:",timestep
+             write(un_lf,'(A6,9(I10))')"Loc",-1,0,1,2,3,4,5,6,7
+             Do ii = 1, n_counties
+                write(un_lf,'(11(I10))')ii,state_count_pl(:,ii)
+             End Do
+          End if
        End if
        !** DEBUG ---------------------------------------------------------------
 
@@ -1484,7 +1499,7 @@ Contains
        risk_pl = w_int * risk_pl + (1._rk - w_int) * Matmul(risk_pl, connect)
        
        !** DEBUG --- Risk per location --------------------------------------
-       if (PT_DEBUG) then
+       if (PT_DEBUG .AND. PT_DEBUG_LEVEL == 3) then
           write(un_lf,PTF_SEP)
           write(un_lf,PTF_M_AI0)"Number of people at risk :",at_risk
           write(un_lf,PTF_M_AI0)"Risk per location @ timestep:",timestep
@@ -1810,11 +1825,15 @@ Contains
        ill_ICU_cases(:,timestep,it_ss)    = state_count_pl(ill_ICU   ,:)
        immune_cases(:,timestep,it_ss)     = state_count_pl(immune    ,:)
        dead_cases(:,timestep,it_ss)       = state_count_pl(dead      ,:)
-       vac_cases(:,start_time,it_ss)      = state_count_pl(vac       ,:)
+       vac_cases(:,timestep,it_ss)        = state_count_pl(vac       ,:)
        
        sim%t1 = sim%t2
-       sim%d  = d_new
+       sim%d  = d_new 
 
+       Call date_and_time(values=realt_e)
+       realt = diff_realtimes(realt_e,realt_s)
+       Write(un_lf,'(A,I5.5,2(";",I2,":",I2,":"I2,",",I3.3))')"TS;",timestep,realt_e(5:8),realt(5:8)
+       
        !!=======================================================================
        !! Write restart data per thread ========================================
        !!=======================================================================
