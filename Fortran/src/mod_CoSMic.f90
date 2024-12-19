@@ -564,10 +564,10 @@ Contains
     n_change  = Size(R0change,dim=2)
 
     !! We have to have R0 per change time frame so size(R0) not being ----------
-    !! equal to n_change is not possible                              ----------
-    If (n_change /= size(R0)) then
+    !! equal or bigger n_change is not possible                       ----------
+    If (n_change > size(R0)) then
        write(pt_umon,PTF_SEP)
-       write(pt_umon,PTF_E_A)"Something bad and unexpected happened!"
+       write(pt_umon,PTF_E_A)"Something is wrong with input data!"
        write(pt_umon,PTF_E_A)"n_change /= size(R0)"
        write(pt_umon,PTF_E_AI0)"n_change:" , n_change
        write(pt_umon,PTF_E_AI0)"size(R0):" , size(R0)
@@ -611,7 +611,7 @@ Contains
     n_change  = Size(R0change,dim=2)
 
     !! We have to have vaccinations per change time frame so size(R0) ----------
-    !! not being equal to n_change is not possible                    ----------
+    !! not being bigger or at least equal to n_change is not possible ----------
     If (n_change > size(vac_pw,dim=1)) then
        write(pt_umon,PTF_SEP)
        write(pt_umon,PTF_E_A)"Something is wrong with input data!"
@@ -707,7 +707,7 @@ Contains
     pop_age    => get_int_column_pointer(iol%pop,'age_gr')
 
     pop_total = Nint(Real(pop_total)/Real(Sum(pop_total)) * sam_size)
-    pop_size      = Sum(pop_total)
+    pop_size  = Sum(pop_total)
 
     !$OMP PARALLEL if((iter_e-iter_s+1) .gt. 1)&
     !$OMP& default(shared) &
@@ -767,12 +767,12 @@ Contains
        sim%t2 = missing
        sim%d(:)  = 1
 
-     write(un_lf,PTF_SEP)
-     Write(un_lf,PTF_M_AI0)"Size of population is", pop_size
-
-     !** Reshuffle population since ordering according to dist id leads to ***
-     !** lower infections in older age groups                              ***
-     !** To do so we use
+       write(un_lf,PTF_SEP)
+       Write(un_lf,PTF_M_AI0)"Size of population is", pop_size
+       
+       !** Reshuffle population since ordering according to dist id leads to ***
+       !** lower infections in older age groups                              ***
+       !** To do so we use
        do ii = 1, pop_size
           sim%d(ii) = ii
        End do
@@ -986,7 +986,9 @@ Contains
           End Do ! do icounty = 1,size(sim_counties)
 
        end if
-      else ! Reuse the passed sim data
+       
+    !** Reuse the passed sim data **********************************************
+    else 
         sim%dist_id      = sim_backup%dist_id
         sim%sample_index = sim_backup%sample_index
         sim%sex          = sim_backup%sex 
